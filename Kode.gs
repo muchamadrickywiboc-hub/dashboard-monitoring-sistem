@@ -1,492 +1,72 @@
 /**
  * DASHBOARD MONITORING DRIVING BEHAVIOUR, DRIVER DISCIPLINE & FATIGUE
- * Versi REKAP BULANAN (Google Apps Script)
+ * Versi SUMMARY (Google Apps Script)
  *
- * Sumber data: file "Fom Laporan Bulanan GPS & Dashcam Mobil Tangki - <REGIONAL> <BULAN>.xlsx"
- * di folder CFG.FOLDER_DATA_ID. Yang dibaca hanya sheet rekap bulanan
- * ("Rekap Bulanan" / "REKAP BULANAN 2026" / "Rekapan Bulan" / "REKAPAN BULANAN"):
- * blok per lokasi (IT/FT/LPG) berisi parameter x Januari..Desember.
+ * Sumber data: satu spreadsheet ringkasan (CFG.SUMBER_ID), mis. "Summary_Dashboard_Format_Referensi".
+ * Sheet yang dibaca (nama sheet dicocokkan tanpa memperhatikan huruf besar/kecil):
+ *   - Parameter_Bulanan   : parameter per kategori x bulan (+ blok PARAMETER LAIN)
+ *   - Rekap_Regional      : (1) regional x kategori untuk satu bulan vs bulan sebelumnya,
+ *                           (2) total 3 kategori per regional per bulan
+ *   - Rekap_Lokasi_<Bln>  : lokasi x kategori untuk bulan tsb (mis. Rekap_Lokasi_Agu), boleh lebih dari satu
+ *   - Rekap_Lokasi_YTD    : lokasi x kategori untuk seluruh periode
+ *   - Top_AMT  (opsional) : pelanggaran per AMT, untuk panel TOP 10 Pelanggaran AMT
+ *   - Catatan  (opsional) : catatan data, ditampilkan di dashboard
  *
- *  - prosesData()  : dijalankan trigger tiap jam. Untuk tiap regional diambil file TERBARU
- *                    di folder; bila file berubah, sheet rekapnya dibaca ulang dan isi
- *                    sheet DATA_BULANAN untuk regional tsb diganti.
- *  - doGet()       : web app; dashboard membaca DATA_BULANAN lewat getDashboardData().
+ * Format sheet Top_AMT (baris judul boleh di mana saja; kolom dicari dari namanya):
+ *   Bulan | Nama AMT | Regional | Lokasi | Driving Behaviour | Driver Discipline | Fatigue Management | Total | Pelanggaran Terbanyak
+ *   Bulan berisi nama bulan (Januari..Desember, boleh disingkat). Satu baris = satu AMT pada satu bulan.
  *
- * Pemasangan: tempel Kode.gs + Index.html, lalu jalankan MULAI_DI_SINI sekali.
+ *  - doGet()            : web app.
+ *  - getDashboardData() : dipanggil dashboard; membaca spreadsheet sumber langsung (hasil di-cache 10 menit).
  *
- * PERBAIKAN versi ini:
- *  - Sheet DATA_BULANAN / FILE_SUMBER dibuat otomatis bila belum ada (memperbaiki error
- *    "Cannot read properties of null (reading 'getLastRow')").
- *  - File .xlsx dibaca LANGSUNG (unzip + XML), tidak lagi dikonversi lewat Drive API/UrlFetchApp,
- *    sehingga error "You do not have permission to call drive.files.copy / UrlFetchApp.fetch" hilang.
- *  - Pencarian sheet rekap & pembacaan blok PARAMETER lebih toleran.
+ * Pemasangan: tempel Kode.gs + Index.html, isi CFG.SUMBER_ID, lalu Deploy > Web app.
+ * Setelah isi spreadsheet sumber diubah, data baru tampil maksimal 10 menit kemudian
+ * (atau jalankan menu Dashboard > Hapus cache dashboard).
  */
 
 /* ============================== PENGATURAN ============================== */
 const CFG = {
-  CTRL_ID: '17n0HQa78drV6u_kq9-oFMOZ6E_Lne0sAWw6w9PFJ_Dc',     // spreadsheet kontrol
-  FOLDER_DATA_ID: '1XW9CBuZrbZ7ClI23v1kn7iRwxv73bgQj',          // folder "Kebutuhan Dashboard Monitoring Event Sistem"
-  TAHUN: 2026,                 // tahun rekap yang dibaca
-  JAM_TRIGGER: 1,              // proses otomatis tiap N jam
-  SHEET_DATA: 'DATA_BULANAN',
-  SHEET_FILE: 'FILE_SUMBER',
+  SUMBER_ID: '1N1_qYb-SDrFIkC0GNB2Ztgyqz0i7OjgQ7ZWBz0_H0Bc',   // spreadsheet Summary_Dashboard_Format_Referensi
+  TAHUN: 2026,
+  CACHE_DETIK: 600,
 };
 
 const REGIONS = ['SUMBAGUT', 'SUMBAGSEL', 'JABALINUS', 'KALIMANTAN', 'SULAWESI', 'MALUPA'];
 const BULAN = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
-
-/**
- * Parameter laporan -> kode standar, tipe alat & kategori dashboard.
- * Kategori: DB = Driving Behaviour, DD = Driver Discipline, FM = Fatigue Management, LAIN = di luar 3 kategori.
- * Nama parameter di laporan dicocokkan setelah huruf besar & tanpa keterangan dalam kurung.
- */
-const PARAM = [
-  { key: 'OVERSPEED',    label: 'Over Speed',          tipe: 'GPS',  kat: 'DB',   alias: ['OVER SPEED', 'OVERSPEED'] },
-  { key: 'HARSH_TURN',   label: 'Harsh Turn / Cornering', tipe: 'GPS', kat: 'DB', alias: ['HARSH CONNERING', 'HARSH CORNERING', 'HARSH TURN'] },
-  { key: 'HARSH_BRAKE',  label: 'Harsh Braking',       tipe: 'GPS',  kat: 'DB',   alias: ['HARSH BREAKE', 'HARSH BREAKING', 'HARSH BRAKE', 'HARSH BRAKING'] },
-  { key: 'HARSH_ACC',    label: 'Harsh Acceleration',  tipe: 'GPS',  kat: 'DB',   alias: ['HARSH ACCELERATION'] },
-  { key: 'BLACKZONE',    label: 'Black Zone',          tipe: 'GPS',  kat: 'DD',   alias: ['BLACK ZONE', 'BLACKZONE'] },
-  { key: 'IDLING',       label: 'Idling',              tipe: 'GPS',  kat: 'DD',   alias: ['IDLING', 'IDLE', 'MT IDLE'] },
-  { key: 'TELEPON',      label: 'Menggunakan Telepon', tipe: 'CCTV', kat: 'DD',   alias: ['MENGGUNAKAN TELEPON', 'PHONE DETECTION'] },
-  { key: 'MEROKOK',      label: 'Merokok / Vape',      tipe: 'CCTV', kat: 'DD',   alias: ['MEROKOK/VAPE', 'MEROKOK / VAPE', 'MEROKOK', 'SMOKING DETECTION'] },
-  { key: 'MICROSLEEP',   label: 'Microsleep',          tipe: 'CCTV', kat: 'FM',   alias: ['MICROSLEEP', 'DRIVER FATIGUE'] },
-  { key: 'MENGUAP',      label: 'Menguap',             tipe: 'CCTV', kat: 'FM',   alias: ['MENGUAP', 'YAWNING DETECTION'] },
-  { key: 'DRIVING4H',    label: 'Driving > 4 Hours',   tipe: 'GPS',  kat: 'DB',   alias: ['DRIVING > 4 HOURS', 'DRIVING >4 HOURS', 'DRIVING > 4 JAM'] },
-  { key: 'DISTRACTION',  label: 'Distraction Pengemudi', tipe: 'CCTV', kat: 'LAIN', alias: ['DISTRACTION PENGEMUDI', 'DRIVER DISTRACTION'] },
-  { key: 'CAMCOVER',     label: 'Camera Covering',     tipe: 'CCTV', kat: 'LAIN', alias: ['CAMERA COVERING', 'CAMERA COVERING ALARM'] },
-  { key: 'GPS_OFF',      label: 'GPS Offline',         tipe: 'GPS',  kat: 'LAIN', alias: ['GPS OFFLINE'] },
-  { key: 'DASHCAM_OFF',  label: 'Dashcam Offline',     tipe: 'CCTV', kat: 'LAIN', alias: ['DASHCAM OFFLINE'] },
-];
-
-/* ============================== MULAI DI SINI ============================== */
-/**
- * JALANKAN SEKALI dari editor (pilih MULAI_DI_SINI > Run):
- *  - menghapus data lama (ringkasan harian/jam September, daftar sumber, log impor, progres)
- *  - menyiapkan sheet FILE_SUMBER & DATA_BULANAN
- *  - memasang proses otomatis tiap jam dan langsung membaca folder sumber
- */
-function MULAI_DI_SINI() {
-  const ss = ctrl();
-  siapkanSheetPada(ss);      // buat sheet baru dulu (spreadsheet harus selalu punya minimal 1 sheet)
-  hapusDataLama(ss);
-  pasangTrigger();
-  const hasil = prosesData(true);
-  Logger.log('Selesai. ' + hasil);
-  Logger.log('Langkah berikut: Deploy > Manage deployments > Edit > Version: New version > Deploy (atau New deployment > Web app).');
-}
-
-/** Menghapus semua sheet & pengaturan dari versi data harian sebelumnya. */
-function hapusDataLama(ss) {
-  ['SUMBER', 'IMPOR', 'PROGRES', 'RINGKASAN_JAM', 'RINGKASAN_UNIT', 'RINGKASAN_LAIN'].forEach(n => {
-    const sh = ss.getSheetByName(n);
-    if (sh && ss.getSheets().length > 1) ss.deleteSheet(sh);
-  });
-  const props = PropertiesService.getScriptProperties();
-  Object.keys(props.getProperties()).forEach(k => { if (k.indexOf('MON_') === 0 || k === 'LAST_RUN') props.deleteProperty(k); });
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'prosesData').forEach(t => ScriptApp.deleteTrigger(t));
-  hapusCache();
-}
+const KATEGORI = { 'DRIVING BEHAVIOUR': 'DB', 'DRIVER DISCIPLINE': 'DD', 'FATIGUE MANAGEMENT': 'FM' };
+/** Parameter yang dipindah kategorinya di dashboard (nama parameter huruf besar -> kode kategori). */
+const PINDAH_KATEGORI = { 'DRIVING > 4 HOURS': 'DB' };
+/** Tipe alat per parameter (untuk keterangan). */
+const TIPE = {
+  'OVER SPEED': 'GPS', 'HARSH TURN / CORNERING': 'GPS', 'HARSH BRAKING': 'GPS', 'HARSH ACCELERATION': 'GPS',
+  'BLACK ZONE': 'GPS', 'IDLING': 'GPS', 'DRIVING > 4 HOURS': 'GPS',
+  'MENGGUNAKAN TELEPON': 'CCTV', 'MEROKOK / VAPE': 'CCTV', 'MICROSLEEP': 'CCTV', 'MENGUAP': 'CCTV',
+};
 
 /* ============================== MENU ============================== */
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu('Dashboard')
-    .addItem('Proses data sekarang', 'prosesDataManual')
-    .addItem('Baca ulang semua file', 'bacaUlangSemua')
-    .addSeparator()
-    .addItem('Aktifkan proses otomatis', 'aktifkanTrigger')
-    .addItem('Matikan proses otomatis', 'matikanTrigger')
-    .addItem('Hapus cache dashboard', 'hapusCache')
-    .addToUi();
-}
-
-function ctrl() {
-  const id = CFG.CTRL_ID || PropertiesService.getScriptProperties().getProperty('CTRL_ID');
-  if (id) return SpreadsheetApp.openById(id);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) throw new Error('Isi CFG.CTRL_ID dengan ID spreadsheet kontrol.');
-  return ss;
-}
-
-function beritahu(pesan) {
-  try { SpreadsheetApp.getUi().alert(pesan); } catch (e) { Logger.log(pesan); }
-}
-
-function siapkanSheetPada(ss) {
-  const buat = (nama, header, lebar) => {
-    let sh = ss.getSheetByName(nama);
-    if (!sh) sh = ss.insertSheet(nama);
-    if (sh.getLastRow() === 0) {
-      sh.getRange(1, 1, 1, header.length).setValues([header])
-        .setFontWeight('bold').setBackground('#4a7a53').setFontColor('#ffffff');
-      sh.setFrozenRows(1);
-      (lebar || []).forEach((w, i) => sh.setColumnWidth(i + 1, w));
-    }
-    return sh;
-  };
-  buat(CFG.SHEET_FILE, ['Regional', 'Nama File', 'ID File', 'Diubah', 'Sheet Rekap', 'Jumlah Lokasi', 'Bulan Terakhir', 'Diproses', 'Status'],
-    [110, 420, 10, 150, 170, 110, 120, 150, 380]).hideColumns(3);
-  buat(CFG.SHEET_DATA, ['Regional', 'Lokasi', 'Kode Parameter', 'Parameter (laporan)', 'Tipe', 'Kategori'].concat(BULAN.map(b => b.charAt(0) + b.slice(1).toLowerCase())),
-    [110, 190, 120, 200, 60, 80]);
-  const awal = ss.getSheetByName('Sheet1') || ss.getSheetByName('Sheet 1') || ss.getSheetByName('Lembar1');
-  if (awal && awal.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(awal);
-}
-
-/** Ambil sheet; bila belum ada, siapkan semua sheet dulu (anti error "null.getLastRow"). */
-function getSh(ss, nama) {
-  let sh = ss.getSheetByName(nama);
-  if (!sh) { siapkanSheetPada(ss); sh = ss.getSheetByName(nama); }
-  if (!sh) throw new Error('Sheet "' + nama + '" tidak bisa dibuat di spreadsheet kontrol.');
-  return sh;
-}
-
-function pasangTrigger() {
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'prosesData').forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('prosesData').timeBased().everyHours(CFG.JAM_TRIGGER).create();
-}
-function aktifkanTrigger() { pasangTrigger(); beritahu('Proses otomatis aktif setiap ' + CFG.JAM_TRIGGER + ' jam.'); }
-function matikanTrigger() {
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'prosesData').forEach(t => ScriptApp.deleteTrigger(t));
-  beritahu('Proses otomatis dimatikan.');
-}
-function prosesDataManual() {
-  const hasil = prosesData();
-  try { ctrl().toast(hasil, 'Proses data', 10); } catch (e) { Logger.log(hasil); }
-}
-function bacaUlangSemua() {
-  const hasil = prosesData(true);
-  beritahu(hasil);
-}
-
-/* ============================== PROSES ============================== */
-/**
- * Membaca folder sumber. Untuk tiap regional dipakai file yang paling baru diubah.
- * File hanya dibaca ulang bila berubah (atau paksa = true).
- */
-function prosesData(paksa) {
-  paksa = paksa === true;
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) return 'Proses lain masih berjalan.';
-  const pesan = [];
   try {
-    const ss = ctrl();
-    siapkanSheetPada(ss);
-    const log = bacaLogFile(ss);
-    const pilihan = pilihFileTerbaru();                 // {REGIONAL: {id,nama,mime,updated}}
-    const data = bacaData(ss);                          // {REGIONAL: [baris...]}
-    let berubah = false;
-
-    // regional yang filenya sudah tidak ada di folder -> datanya dihapus
-    Object.keys(data).forEach(r => { if (!pilihan[r]) { delete data[r]; delete log[r]; berubah = true; } });
-
-    Object.keys(pilihan).forEach(r => {
-      const f = pilihan[r], L = log[r];
-      if (!paksa && L && L.id === f.id && L.updated === f.updated && L.status === 'OK') return;
-      const rec = { regional: r, nama: f.nama, id: f.id, updated: f.updated, sheet: '', lokasi: 0, bulan: '', diproses: new Date(), status: '' };
-      try {
-        const rekap = ambilRekap(f);
-        if (!rekap) throw new Error('Sheet rekap bulanan tidak ditemukan (nama sheet harus memuat kata "Rekap")');
-        const blok = parseRekap(rekap.values);
-        if (!blok.length) throw new Error('Tidak ada blok PARAMETER di sheet "' + rekap.nama + '"');
-        data[r] = blok.map(b => {
-          const p = cocokParam(b.param);
-          return [r, b.lokasi, p.key, b.param, p.tipe, p.kat].concat(b.vals.map(v => v === null ? '' : v));
-        });
-        const lastM = bulanTerakhir(blok);
-        rec.sheet = rekap.nama;
-        rec.lokasi = new Set(blok.map(b => b.lokasi)).size;
-        rec.bulan = lastM >= 0 ? BULAN[lastM] : '-';
-        rec.status = 'OK';
-        berubah = true;
-        pesan.push(r + ': ' + rec.lokasi + ' lokasi, s/d ' + rec.bulan);
-      } catch (e) {
-        rec.status = 'Gagal: ' + e.message;
-        pesan.push(r + ': GAGAL - ' + e.message);
-      }
-      log[r] = rec;
-    });
-
-    if (berubah) { tulisData(ss, data); hapusCache(); }
-    tulisLogFile(ss, log);
-    hapusCache();
-    PropertiesService.getScriptProperties().setProperty('LAST_RUN', new Date().toISOString());
-  } finally {
-    lock.releaseLock();
-  }
-  return pesan.length ? pesan.join(' | ') : 'Tidak ada file yang berubah.';
+    SpreadsheetApp.getUi().createMenu('Dashboard')
+      .addItem('Hapus cache dashboard', 'hapusCache')
+      .addItem('Uji baca sumber', 'UJI_BACA_SUMBER')
+      .addToUi();
+  } catch (e) { /* dijalankan dari luar spreadsheet */ }
 }
 
-/** Untuk tiap regional (dibaca dari nama file) ambil file Excel/Google Sheets yang paling baru diubah. */
-function pilihFileTerbaru() {
-  const excel = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel',
-    'application/vnd.ms-excel.sheet.macroEnabled.12'];
-  const out = {};
-  const it = DriveApp.getFolderById(CFG.FOLDER_DATA_ID).getFiles();
-  while (it.hasNext()) {
-    const f = it.next(), mt = f.getMimeType();
-    if (mt !== MimeType.GOOGLE_SHEETS && excel.indexOf(mt) < 0) continue;
-    const nama = f.getName(), up = nama.toUpperCase();
-    if (up.indexOf('_TMP_') === 0) continue;            // abaikan salinan sementara
-    const r = REGIONS.filter(x => up.indexOf(x) >= 0)[0];
-    if (!r) continue;
-    const t = f.getLastUpdated().getTime();
-    if (!out[r] || t > out[r].t) out[r] = { id: f.getId(), nama: nama, mime: mt, t: t, updated: new Date(t).toISOString() };
-  }
-  return out;
+function hapusCache() {
+  CacheService.getScriptCache().remove('DASHB2');
+  try { SpreadsheetApp.getActiveSpreadsheet().toast('Cache dihapus. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Cache dihapus.'); }
 }
 
-/* ===== Pembaca file Excel (.xlsx) langsung, TANPA konversi, TANPA Drive API / UrlFetchApp ===== */
-const NS_M = XmlService.getNamespace('http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-const NS_R = XmlService.getNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
-const NS_REL = XmlService.getNamespace('http://schemas.openxmlformats.org/package/2006/relationships');
-
-/** Ambil sheet rekap dari satu file sumber -> {nama, values} atau null bila sheet rekap tidak ada. */
-function ambilRekap(f) {
-  if (f.mime === MimeType.GOOGLE_SHEETS) {
-    const sheet = cariSheetRekap(SpreadsheetApp.openById(f.id));
-    return sheet ? { nama: sheet.getName(), values: sheet.getDataRange().getValues() } : null;
-  }
-  return bacaRekapXlsx(DriveApp.getFileById(f.id).getBlob());
-}
-
-function skorNamaRekap(nama, tersembunyi) {
-  const n = String(nama).toUpperCase();
-  if (!/REKAP/.test(n)) return -100;
-  let sk = 0;
-  if (n.indexOf(String(CFG.TAHUN)) >= 0) sk += 4;
-  if (/BULAN/.test(n)) sk += 2;
-  if (tersembunyi) sk -= 5;
-  return sk;
-}
-
-function kolomDariRef(huruf) {
-  let c = 0;
-  for (let i = 0; i < huruf.length; i++) c = c * 26 + (huruf.charCodeAt(i) - 64);
-  return c - 1;
-}
-
-function teksSi(el) {
-  let s = '';
-  el.getChildren().forEach(ch => {
-    const n = ch.getName();
-    if (n === 't') s += ch.getText();
-    else if (n === 'r') { const t = ch.getChild('t', NS_M); if (t) s += t.getText(); }
-  });
-  return s;
-}
-
-/** Membaca sheet rekap dari blob .xlsx dengan membuka zip & XML-nya sendiri. */
-function bacaRekapXlsx(blob) {
-  let files;
-  try { files = Utilities.unzip(blob.copyBlob().setContentType('application/zip')); }
-  catch (e) { throw new Error('File bukan .xlsx yang valid (jika .xls lama, simpan ulang sebagai .xlsx)'); }
-  const peta = {};
-  files.forEach(b => { peta[b.getName()] = b; });
-  const teks = n => peta[n] ? peta[n].getDataAsString('UTF-8') : null;
-
-  const wbXml = teks('xl/workbook.xml'), relXml = teks('xl/_rels/workbook.xml.rels');
-  if (!wbXml || !relXml) throw new Error('Struktur .xlsx tidak dikenali (workbook.xml tidak ada)');
-  const daftar = XmlService.parse(wbXml).getRootElement().getChild('sheets', NS_M).getChildren('sheet', NS_M).map(s => {
-    const st = s.getAttribute('state');
-    return { nama: s.getAttribute('name').getValue(), rid: s.getAttribute('id', NS_R).getValue(), hidden: !!(st && st.getValue() !== 'visible') };
-  });
-  const rel = {};
-  XmlService.parse(relXml).getRootElement().getChildren('Relationship', NS_REL).forEach(r => {
-    let t = r.getAttribute('Target').getValue().replace(/^\//, '');
-    if (t.indexOf('xl/') !== 0) t = 'xl/' + t;
-    rel[r.getAttribute('Id').getValue()] = t;
-  });
-
-  const kand = daftar.map(d => ({ d: d, k: skorNamaRekap(d.nama, d.hidden) })).filter(x => x.k > -100).sort((a, b) => b.k - a.k);
-  if (!kand.length) return null;
-  const pilih = kand[0].d;
-  const xmlSheet = teks(rel[pilih.rid]);
-  if (!xmlSheet) throw new Error('Isi sheet "' + pilih.nama + '" tidak ditemukan di dalam file');
-
-  const ss = [];
-  const ssXml = teks('xl/sharedStrings.xml');
-  if (ssXml) XmlService.parse(ssXml).getRootElement().getChildren('si', NS_M).forEach(si => ss.push(teksSi(si)));
-
-  const sel = [];
-  let maxR = -1, maxC = -1, rowNo = 0;
-  XmlService.parse(xmlSheet).getRootElement().getChild('sheetData', NS_M).getChildren('row', NS_M).forEach(row => {
-    const ra = row.getAttribute('r');
-    const ri = ra ? Number(ra.getValue()) - 1 : rowNo;
-    rowNo = ri + 1;
-    row.getChildren('c', NS_M).forEach(c => {
-      const m = /^([A-Z]+)(\d+)$/.exec(c.getAttribute('r').getValue());
-      if (!m) return;
-      const t = c.getAttribute('t'), tipe = t ? t.getValue() : 'n';
-      const v = c.getChild('v', NS_M);
-      let val = '';
-      if (tipe === 'inlineStr') { const is = c.getChild('is', NS_M); val = is ? teksSi(is) : ''; }
-      else if (v) {
-        const tx = v.getText();
-        if (tipe === 's') val = ss[Number(tx)] !== undefined ? ss[Number(tx)] : '';
-        else if (tipe === 'str' || tipe === 'b') val = tx;
-        else if (tipe === 'e') val = '';
-        else val = tx === '' ? '' : Number(tx);
-      }
-      if (val === '' || val === null) return;
-      const ci = kolomDariRef(m[1]);
-      sel.push([ri, ci, val]);
-      if (ri > maxR) maxR = ri;
-      if (ci > maxC) maxC = ci;
-    });
-  });
-  const values = [];
-  for (let r = 0; r <= maxR; r++) values.push(new Array(maxC + 1).fill(''));
-  sel.forEach(x => { values[x[0]][x[1]] = x[2]; });
-  return { nama: pilih.nama, values: values };
-}
-
-/**
- * Sheet yang namanya memuat "REKAP" (Rekap Bulanan / Rekapan Bulanan / Rekapan Bulan / REKAP BULANAN 2026).
- * Bila lebih dari satu, pilih yang paling cocok: memuat tahun CFG.TAHUN, memuat kata BULAN, tidak tersembunyi.
- */
-function cariSheetRekap(ss) {
-  const kand = ss.getSheets().map(s => {
-    let h = false; try { h = s.isSheetHidden(); } catch (e) { /* abaikan */ }
-    return { s: s, k: skorNamaRekap(s.getName(), h) };
-  }).filter(x => x.k > -100).sort((a, b) => b.k - a.k);
-  return kand.length ? kand[0].s : null;
-}
-
-/**
- * Membaca blok rekap: baris yang memuat sel "PARAMETER" (kolom A-D) adalah judul tabel;
- * nama lokasi ada di baris-baris di atasnya; baris parameter di bawahnya sampai sel parameter kosong.
- * Kolom bulan dicocokkan dari judul (nama penuh atau singkatan 3 huruf); kolom bertahun lain,
- * mis. "DESEMBER (2025)", dilewati.
- */
-function parseRekap(v) {
-  const out = [];
-  const th = String(CFG.TAHUN);
-  const idxBulan = s => {
-    s = s.replace(/\(.*\)/, '').replace(/\s+/g, ' ').trim();
-    let m = BULAN.indexOf(s);
-    if (m < 0 && s.length === 3) m = BULAN.findIndex(b => b.slice(0, 3) === s);
-    return m;
-  };
-  for (let i = 0; i < v.length; i++) {
-    let c = -1;
-    for (let j = 0; j < Math.min(4, v[i].length); j++) {
-      if (String(v[i][j]).trim().toUpperCase() === 'PARAMETER') { c = j; break; }
-    }
-    if (c < 0) continue;
-
-    const kolom = {};
-    v[i].forEach((h, j) => {
-      const s = String(h).trim().toUpperCase();
-      const thn = s.match(/(20\d\d)/);
-      if (thn && thn[1] !== th) return;
-      const m = idxBulan(s);
-      if (m >= 0 && kolom[m] === undefined) kolom[m] = j;
-    });
-
-    let lokasi = '';
-    for (let k = i - 1; k >= Math.max(0, i - 3) && !lokasi; k--) {
-      for (let j = 0; j <= c; j++) {
-        const a = v[k][j] == null ? '' : String(v[k][j]).trim();
-        if (a && !/^(LAPORAN|PERIODE|NO\.?$)/i.test(a)) { lokasi = a.toUpperCase().replace(/\s+/g, ' '); break; }
-      }
-    }
-
-    for (let k = i + 1; k < v.length; k++) {
-      const p = v[k][c] == null ? '' : String(v[k][c]).trim();
-      if (!p || p.toUpperCase() === 'PARAMETER') break;
-      const vals = BULAN.map((_, m) => kolom[m] === undefined ? null : angka(v[k][kolom[m]]));
-      out.push({ lokasi: lokasi || '(TANPA NAMA)', param: p, vals: vals });
-    }
-  }
-  return out;
-}
-
-function angka(x) {
-  if (typeof x === 'number') return isFinite(x) ? x : null;
-  const s = String(x == null ? '' : x).trim().replace(/\./g, '').replace(',', '.');
-  if (s === '' || /^(N\/?A|-|NA)$/i.test(s)) return null;
-  const n = Number(s);
-  return isFinite(n) ? n : null;
-}
-
-function cocokParam(nama) {
-  const n = String(nama).toUpperCase().replace(/\(.*?\)/g, '').replace(/\s+/g, ' ').trim();
-  for (const p of PARAM) if (p.alias.indexOf(n) >= 0) return p;
-  return { key: 'LAIN:' + n, label: nama, tipe: '-', kat: 'LAIN' };
-}
-
-/** Bulan terakhir yang berisi data (ada nilai > 0). */
-function bulanTerakhir(blok) {
-  let last = -1;
-  blok.forEach(b => b.vals.forEach((x, m) => { if (x !== null && x > 0 && m > last) last = m; }));
-  return last;
-}
-
-/**
- * DIAGNOSA (opsional): jalankan dari editor untuk melihat hasil baca sheet rekap
- * tiap regional di View > Logs, TANPA mengubah data dashboard.
- */
-function UJI_BACA_REKAP() {
-  const pilihan = pilihFileTerbaru();
-  Object.keys(pilihan).forEach(r => {
-    const f = pilihan[r];
-    try {
-      const rekap = ambilRekap(f);
-      if (!rekap) { Logger.log(r + ' | ' + f.nama + ' -> sheet rekap TIDAK ditemukan'); return; }
-      const blok = parseRekap(rekap.values);
-      const lokasi = Array.from(new Set(blok.map(b => b.lokasi)));
-      const lain = Array.from(new Set(blok.map(b => cocokParam(b.param)).filter(p => p.key.indexOf('LAIN:') === 0).map(p => p.label)));
-      const lm = bulanTerakhir(blok);
-      Logger.log(r + ' | ' + f.nama + ' | sheet "' + rekap.nama + '" | ' + lokasi.length + ' lokasi: ' + lokasi.join(', '));
-      Logger.log('   baris parameter: ' + blok.length + ' | bulan terakhir: ' + (lm >= 0 ? BULAN[lm] : '-')
-        + (lain.length ? ' | parameter tak dikenal: ' + lain.join('; ') : ''));
-    } catch (e) {
-      Logger.log(r + ' | GAGAL: ' + e.message);
-    }
-  });
-}
-
-/* ============================== SHEET I/O ============================== */
-function bacaLogFile(ss) {
-  const sh = getSh(ss, CFG.SHEET_FILE), out = {};
-  if (sh.getLastRow() < 2) return out;
-  sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues().forEach(r => {
-    if (r[0]) out[r[0]] = { regional: r[0], nama: r[1], id: r[2], updated: String(r[3]), sheet: r[4], lokasi: r[5], bulan: r[6], diproses: r[7], status: String(r[8]) };
-  });
-  return out;
-}
-
-function tulisLogFile(ss, log) {
-  const rows = REGIONS.filter(r => log[r]).map(r => {
-    const L = log[r];
-    return [r, L.nama, L.id, L.updated, L.sheet, L.lokasi, L.bulan, L.diproses, L.status];
-  });
-  tulis(getSh(ss, CFG.SHEET_FILE), rows, 9, [4]);
-}
-
-function bacaData(ss) {
-  const sh = getSh(ss, CFG.SHEET_DATA), out = {};
-  if (sh.getLastRow() < 2) return out;
-  sh.getRange(2, 1, sh.getLastRow() - 1, 18).getValues().forEach(r => {
-    if (!r[0]) return;
-    (out[r[0]] = out[r[0]] || []).push(r);
-  });
-  return out;
-}
-
-function tulisData(ss, data) {
-  const rows = [];
-  REGIONS.forEach(r => (data[r] || []).forEach(x => rows.push(x)));
-  tulis(getSh(ss, CFG.SHEET_DATA), rows, 18, [1, 2, 3, 4, 5, 6]);
-}
-
-function tulis(sh, rows, lebar, kolTeks) {
-  const lama = sh.getLastRow();
-  if (lama > 1) sh.getRange(2, 1, lama - 1, Math.max(lebar, sh.getLastColumn())).clearContent();
-  if (!rows.length) return;
-  const perlu = rows.length + 1;
-  if (sh.getMaxRows() < perlu) sh.insertRowsAfter(sh.getMaxRows(), perlu - sh.getMaxRows());
-  (kolTeks || []).forEach(c => sh.getRange(2, c, rows.length, 1).setNumberFormat('@'));
-  sh.getRange(2, 1, rows.length, lebar).setValues(rows);
+/** DIAGNOSA: jalankan dari editor, lihat hasilnya di View > Logs. */
+function UJI_BACA_SUMBER() {
+  const d = bangunData();
+  Logger.log('Bulan berisi data: ' + d.bulanAda.map(m => BULAN[m]).join(', '));
+  Logger.log('Parameter: ' + d.params.map(p => p.label + ' (' + p.kat + ')').join('; '));
+  Logger.log('Regional: ' + Object.keys(d.regional).join(', '));
+  Logger.log('Rekap lokasi per bulan: ' + Object.keys(d.lokasiBulan).map(m => BULAN[m]).join(', ') + ' | YTD: ' + d.lokasiYTD.length + ' lokasi');
+  Logger.log('Top AMT: ' + (d.topAMT ? d.topAMT.length + ' baris' : 'sheet Top_AMT belum ada'));
+  if (d.peringatan.length) Logger.log('Peringatan: ' + d.peringatan.join(' | '));
 }
 
 /* ============================== WEB APP ============================== */
@@ -497,48 +77,194 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-/** Dipanggil dashboard (google.script.run). Hasil disimpan di cache 10 menit. */
 function getDashboardData() {
   const cache = CacheService.getScriptCache();
-  const hit = cache.get('DASHB');
+  const hit = cache.get('DASHB2');
   if (hit) return hit;
   const json = JSON.stringify(bangunData());
-  try { if (json.length < 95000) cache.put('DASHB', json, 600); } catch (e) { /* tanpa cache */ }
+  try { if (json.length < 95000) cache.put('DASHB2', json, CFG.CACHE_DETIK); } catch (e) { /* tanpa cache */ }
   return json;
 }
 
-function hapusCache() {
-  const c = CacheService.getScriptCache();
-  c.remove('DASHB'); c.remove('DASH_N');
-}
-
-/** data[regional][lokasi][kodeParameter] = [12 nilai, null = kosong/N/A] */
+/* ============================== BACA SUMBER ============================== */
 function bangunData() {
-  const ss = ctrl();
-  siapkanSheetPada(ss);                                 // pastikan sheet ada walau MULAI_DI_SINI belum dijalankan
-  const data = {}, extra = {};
-  const raw = bacaData(ss);
-  Object.keys(raw).forEach(r => raw[r].forEach(x => {
-    const lok = String(x[1]), key = String(x[2]);
-    const reg = data[r] = data[r] || {};
-    const o = reg[lok] = reg[lok] || {};
-    const vals = x.slice(6, 18).map(v => v === '' || v === null ? null : Number(v));
-    if (o[key]) o[key] = o[key].map((a, i) => a === null && vals[i] === null ? null : (a || 0) + (vals[i] || 0));
-    else o[key] = vals;
-    if (key.indexOf('LAIN:') === 0) extra[key] = { key: key, label: String(x[3]), tipe: '-', kat: 'LAIN' };
-  }));
-  const log = bacaLogFile(ss);
-  const files = {};
-  REGIONS.forEach(r => { if (log[r]) files[r] = { nama: log[r].nama, bulan: log[r].bulan, status: log[r].status, lokasi: log[r].lokasi, updated: log[r].updated }; });
-  let trig = false;
-  try { trig = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'prosesData'); } catch (e) { trig = true; }
+  const ss = SpreadsheetApp.openById(CFG.SUMBER_ID);
+  const peringatan = [];
+  const ambil = (awalan, wajib) => {
+    const a = awalan.toUpperCase();
+    const sh = ss.getSheets().filter(s => s.getName().trim().toUpperCase().indexOf(a) === 0)[0];
+    if (!sh) { if (wajib) peringatan.push('Sheet "' + awalan + '" tidak ditemukan di spreadsheet sumber.'); return null; }
+    return sh.getDataRange().getValues();
+  };
+
+  const par = bacaParameter(ambil('Parameter_Bulanan', true) || []);
+  const reg = bacaRegional(ambil('Rekap_Regional', true) || []);
+  const lokasiBulan = {};
+  ss.getSheets().forEach(s => {
+    const n = s.getName().trim().toUpperCase();
+    if (n.indexOf('REKAP_LOKASI_') !== 0 || /YTD/.test(n)) return;
+    const m = idxBulan(n.replace('REKAP_LOKASI_', ''));
+    if (m < 0) return;
+    lokasiBulan[m] = bacaLokasi(s.getDataRange().getValues(), m);
+  });
+  const lokasiYTD = bacaLokasi(ambil('Rekap_Lokasi_YTD', true) || [], -1);
+  const top = ambil('Top_AMT', false);
+  const catatan = (ambil('Catatan', false) || []).map(r => String(r[0] || '').trim()).filter(s => s);
+
+  const bulanAda = [];
+  for (let m = 0; m < 12; m++) {
+    const ada = Object.keys(par.nilai).some(k => par.nilai[k][m] !== null) || Object.keys(reg).some(r => reg[r].total[m] !== null);
+    if (ada) bulanAda.push(m);
+  }
   return {
-    tahun: CFG.TAHUN, regions: REGIONS, bulan: BULAN,
-    params: PARAM.map(p => ({ key: p.key, label: p.label, tipe: p.tipe, kat: p.kat })).concat(Object.values(extra)),
-    data: data, files: files,
-    updated: PropertiesService.getScriptProperties().getProperty('LAST_RUN'),
-    otomatis: trig,
+    tahun: CFG.TAHUN, regions: REGIONS, bulanAda: bulanAda,
+    params: par.params, nilai: par.nilai, lain: par.lain,
+    regional: reg, lokasiBulan: lokasiBulan, lokasiYTD: lokasiYTD,
+    topAMT: top ? bacaTopAMT(top) : null,
+    catatan: catatan, peringatan: peringatan,
+    updated: new Date().toISOString(),
   };
 }
 
+/* ---- util ---- */
+function teks(x) { return String(x == null ? '' : x).replace(/\s+/g, ' ').trim(); }
+function angka(x) {
+  if (typeof x === 'number') return isFinite(x) ? x : null;
+  const s = teks(x).replace(/\./g, '').replace(',', '.');
+  if (s === '' || /^(N\/?A|-|NA)$/i.test(s)) return null;
+  const n = Number(s);
+  return isFinite(n) ? n : null;
+}
+/** "Agustus*", "AGU", "Total Agu", "Jul" -> indeks bulan 0..11, atau -1. */
+function idxBulan(s) {
+  s = teks(s).toUpperCase().replace(/\*|\(.*?\)/g, '').replace(/^TOTAL\s+/, '').replace(/\s*20\d\d$/, '').trim();
+  let m = BULAN.indexOf(s);
+  if (m < 0 && s.length >= 3) m = BULAN.findIndex(b => b.slice(0, 3) === s.slice(0, 3) && (s.length === 3 || b.indexOf(s) === 0));
+  if (m < 0 && s === 'AUG') m = 7;
+  return m;
+}
+function namaRegional(s) {
+  const u = teks(s).toUpperCase();
+  return REGIONS.filter(r => u.indexOf(r) === 0)[0] || null;
+}
+function petaKolom(baris) {
+  const k = {};
+  baris.forEach((h, j) => { const s = teks(h).toUpperCase(); if (s && k[s] === undefined) k[s] = j; });
+  return k;
+}
+function kolomBulan(baris) {
+  const k = {};
+  baris.forEach((h, j) => { const s = teks(h).toUpperCase(); if (/TOTAL|KENAIKAN|RATA/.test(s)) return; const m = idxBulan(s); if (m >= 0 && k[m] === undefined) k[m] = j; });
+  return k;
+}
+const kosong12 = () => BULAN.map(() => null);
 
+/* ---- Parameter_Bulanan ---- */
+function bacaParameter(v) {
+  const params = [], nilai = {}, lain = {};
+  let kat = null, kol = {};
+  v.forEach(r => {
+    const a = teks(r[0]), A = a.toUpperCase();
+    if (!a) return;
+    if (A === 'PARAMETER') { kol = kolomBulan(r); return; }
+    if (KATEGORI[A]) { kat = KATEGORI[A]; return; }
+    if (A.indexOf('PARAMETER LAIN') === 0) { kat = 'LAIN'; return; }
+    if (A.indexOf('TOTAL') === 0) return;
+    if (!kat || !Object.keys(kol).length) return;
+    const vals = kosong12();
+    Object.keys(kol).forEach(m => { vals[m] = angka(r[kol[m]]); });
+    if (kat === 'LAIN') { lain[a] = vals; return; }
+    const k = PINDAH_KATEGORI[A] || kat;
+    params.push({ key: a, label: a, kat: k, katAsal: kat, tipe: TIPE[A] || '-' });
+    nilai[a] = vals;
+  });
+  return { params: params, nilai: nilai, lain: lain };
+}
+
+/* ---- Rekap_Regional ---- */
+function bacaRegional(v) {
+  const out = {};
+  REGIONS.forEach(r => { out[r] = { total: kosong12(), kat: {}, lokasi: null }; });
+  let judul = '';
+  for (let i = 0; i < v.length; i++) {
+    const a = teks(v[i][0]).toUpperCase();
+    if (a && a !== 'REGIONAL' && !namaRegional(a)) { judul = a; continue; }
+    if (a !== 'REGIONAL') continue;
+    const k = petaKolom(v[i]);
+    const totals = Object.keys(k).filter(h => /^TOTAL\s/.test(h) && idxBulan(h) >= 0).sort((x, y) => k[x] - k[y]);
+    if (k['DRIVING BEHAVIOUR'] !== undefined) {
+      // tabel regional x kategori untuk satu bulan
+      let m = totals.length ? idxBulan(totals[0]) : -1;
+      if (m < 0) { const t = judul.match(/[–-]\s*([A-Z]+)/); m = t ? idxBulan(t[1]) : -1; }
+      const mp = totals.length > 1 ? idxBulan(totals[1]) : -1;
+      for (let j = i + 1; j < v.length; j++) {
+        const r = namaRegional(v[j][0]);
+        if (!r) break;
+        const o = out[r];
+        if (m >= 0) o.kat[m] = { DB: angka(v[j][k['DRIVING BEHAVIOUR']]) || 0, DD: angka(v[j][k['DRIVER DISCIPLINE']]) || 0, FM: angka(v[j][k['FATIGUE MANAGEMENT']]) || 0 };
+        if (m >= 0 && totals.length) o.total[m] = angka(v[j][k[totals[0]]]);
+        if (mp >= 0 && o.total[mp] === null) o.total[mp] = angka(v[j][k[totals[1]]]);
+        if (k['JUMLAH LOKASI'] !== undefined) o.lokasi = angka(v[j][k['JUMLAH LOKASI']]);
+      }
+    } else {
+      // tabel total 3 kategori per regional per bulan
+      const kb = kolomBulan(v[i]);
+      for (let j = i + 1; j < v.length; j++) {
+        const r = namaRegional(v[j][0]);
+        if (!r) break;
+        Object.keys(kb).forEach(m => { out[r].total[m] = angka(v[j][kb[m]]); });
+      }
+    }
+  }
+  return out;
+}
+
+/* ---- Rekap_Lokasi_<Bln> / Rekap_Lokasi_YTD ---- */
+function bacaLokasi(v, m) {
+  const rows = [];
+  for (let i = 0; i < v.length; i++) {
+    if (teks(v[i][0]).toUpperCase() !== 'LOKASI') continue;
+    const k = petaKolom(v[i]);
+    const prevH = Object.keys(k).filter(h => /^TOTAL\s/.test(h) && idxBulan(h) >= 0)[0];
+    const kBulan = Object.keys(k).filter(h => /BULAN TERDATA/.test(h))[0];
+    const kRata = Object.keys(k).filter(h => /RATA/.test(h))[0];
+    for (let j = i + 1; j < v.length; j++) {
+      const l = teks(v[j][0]);
+      if (!l) break;
+      rows.push({
+        l: l.toUpperCase(), r: namaRegional(v[j][k['REGIONAL']]),
+        DB: angka(v[j][k['DRIVING BEHAVIOUR']]) || 0, DD: angka(v[j][k['DRIVER DISCIPLINE']]) || 0, FM: angka(v[j][k['FATIGUE MANAGEMENT']]) || 0,
+        t: angka(v[j][k['TOTAL']]) || 0,
+        p: prevH ? angka(v[j][k[prevH]]) : null, pm: prevH ? idxBulan(prevH) : null,
+        n: kBulan ? angka(v[j][k[kBulan]]) : null, avg: kRata ? angka(v[j][k[kRata]]) : null,
+      });
+    }
+    break;
+  }
+  return rows;
+}
+
+/* ---- Top_AMT ---- */
+function bacaTopAMT(v) {
+  const rows = [];
+  for (let i = 0; i < v.length; i++) {
+    const k = petaKolom(v[i]);
+    const kAmt = Object.keys(k).filter(h => /AMT/.test(h))[0];
+    if (!kAmt || k['TOTAL'] === undefined) continue;
+    const kTop = Object.keys(k).filter(h => /TERBANYAK|DOMINAN/.test(h))[0];
+    for (let j = i + 1; j < v.length; j++) {
+      const amt = teks(v[j][k[kAmt]]);
+      if (!amt) continue;
+      const col = h => k[h] === undefined ? null : v[j][k[h]];
+      const bl = col('BULAN');
+      rows.push({
+        b: bl === null ? -1 : bl instanceof Date ? bl.getMonth() : /^\s*(1[0-2]|[1-9])\s*$/.test(String(bl)) ? Number(bl) - 1 : idxBulan(bl),
+        amt: amt.toUpperCase(), r: namaRegional(col('REGIONAL')), l: teks(col('LOKASI')).toUpperCase(),
+        DB: angka(col('DRIVING BEHAVIOUR')) || 0, DD: angka(col('DRIVER DISCIPLINE')) || 0, FM: angka(col('FATIGUE MANAGEMENT')) || 0,
+        t: angka(col('TOTAL')) || 0, top: kTop ? teks(v[j][k[kTop]]) : '',
+      });
+    }
+    break;
+  }
+  return rows;
+}
