@@ -29,7 +29,7 @@
 
 /* ============================== PENGATURAN ============================== */
 const CFG = {
-  SUMBER_ID: '1eyKwUV9co0L4-39bWqEdpdg8XB7QZ6CAGrMqlguS5Rw',   // spreadsheet Summary_Dashboard_2026_Jan-Agu
+  SUMBER_ID: '1SZpcc98GEWkHGlaYxLwAD8fEjJ2eTXhyJ4BZKhpVRTU',   // spreadsheet Summary_Dashboard_2026_Rumus (berbasis rumus)
   TAHUN: 2026,
   CACHE_DETIK: 600,
 };
