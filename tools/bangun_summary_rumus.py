@@ -4,7 +4,7 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter as CL
 from openpyxl.comments import Comment
-AGG, OLD, OUTX = sys.argv[1:4]
+AGG, OUTX = sys.argv[1:3]
 BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
 B3 = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
 REG = ['SUMBAGUT','SUMBAGSEL','JABALINUS','KALIMANTAN','SULAWESI','MALUPA']
@@ -12,15 +12,16 @@ RN = {r: r.title() for r in REG}
 KATS = ['Driving Behaviour', 'Driver Discipline', 'Fatigue Management']
 KAT3 = 'Driving Behaviour|Driver Discipline|Fatigue Management'
 PAR = [
-  ('Over Speed','Driving Behaviour',['OVERSPEED','OVER SPEED']), ('Harsh Turn / Cornering','Driving Behaviour',['HARSH TURN']),
-  ('Harsh Braking','Driving Behaviour',['HARSH BREAKING','HARSH BRAKING']), ('Harsh Acceleration','Driving Behaviour',['HARSH ACCELERATION']),
-  ('Driving > 4 Hours','Driving Behaviour',['DRIVING > 4 HOURS','DRIVING >4 HOURS']),
-  ('Black Zone','Driver Discipline',['BLACKZONE','BLACK ZONE']), ('Idling','Driver Discipline',['IDLE','IDLING']),
+  ('Over Speed','Driving Behaviour',['OVERSPEED','OVER SPEED','OVEESPEED']), ('Harsh Turn / Cornering','Driving Behaviour',['HARSH TURN','HHARSH TURN','HASRH TURN']),
+  ('Harsh Braking','Driving Behaviour',['HARSH BREAKING','HARSH BRAKING']),
+  ('Harsh Acceleration','Driving Behaviour',['HARSH ACCELERATION','HARSH ACCELRATION','HARSH ACCELARATION','HARSH ACCELERATIO','HARSHACCELERATION','HARSH ACCELERATON']),
+  ('Driving > 4 Hours','Driving Behaviour',['DRIVING > 4 HOURS','DRIVING >4 HOURS','DRIVING > HOURS','DRIVING 4 HOURS']),
+  ('Black Zone','Driver Discipline',['BLACKZONE','BLACK ZONE']), ('Idling','Driver Discipline',['IDLE','IDLING','IDE']),
   ('Menggunakan Telepon','Driver Discipline',['PHONE DETECTION']), ('Merokok / Vape','Driver Discipline',['SMOKING DETECTION']),
   ('Microsleep','Fatigue Management',['DRIVER FATIGUE']), ('Menguap','Fatigue Management',['YAWNING DETECTION']),
-  ('Distraction Pengemudi','Parameter lain',['DRIVER DISTRACTION']), ('Camera Covering','Parameter lain',['CAMERA COVERING ALARM']),
+  ('Distraction Pengemudi','Parameter lain',['DRIVER DISTRACTION']), ('Camera Covering','Parameter lain',['CAMERA COVERING ALARM','CAMERA-COVERING ALARM','COVERING ALARM','CAMERA COVERING']),
 ]
-EXCL = ['SEAT BELT DETECTION', 'ILLEGAL SHUTDOWN', 'REST AREA']
+EXCL = ['SEAT BELT DETECTION', 'SEATBELT DETECTION', 'ILLEGAL SHUTDOWN', 'REST AREA', 'REST ARE', 'VIDEO LOSS ALARM', 'HIGH SPEED ALARM', 'ABNORMAL STORAGE ALARM', '0.0']
 CASE = {c: (l, k) for l, k, cs in PAR for c in cs}
 for c in EXCL: CASE[c] = ('', 'Tidak dihitung')
 AREA = {'SUMBAGUT I': 'Sumbagut', 'SUMBAGUT II': 'Sumbagut', 'SUMBAGSEL': 'Sumbagsel', 'JABALINUS': 'Jabalinus',
@@ -37,10 +38,9 @@ EV = collections.Counter()    # (bulan, tanggal|None, area, lokasi, case)
 AM = collections.Counter()    # (bulan, area, lokasi, nama, case)
 lokreg = collections.defaultdict(collections.Counter)
 areas, cases = set(), collections.Counter()
-drop = collections.Counter()
+drop = collections.Counter(); INFO = []
 for f in sorted(glob.glob(os.path.join(AGG, '*.json'))):
-    d = json.load(open(f)); b = os.path.basename(f)[:-5]
-    fm = 7 if b.startswith('rawagu_') else BLN.index(b.split('_', 1)[1])
+    d = json.load(open(f)); fm = d['mon'] - 1; INFO.append(d)
     for ds, area, lok, case, n in d['DL']:
         if ds:
             dt = datetime.date.fromisoformat(ds)
@@ -61,22 +61,6 @@ LOKREG = {l: c.most_common(1)[0][0] for l, c in lokreg.items()}
 def regrow(area, lok): return reg_of(area) or LOKREG.get(lok) or '?'
 MONTHS = sorted({k[0] for k in EV})          # 1-based bulan dengan data mentah
 AMONTHS = sorted({k[0] for k in AM})
-
-# ---------- Juli dari Summary lama ----------
-old = json.load(open(OLD))
-def tbl(rows, key, col):
-    out, hdr = {}, None
-    for row in rows:
-        a = str(row[0]).strip()
-        if a == key: hdr = [str(x).strip() for x in row]; continue
-        if hdr and a and col in hdr and row[hdr.index(col)] not in ('', None): out[a] = row
-    return out, hdr
-jp, hp = tbl(old['Parameter_Bulanan'], 'Parameter', 'Juli')
-JUL_PAR = {k: v[hp.index('Juli')] for k, v in jp.items() if not k.upper().startswith('TOTAL')}
-jr, hr = tbl(old['Rekap_Regional'], 'Regional', 'Juli')
-JUL_REG = {k: v[hr.index('Juli')] for k, v in jr.items() if k.upper() in REG}
-jl, hl = tbl(old['Rekap_Lokasi_Agu'], 'Lokasi', 'Total Jul')
-JUL_LOK = {k.upper(): (v[1], v[hl.index('Total Jul')]) for k, v in jl.items()}
 
 # ---------- workbook ----------
 wb = openpyxl.Workbook(); wb.remove(wb.active)
@@ -104,37 +88,39 @@ pand = [
  ('Semua angka di sheet ringkasan dihitung dengan RUMUS dari sheet Data_Event dan Data_AMT. Klik sel mana pun untuk melihat rumusnya.', None),
  ('', None),
  ('ALUR DATA', BOLD),
- ('File mentah bulanan (1 baris = 1 event)  →  pivot  →  Data_Event & Data_AMT  →  rumus  →  sheet ringkasan  →  dashboard', None),
+ ('File mentah per regional per bulan (1 baris = 1 event)  →  pivot  →  Data_Event & Data_AMT  →  rumus  →  sheet ringkasan  →  dashboard', None),
+ ('Sumber: folder "2026" (subfolder per bulan, isinya file per regional). Daftar file yang dipakai dan kelengkapan tanggalnya ada di sheet Kelengkapan.', None),
  ('', None),
  ('SHEET', BOLD),
  ('Data_Event : jumlah event per Tanggal × Area × Lokasi × Case. Kolom A–F diisi (tempel hasil pivot), kolom G–I (Regional, Parameter, Kategori) terisi otomatis.', None),
- ('Data_AMT   : jumlah event per Bulan × Area × Lokasi × Nama AMT (kolom AMT 1) × Case. Kolom A–F diisi, kolom G–I otomatis.', None),
- ('Pemetaan   : kode Case → Parameter & Kategori, Area → Regional, Lokasi → Regional. Tambahkan baris di sini kalau ada Case/Lokasi baru.', None),
- ('Juli_Manual: angka Juli dari Summary lama (file mentah Juli belum ada). Dipakai otomatis selama Data_Event belum punya Bulan 7.', None),
+ ('Data_AMT   : jumlah event per Bulan × Area × Lokasi × Nama AMT (kolom AMT 1, NIP dalam kurung dibuang) × Case. Kolom A–F diisi, kolom G–I otomatis.', None),
+ ('Pemetaan   : kode Case → Parameter & Kategori (termasuk salah ketik di file mentah), Area → Regional, Lokasi → Regional. Tambahkan baris di sini kalau ada Case/Lokasi baru.', None),
+ ('Kelengkapan: per bulan & regional: file sumber, jumlah baris, tanggal yang kosong / sangat rendah. Dipakai untuk mengecek data yang kurang.', None),
  ('Cek        : pemeriksaan otomatis (Case/Regional yang belum terpetakan, lokasi yang belum ada di tabel). Semua harus 0 / OK.', None),
  ('Parameter_Bulanan, Rekap_Regional, Rekap_Lokasi_*, Top_AMT, Harian : sheet yang dibaca dashboard. Jangan ganti nama sheet & judul kolomnya.', None),
  ('', None),
- ('CARA UPDATE DATA BULAN BARU (contoh: September)', BOLD),
- ('1. Buka file mentah September (kolom Case, Area, Tanggal, Lokasi, AMT 1). Buat Pivot Table: Baris = Tanggal, Area, Lokasi, Case; Nilai = COUNTA dari Case.', None),
- ('   Tampilkan dalam bentuk tabel (tanpa subtotal / total). Salin hasilnya.', None),
- ('2. Di Data_Event, tempel di baris kosong pertama mulai kolom B (Tanggal, Area, Lokasi, Case, Jumlah). Isi kolom A (Bulan) dengan angka 9 untuk semua baris itu.', None),
- ('3. Buat Pivot kedua: Baris = Area, Lokasi, AMT 1, Case; Nilai = COUNTA. Tempel di Data_AMT mulai kolom B, isi kolom A (Bulan) = 9. Baris tanpa nama AMT boleh dibuang.', None),
- ('4. Parameter_Bulanan & total di Rekap_Regional langsung terisi untuk September (kolom bulan sudah ada sampai Desember). Sheet Harian juga otomatis.', None),
- ('5. Rekap_Regional: salin satu blok bulan (judul s/d baris TOTAL) ke bawah blok terakhir, ganti judulnya, lalu ganti angka bulan di sel kuning kolom J (9) dan K (8 = bulan pembanding).', None),
+ ('CARA UPDATE DATA BULAN BARU (contoh: November)', BOLD),
+ ('1. Untuk tiap file regional November (kolom Case, Area, Tanggal, Lokasi, AMT 1): buat Pivot Table, Baris = Tanggal, Area, Lokasi, Case; Nilai = COUNTA dari Case.', None),
+ ('   Tampilkan dalam bentuk tabel (tanpa subtotal / total). Salin hasilnya. File yang dipecah (mis. 1–22 dan 23–30) dipivot masing-masing; pastikan tanggalnya tidak tumpang tindih.', None),
+ ('2. Di Data_Event, tempel di baris kosong pertama mulai kolom B (Tanggal, Area, Lokasi, Case, Jumlah). Isi kolom A (Bulan) dengan angka 11 untuk semua baris itu.', None),
+ ('3. Pivot kedua: Baris = Area, Lokasi, AMT 1, Case; Nilai = COUNTA. Tempel di Data_AMT mulai kolom B, isi kolom A (Bulan) = 11. Baris tanpa nama AMT boleh dibuang.', None),
+ ('4. Parameter_Bulanan & total di Rekap_Regional langsung terisi (kolom bulan sudah ada sampai Desember). Sheet Harian juga otomatis.', None),
+ ('5. Rekap_Regional: salin satu blok bulan (judul s/d baris TOTAL) ke bawah blok terakhir, ganti judulnya, lalu ganti angka bulan di sel kuning kolom J (11) dan K (10 = bulan pembanding).', None),
  ('   Judul kolom "Total ..." ikut berubah otomatis.', None),
- ('6. Rekap_Lokasi: klik kanan sheet Rekap_Lokasi_Agu → Duplikat → ganti nama jadi Rekap_Lokasi_Sep, lalu ganti sel kuning J1 = 9 dan K1 = 8.', None),
- ('7. Top_AMT: salin 60 baris blok Agustus (6 regional × 10) ke bawah, lalu ganti angka bulan di kolom kuning K menjadi 9 dan teks bulan di kolom L menjadi September.', None),
+ ('6. Rekap_Lokasi: klik kanan sheet Rekap_Lokasi_Okt → Duplikat → ganti nama jadi Rekap_Lokasi_Nov, lalu ganti sel kuning J1 = 11 dan K1 = 10.', None),
+ ('7. Top_AMT: salin 60 baris blok Oktober (6 regional × 10) ke atas blok YTD, lalu ganti angka bulan di kolom kuning K menjadi 11 dan teks bulan di kolom L menjadi November.', None),
  ('8. Buka sheet Cek. Kalau ada Case/Area/Lokasi baru (tanda "?"), tambahkan ke Pemetaan; kalau ada lokasi baru, tambahkan barisnya di Rekap_Lokasi_* (salin baris di atasnya).', None),
  ('9. Dashboard membaca data baru dalam 10 menit (atau menu Dashboard → Hapus cache).', None),
+ ('   Alternatif: kirim folder bulan baru ke Claude; Data_Event/Data_AMT dan sheet Kelengkapan dibuat ulang otomatis.', None),
  ('', None),
  ('MENELUSURI ANGKA', BOLD),
  ('Contoh: Idling Agustus di Parameter_Bulanan = SUMIFS(Data_Event Jumlah; Bulan = 8; Parameter = "Idling").', None),
  ('Di Data_Event, filter kolom A = 8 dan H = Idling untuk melihat baris penyusunnya. Tiap baris = jumlah baris di file mentah dengan Tanggal, Area, Lokasi dan Case yang sama,', None),
  ('jadi bisa dicek ulang di file mentah dengan filter yang sama (atau COUNTIFS).', None),
  ('', None),
- ('ATURAN YANG DIPAKAI SAAT MENYUSUN DATA AWAL (Jan–Agu)', BOLD),
- ('• Baris di file mentah yang tanggalnya di luar bulan file tidak dimasukkan (Januari: 60 baris bertanggal Februari, Juni: 3.219 baris bertanggal Juli) agar tidak dobel.', None),
- ('• Baris tanpa tanggal tetap dimasukkan ke bulan file (kolom Tanggal kosong). JABALINUS Agustus: sheet pivot (Sheet3) diabaikan.', None),
+ ('ATURAN YANG DIPAKAI SAAT MENYUSUN DATA (Jan–Okt)', BOLD),
+ ('• Semua sheet yang punya kolom Case, Area dan Tanggal ikut dihitung (mis. "Master Table" dan "Master Table II"); sheet pivot/master data diabaikan.', None),
+ ('• Baris yang tanggalnya di luar bulan folder tidak dimasukkan agar tidak dobel. Baris yang persis sama di dua file berbeda (file tumpang tindih) dihitung sekali.', None),
  ('• Data_AMT hanya memuat Case yang masuk 3 kategori dan baris yang punya nama AMT 1.', None),
 ]
 for i, (t, f) in enumerate(pand, 1):
@@ -181,26 +167,10 @@ for c in ws[1][:6]: c.font = HF; c.fill = HFILL
 ws.freeze_panes = 'A2'; widths(ws, [7, 13, 22, 30, 22, 9, 12, 22, 19])
 n_am = len(arows)
 
-# ===== Juli_Manual =====
-ws = wb.create_sheet('Juli_Manual')
-ws.append(['Angka Juli 2026 dari Summary lama (file mentah Juli belum ada). Rumus memakai tabel ini hanya selama Data_Event belum punya Bulan = 7.'])
-ws['A1'].font = BOLD
-ws.append([]); ws.append(['Parameter', 'Juli', None, 'Regional', 'Total Juli (3 kategori)', None, 'Lokasi', 'Regional', 'Total Juli (3 kategori)'])
-jpi = [(l, JUL_PAR.get(l, 0)) for l, k, _ in PAR]
-jri = [(RN[r], JUL_REG.get(RN[r])) for r in REG]
-jli = sorted(JUL_LOK.items())
-for i in range(max(len(jpi), len(jri), len(jli))):
-    row = list(jpi[i]) if i < len(jpi) else [None, None]
-    row += [None] + (list(jri[i]) if i < len(jri) else [None, None])
-    row += [None] + ([jli[i][0], jli[i][1][0], jli[i][1][1]] if i < len(jli) else [None, None, None])
-    ws.append(row)
-head(ws, 3); widths(ws, [24, 10, 3, 13, 20, 3, 24, 13, 20])
-JP = "Juli_Manual!$A:$B"; JR = "Juli_Manual!$D:$E"; JL = "Juli_Manual!$G:$I"
-
 # ===== Parameter_Bulanan =====
 ws = wb.create_sheet('Parameter_Bulanan', 1)
 ws.append(['Parameter per Kategori per Bulan'])
-ws.append(['Rumus: SUMIFS dari Data_Event (Bulan & Parameter). Bulan tanpa data dibiarkan kosong. Juli memakai Juli_Manual selama Data_Event belum punya Bulan 7.'])
+ws.append(['Rumus: SUMIFS dari Data_Event (Bulan & Parameter). Bulan tanpa data dibiarkan kosong.'])
 ws.append(['Baris data per bulan'] + [f'={cnt(m)}' for m in range(1, 13)])
 ws.append(['Parameter'] + BLN + ['Total'])
 ws['A1'].font = H1; ws['A2'].font = NOTE
@@ -208,8 +178,7 @@ for c in ws[3]: c.font = HELP
 head(ws, 4)
 def pcell(r, m):
     col = CL(m + 1); base = f'{sumifs("A", m, "H", f"$A{r}")}'
-    fb = f'IFERROR(VLOOKUP($A{r},{JP},2,FALSE),"")' if m == 7 else '""'
-    return f'=IF({col}$3=0,{fb},{base})'
+    return f'=IF({col}$3=0,"",{base})'
 r = 5; totrows = []
 for k in KATS:
     ws.append([k.upper()]); ws.cell(r, 1).font = BOLD; r += 1
@@ -259,8 +228,7 @@ def lokasi_sheet(name, m, pm, title):
         crit = ['D', f'$A{r}', 'G', f'$B{r}'] + (['A', '$J$1'] if m else [])
         row = [l, rg] + [f'={sumifs(*crit, "I", CL(3 + j) + "$4")}' for j in range(3)] + [f'=SUM(C{r}:E{r})']
         if m and pm:
-            alt = f'IFERROR(VLOOKUP($A{r},{JL},3,FALSE),"")'
-            row += [f'=IF($K$1="","",IF({cnt("$K$1")}=0,IF($K$1=7,{alt},""),{kat3("D", f"$A{r}", "G", f"$B{r}", "A", "$K$1")}))', growth(f'F{r}', f'G{r}')]
+            row += [f'=IF($K$1="","",IF({cnt("$K$1")}=0,"",{kat3("D", f"$A{r}", "G", f"$B{r}", "A", "$K$1")}))', growth(f'F{r}', f'G{r}')]
         elif not m:
             row += [f'=IF(H{r}=0,"",F{r}/H{r})', f'=COUNTUNIQUEIFS({DE}!$A:$A,{DE}!$D:$D,$A{r},{DE}!$G:$G,$B{r},{DE}!$F:$F,">0")']
         ws.append(row)
@@ -292,8 +260,7 @@ for i, m in enumerate(MONTHS):
         ws.cell(r, 5, f'=SUM(B{r}:D{r})')
         c = 6
         if pm:
-            alt = f'IFERROR(VLOOKUP($A{r},{JR},2,FALSE),"")'
-            ws.cell(r, 6, f'=IF({cnt(f"$K${t}")}=0,IF($K${t}=7,{alt},""),{kat3("A", f"$K${t}", "G", f"$A{r}")})')
+            ws.cell(r, 6, f'=IF({cnt(f"$K${t}")}=0,"",{kat3("A", f"$K${t}", "G", f"$A{r}")})')
             ws.cell(r, 7, growth(f'E{r}', f'F{r}')); ws.cell(r, 7).number_format = '0.0%'; c = 8
         ws.cell(r, c, f'=COUNTIFS(Rekap_Lokasi_YTD!$B:$B,$A{r},Rekap_Lokasi_YTD!$F:$F,">0")')
         r += 1
@@ -312,8 +279,7 @@ head(ws, r); r += 1
 for rg in REG:
     R = RN[rg]; ws.cell(r, 1, R)
     for m in range(1, 13):
-        alt = f'IFERROR(VLOOKUP($A{r},{JR},2,FALSE),"")' if m == 7 else '""'
-        ws.cell(r, 1 + m, f'=IF({cnt(m)}=0,{alt},{kat3("A", m, "G", f"$A{r}")})')
+        ws.cell(r, 1 + m, f'=IF({cnt(m)}=0,"",{kat3("A", m, "G", f"$A{r}")})')
     r += 1
 widths(ws, [22, 17, 17, 19, 15, 15, 11, 13, 8, 7, 7, 11, 11])
 
@@ -378,6 +344,45 @@ ws.append([]); ws.append(['Pemeriksaan', 'Nilai', 'Keterangan']); head(ws, 3)
 for t, f, k in chk: ws.append([t, f, k])
 widths(ws, [60, 14, 70])
 
+# ===== Kelengkapan =====
+import calendar
+ws = wb.create_sheet('Kelengkapan')
+ws['A1'] = 'Kelengkapan data per bulan & regional (dari file mentah)'; ws['A1'].font = H1
+ws['A2'] = 'Hari kosong = tidak ada event sama sekali. Hari rendah = di bawah 35% median harian regional tsb (hari Minggu/libur bisa wajar rendah). "Batas Excel" = sheet terisi 1.048.575 baris, kemungkinan ada baris yang terpotong.'; ws['A2'].font = NOTE
+ws.append([]); ws.append(['Bulan', 'Regional', 'File sumber', 'Baris dihitung', 'Tanggal pertama', 'Tanggal terakhir', 'Hari kosong', 'Hari rendah', 'Catatan']); head(ws, 4)
+LASTDAY = max(datetime.date.fromisoformat(r[0]) for d in INFO for r in d['DL'] if r[0])
+GAPS = []
+for d in sorted(INFO, key=lambda d: (d['mon'], REG.index(d['reg']) if d['reg'] in REG else 9)):
+    m = d['mon']; days = collections.Counter()
+    for ds, a_, l_, c_, n in d['DL']:
+        if ds and CASE.get(c_, ('', ''))[1] != 'Tidak dihitung': days[int(ds[8:10])] += n
+    nd = calendar.monthrange(2026, m)[1]
+    if m == LASTDAY.month: nd = LASTDAY.day
+    vals = sorted(days.values()); med = vals[len(vals)//2] if vals else 0
+    miss = [x for x in range(1, nd + 1) if days[x] == 0]; low = [x for x in range(1, nd + 1) if 0 < days[x] < med * 0.35]
+    sheets = [(f['file'].split('/')[-1], sh, nn) for f in d['info']['files'] for sh, nn in f['sheets'] if isinstance(nn, int) and nn > 0]
+    perfile = collections.Counter(fn for fn, sh, nn in sheets)
+    cap = [f'{fn} [{sh}]' for fn, sh, nn in sheets if nn >= 1048575 - 1 and perfile[fn] == 1]
+    notes = []
+    if cap: notes.append('Batas Excel: ' + '; '.join(cap))
+    if d['info']['dup_removed']: notes.append(f"{d['info']['dup_removed']:,} baris dobel antar file dihapus".replace(',', '.'))
+    om = sum(d['info']['outmonth'].values())
+    if om: notes.append(f'{om:,} baris bertanggal di luar bulan tidak dihitung'.replace(',', '.'))
+    ds_ = sorted(days)
+    ws.append([BLN[m-1], RN.get(d['reg'], d['reg']), '\n'.join(sorted({f[0] for f in sheets})), d['info']['rows'],
+               f'2026-{m:02d}-{ds_[0]:02d}' if ds_ else '', f'2026-{m:02d}-{ds_[-1]:02d}' if ds_ else '',
+               ', '.join(map(str, miss)), ', '.join(map(str, low)), '; '.join(notes)])
+    ws.cell(ws.max_row, 3).alignment = Alignment(wrap_text=True, vertical='top')
+    ws.cell(ws.max_row, 4).number_format = '#,##0'
+    R_ = RN.get(d['reg'], d['reg'])
+    if m == LASTDAY.month:
+        continue
+    if len(miss) >= 3: GAPS.append(f'{BLN[m-1]} {R_}: tidak ada data tanggal {", ".join(map(str, miss))}.')
+    elif miss: GAPS.append(f'{BLN[m-1]} {R_}: tanggal {", ".join(map(str, miss))} kosong.')
+    if cap: GAPS.append(f'{BLN[m-1]} {R_}: sheet di file sumber terisi penuh sampai batas Excel 1.048.575 baris, kemungkinan ada event yang terpotong.')
+GAPS.append(f'{BLN[LASTDAY.month-1]} masih berjalan: data s/d {LASTDAY.day} {BLN[LASTDAY.month-1]} dan tidak semua regional sudah sampai tanggal itu (lihat sheet Kelengkapan).')
+widths(ws, [11, 12, 48, 14, 14, 14, 30, 30, 60]); ws.freeze_panes = 'A5'
+
 # ===== Catatan (dibaca dashboard) =====
 ws = wb.create_sheet('Catatan')
 cat = ['PEMETAAN',
@@ -385,19 +390,15 @@ cat = ['PEMETAAN',
  'Driving Behaviour: Over Speed=OVERSPEED, Harsh Turn/Cornering=HARSH TURN, Harsh Braking=HARSH BREAKING, Harsh Acceleration=HARSH ACCELERATION, Driving > 4 Hours=DRIVING > 4 HOURS.',
  'Driver Discipline: Black Zone=BLACKZONE, Idling=IDLE, Menggunakan Telepon=PHONE DETECTION, Merokok/Vape=SMOKING DETECTION.',
  'Fatigue Management: Microsleep=DRIVER FATIGUE (asumsi, mohon konfirmasi), Menguap=YAWNING DETECTION.',
- 'Parameter lain: Distraction Pengemudi=DRIVER DISTRACTION, Camera Covering=CAMERA COVERING ALARM. Tidak dihitung: ' + ', '.join(EXCL) + '.',
- 'TOP AMT: nama dari kolom AMT 1; event tanpa nama AMT tidak ikut peringkat.',
- '', 'KETERBATASAN DATA',
- '1. File mentah Juli belum ada: angka Juli (parameter & total regional) dari Summary lama (sheet Juli_Manual); rincian kategori per regional/lokasi, harian dan AMT Juli belum tersedia.',
- '2. Agustus belum lengkap: Sumbagsel tidak ada file Agustus; Sulawesi hanya s/d 12 Agustus.',
- '3. Harsh Turn/Braking/Acceleration dan Camera Covering baru muncul di data Agustus, sehingga kenaikannya terlihat ekstrem.',
- '4. Baris bertanggal di luar bulan file tidak dihitung (Januari: 60 baris Februari; Juni: 3.219 baris Juli).']
+ 'Parameter lain: Distraction Pengemudi=DRIVER DISTRACTION, Camera Covering=CAMERA COVERING ALARM. Tidak dihitung: SEAT BELT DETECTION, ILLEGAL SHUTDOWN, REST AREA, VIDEO LOSS/HIGH SPEED/ABNORMAL STORAGE ALARM.',
+ 'TOP AMT: nama dari kolom AMT 1 (NIP dalam kurung dibuang agar satu orang tidak terhitung dua kali); event tanpa nama AMT tidak ikut peringkat.',
+ '', 'KETERBATASAN DATA'] + [f'{i}. {t}' for i, t in enumerate(GAPS, 1)]
 for c in cat: ws.append([c])
 ws['A1'].font = BOLD; ws['A9'].font = BOLD; widths(ws, [150])
 
-order = ['Panduan', 'Cek', 'Parameter_Bulanan', 'Rekap_Regional'] + [f'Rekap_Lokasi_{B3[m-1]}' for m in MONTHS] + ['Rekap_Lokasi_YTD', 'Top_AMT', 'Harian', 'Catatan', 'Pemetaan', 'Juli_Manual', DE, DA]
+order = ['Panduan', 'Cek', 'Parameter_Bulanan', 'Rekap_Regional'] + [f'Rekap_Lokasi_{B3[m-1]}' for m in MONTHS] + ['Rekap_Lokasi_YTD', 'Top_AMT', 'Harian', 'Catatan', 'Kelengkapan', 'Pemetaan', DE, DA]
 wb._sheets = [wb[n] for n in order]
-for n in ('Pemetaan', 'Juli_Manual', DE, DA): wb[n].sheet_properties.tabColor = '999999'
+for n in ('Kelengkapan', 'Pemetaan', DE, DA): wb[n].sheet_properties.tabColor = '999999'
 for n in ('Panduan', 'Cek'): wb[n].sheet_properties.tabColor = 'E8833A'
 wb.save(OUTX)
 print('Data_Event', n_ev, 'Data_AMT', n_am, 'lokasi', len(ALLLOK), 'months', MONTHS, AMONTHS, 'drop', dict(drop))
