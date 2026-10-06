@@ -247,6 +247,8 @@ function bacaLokasi(v, m) {
     for (let j = i + 1; j < v.length; j++) {
       const l = teks(v[j][0]);
       if (!l) break;
+      const tt = angka(v[j][k['TOTAL']]) || 0, pp = prevH ? angka(v[j][k[prevH]]) : null;
+      if (!tt && !pp) continue;   // lokasi tanpa event di bulan ini maupun bulan pembanding
       rows.push({
         l: l.toUpperCase(), r: namaRegional(v[j][k['REGIONAL']]),
         DB: angka(v[j][k['DRIVING BEHAVIOUR']]) || 0, DD: angka(v[j][k['DRIVER DISCIPLINE']]) || 0, FM: angka(v[j][k['FATIGUE MANAGEMENT']]) || 0,
@@ -295,6 +297,7 @@ function bacaHarian(v) {
     const k = petaKolom(v[i]);
     for (let j = i + 1; j < v.length; j++) {
       let d = v[j][0];
+      if (typeof d === 'number' && d > 30000) d = new Date(Math.round((d - 25569) * 86400000) + new Date().getTimezoneOffset() * 60000);   // nomor seri tanggal
       if (!(d instanceof Date)) { const t = teks(d).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (!t) continue; d = new Date(+t[1], +t[2] - 1, +t[3]); }
       const r = namaRegional(v[j][k['REGIONAL']]);
       if (!r) continue;
