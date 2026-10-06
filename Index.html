@@ -247,7 +247,7 @@ td{padding:7px 10px}
 </div>
 <footer class="footer">
   <div class="redtab">www.elnusapetrofin.co.id</div>
-  <div class="src">Sumber: spreadsheet Summary Dashboard (Parameter_Bulanan, Rekap_Regional, Rekap_Lokasi, Top_AMT) — <span id="tSrc">2026</span>.</div>
+  <div class="src">Sumber: folder Google Drive "3. Data Dashboard" (file Data per bulan + Pengaturan Dashboard) — <span id="tSrc">2026</span>.</div>
 </footer>
 <div id="tip" role="tooltip"></div>
 <script>
@@ -380,7 +380,7 @@ function renderAMT(host, sub, bulan) {
   const rows = amtRows(bulan), per = bulan === null ? `${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}` : `${BLN[bulan]} ${D.tahun}`;
   const kira = bulan === null && mon !== LAST && D.topAMT && D.topAMT.some(o => o.b === -2);
   sub.textContent = `${per} · ${sel === 'ALL' ? 'semua regional' : RNAME[sel]} · urut dari total pelanggaran 3 kategori${kira ? ' · dijumlah dari 10 teratas tiap bulan' : ''}`;
-  if (rows === null) { host.innerHTML = `<div class="emptyamt"><b>Data AMT belum ada di spreadsheet sumber.</b> Tambahkan sheet <code>Top_AMT</code> dengan kolom: Bulan, Nama AMT, Regional, Lokasi, Driving Behaviour, Driver Discipline, Fatigue Management, Total, Pelanggaran Terbanyak. Satu baris untuk satu AMT per bulan. Panel ini terisi otomatis setelah sheet tersebut ada.</div>`; return; }
+  if (rows === null) { host.innerHTML = `<div class="emptyamt"><b>Data AMT belum ada.</b> Isi sheet <code>AMT</code> (Area, Lokasi, Nama AMT, Case, Jumlah) di file Data per bulan pada folder data. Panel ini terisi otomatis setelahnya.</div>`; return; }
   if (!rows.length) { host.innerHTML = `<div class="emptyamt">Tidak ada data AMT untuk ${per}${sel === 'ALL' ? '' : ' di ' + RNAME[sel]}.</div>`; return; }
   const mx = rows[0].t || 1;
   host.innerHTML = `<table class="amttbl"><thead><tr><th>#</th><th>Nama AMT</th><th>Lokasi</th>${CATS.map(c => `<th title="${c.name}">${c.key}</th>`).join('')}<th>Total</th><th>Terbanyak</th></tr></thead><tbody>` +
@@ -404,7 +404,7 @@ function renderHarian() {
   const cur = hariBulan(mon), prv = pm === null ? null : hariBulan(pm);
   const scope = sel === 'ALL' ? 'semua regional' : RNAME[sel];
   document.getElementById('bdayLeg').hidden = !cur;
-  if (!cur) { sub.textContent = scope; host.innerHTML = `<div class="emptyamt">${D.harian ? `Data harian ${BLN[mon]} belum ada di sheet Harian.` : 'Sheet <code>Harian</code> belum ada di spreadsheet sumber (kolom: Tanggal, Regional, Driving Behaviour, Driver Discipline, Fatigue Management, Total).'}</div>`; return; }
+  if (!cur) { sub.textContent = scope; host.innerHTML = `<div class="emptyamt">${D.harian ? `Data harian ${BLN[mon]} belum ada. Pastikan file Data bulan ini ada di folder data dan sheet Event berisi kolom Tanggal.` : 'Data harian belum ada di folder data.'}</div>`; return; }
   document.getElementById('bdayCmpLeg').hidden = !prv;
   document.getElementById('bdayCmpName').textContent = prv ? BLN[pm] + ' (tanggal yang sama)' : '';
   const isi = cur.filter(o => o.ada), avg = sum(isi.map(o => o.t)) / (isi.length || 1);
@@ -494,7 +494,7 @@ function renderBulan() {
   const lbAda = !!D.lokasiBulan[mon], pmL = LB.length ? LB[0].pm : null;
   // lokasi yang paling berubah (bulan ini vs bulan pembanding yang tersedia di sheet lokasi)
   const dh = document.getElementById('bdelta'), dsub = document.getElementById('bdeltaSub'), dmore = document.getElementById('bdeltaMore');
-  if (!lbAda || pmL === null) { dh.innerHTML = ''; dmore.innerHTML = ''; dsub.textContent = `Rincian lokasi per bulan belum ada untuk ${BLN[mon]}. Tambahkan sheet Rekap_Lokasi_${B3[mon]} di spreadsheet sumber.`; }
+  if (!lbAda || pmL === null) { dh.innerHTML = ''; dmore.innerHTML = ''; dsub.textContent = `Rincian lokasi per bulan belum ada untuk ${BLN[mon]}. Data bulan sebelumnya belum ada di folder data sebagai pembanding.`; }
   else {
     const rows = LB.filter(o => o.p !== null).map(o => ({...o, d: o.t - o.p})).filter(o => o.d).sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
     const N = showAllDelta ? rows.length : Math.min(8, rows.length);
@@ -599,7 +599,7 @@ function renderYTD() {
   // catatan
   const notes = [];
   if (P.some(p => p.kat !== p.katAsal)) notes.push(`<b>Driving &gt; 4 Hours dihitung di Driving Behaviour</b> pada grafik dan tabel parameter. Di tabel regional dan lokasi, angkanya masih ikut Fatigue Management karena sumber sudah menjumlahkannya per kategori.`);
-  if (!D.topAMT) notes.push('<b>TOP 10 Pelanggaran AMT belum terisi.</b> Spreadsheet sumber belum punya sheet Top_AMT.');
+  if (!D.topAMT) notes.push('<b>TOP 10 Pelanggaran AMT belum terisi.</b> Sheet AMT di file Data per bulan masih kosong.');
   (D.peringatan || []).forEach(s => notes.push(`<b>Sumber:</b> ${s}`));
   (D.catatan || []).forEach(s => { if (/^[A-Z ]+$/.test(s)) return; notes.push(s.replace(/^(\d+\.\s*)?([^:]{3,60}:)/, '$1<b>$2</b>')); });
   document.getElementById('notes').innerHTML = notes.map(n => `<li>${n}</li>`).join('');
@@ -622,7 +622,7 @@ function start(json) {
   if (wasLatest || ADA.indexOf(mon) < 0) mon = Math.max(0, LAST);
   const l = document.getElementById('loading');
   if (LAST < 0) { document.body.classList.add('nodata'); document.getElementById('tUpdate').textContent = 'Menunggu data'; l.hidden = false;
-    l.innerHTML = `<div class="status"><h3>Belum ada data yang bisa ditampilkan</h3><ul>${(D.peringatan || []).map(s => `<li class="err">${s}</li>`).join('') || '<li>Spreadsheet sumber belum berisi angka bulanan.</li>'}</ul><div>Periksa CFG.SUMBER_ID di Kode.gs dan isi sheet Parameter_Bulanan serta Rekap_Regional.</div></div>`; return; }
+    l.innerHTML = `<div class="status"><h3>Belum ada data yang bisa ditampilkan</h3><ul>${(D.peringatan || []).map(s => `<li class="err">${s}</li>`).join('') || '<li>Folder data belum berisi file Data per bulan.</li>'}</ul><div>Periksa CFG.FOLDER_ID di Kode.gs, file Pengaturan Dashboard, dan file Data per bulan di folder tersebut.</div></div>`; return; }
   document.body.classList.remove('nodata'); l.hidden = true;
   document.getElementById('tPeriode').textContent = `${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun}`;
   document.getElementById('tUpdate').textContent = 'Data s/d ' + BLN[LAST] + ' ' + D.tahun + (D.updated ? ' · dibaca ' + new Date(D.updated).toLocaleString('id-ID', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : '');
