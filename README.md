@@ -2,8 +2,8 @@
 
 Dashboard rekap bulanan Driving Behaviour, Driver Discipline & Fatigue Management (Google Apps Script web app).
 
-Data dibaca langsung dari spreadsheet Summary Dashboard
-(`https://docs.google.com/spreadsheets/d/1N1_qYb-SDrFIkC0GNB2Ztgyqz0i7OjgQ7ZWBz0_H0Bc`, diatur di `CFG.SUMBER_ID` pada `Kode.gs`).
+Data dibaca langsung dari spreadsheet Summary_Dashboard_2026_Jan-Agu
+(`https://docs.google.com/spreadsheets/d/1eyKwUV9co0L4-39bWqEdpdg8XB7QZ6CAGrMqlguS5Rw`, diatur di `CFG.SUMBER_ID` pada `Kode.gs`).
 
 ## Sheet yang dibaca
 | Sheet | Isi yang dipakai |
