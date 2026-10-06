@@ -139,7 +139,9 @@ function bangunData() {
   });
   const lokasiYTD = bacaLokasi(ambil('Rekap_Lokasi_YTD', true) || [], -1);
   const top = ambil('Top_AMT', false);
-  const harian = ambil('Harian', false);
+  const aggH = ambil('Agg_Harian', false);   // ringkasan panjang: Tanggal | Regional | Kategori | Jumlah (lebih andal dari pivot)
+  let harian = aggH ? bacaAggHarian(aggH) : null;
+  if (!harian || !harian.length) { const h = ambil('Harian', false); harian = h ? bacaHarian(h) : harian; }
   const catatan = (ambil('Catatan', false) || []).map(r => String(r[0] || '').trim()).filter(s => s);
 
   const bulanAda = [];
@@ -152,7 +154,7 @@ function bangunData() {
     params: par.params, nilai: par.nilai, lain: par.lain,
     regional: reg, lokasiBulan: lokasiBulan, lokasiYTD: lokasiYTD,
     topAMT: top ? bacaTopAMT(top) : null,
-    harian: harian ? bacaHarian(harian) : null,
+    harian: harian,
     catatan: catatan, peringatan: peringatan,
     updated: new Date().toISOString(),
   };
@@ -304,6 +306,26 @@ function bacaTopAMT(v) {
 }
 
 /* ---- Harian (opsional) ---- */
+function keTanggal(d) {
+  if (typeof d === 'number' && d > 30000) return new Date(Math.round((d - 25569) * 86400000) + new Date().getTimezoneOffset() * 60000);   // nomor seri tanggal
+  if (d instanceof Date) return d;
+  const t = teks(d).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/) || teks(d).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!t) return null;
+  return t[1].length === 4 ? new Date(+t[1], +t[2] - 1, +t[3]) : new Date(+t[3], +t[2] - 1, +t[1]);
+}
+// Agg_Harian: Tanggal | Regional | Kategori | Jumlah -> [[bulan, tanggal, regional, DB, DD, FM], ...]
+function bacaAggHarian(v) {
+  const KAT = { 'DRIVING BEHAVIOUR': 3, 'DRIVER DISCIPLINE': 4, 'FATIGUE MANAGEMENT': 5 };
+  const peta = {};
+  for (let j = 1; j < v.length; j++) {
+    const d = keTanggal(v[j][0]); const r = namaRegional(v[j][1]); const c = KAT[teks(v[j][2]).toUpperCase()];
+    if (!d || !r || !c) continue;
+    const key = d.getMonth() + '|' + d.getDate() + '|' + r;
+    const o = peta[key] || (peta[key] = [d.getMonth(), d.getDate(), r, 0, 0, 0]);
+    o[c] += angka(v[j][3]) || 0;
+  }
+  return Object.keys(peta).map(k => peta[k]);
+}
 // Tanggal | Regional | Driving Behaviour | Driver Discipline | Fatigue Management | Total
 // Hasil: [[bulan(0-11), tanggal, kode regional, DB, DD, FM], ...]
 function bacaHarian(v) {
