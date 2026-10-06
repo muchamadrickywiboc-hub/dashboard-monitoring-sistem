@@ -10,11 +10,14 @@
  *   - Rekap_Lokasi_<Bln>  : lokasi x kategori untuk bulan tsb (mis. Rekap_Lokasi_Agu), boleh lebih dari satu
  *   - Rekap_Lokasi_YTD    : lokasi x kategori untuk seluruh periode
  *   - Top_AMT  (opsional) : pelanggaran per AMT, untuk panel TOP 10 Pelanggaran AMT
+ *   - Harian   (opsional) : event per tanggal per regional, untuk grafik per hari
  *   - Catatan  (opsional) : catatan data, ditampilkan di dashboard
  *
  * Format sheet Top_AMT (baris judul boleh di mana saja; kolom dicari dari namanya):
  *   Bulan | Nama AMT | Regional | Lokasi | Driving Behaviour | Driver Discipline | Fatigue Management | Total | Pelanggaran Terbanyak
  *   Bulan berisi nama bulan (Januari..Desember, boleh disingkat). Satu baris = satu AMT pada satu bulan.
+ *   Baris dengan Bulan = YTD dipakai untuk peringkat seluruh periode (kalau tidak ada, dijumlah dari baris bulanan).
+ * Format sheet Harian: Tanggal | Regional | Driving Behaviour | Driver Discipline | Fatigue Management | Total
  *
  *  - doGet()            : web app.
  *  - getDashboardData() : dipanggil dashboard; membaca spreadsheet sumber langsung (hasil di-cache 10 menit).
@@ -54,6 +57,7 @@ function onOpen() {
 }
 
 function hapusCache() {
+  CacheService.getScriptCache().remove('DASHB2_N');
   CacheService.getScriptCache().remove('DASHB2');
   try { SpreadsheetApp.getActiveSpreadsheet().toast('Cache dihapus. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Cache dihapus.'); }
 }
@@ -66,6 +70,7 @@ function UJI_BACA_SUMBER() {
   Logger.log('Regional: ' + Object.keys(d.regional).join(', '));
   Logger.log('Rekap lokasi per bulan: ' + Object.keys(d.lokasiBulan).map(m => BULAN[m]).join(', ') + ' | YTD: ' + d.lokasiYTD.length + ' lokasi');
   Logger.log('Top AMT: ' + (d.topAMT ? d.topAMT.length + ' baris' : 'sheet Top_AMT belum ada'));
+  Logger.log('Harian: ' + (d.harian ? d.harian.length + ' baris' : 'sheet Harian belum ada'));
   if (d.peringatan.length) Logger.log('Peringatan: ' + d.peringatan.join(' | '));
 }
 
@@ -79,10 +84,19 @@ function doGet() {
 
 function getDashboardData() {
   const cache = CacheService.getScriptCache();
-  const hit = cache.get('DASHB2');
-  if (hit) return hit;
+  const n = Number(cache.get('DASHB2_N') || 0);
+  if (n) {
+    const keys = []; for (let i = 0; i < n; i++) keys.push('DASHB2_' + i);
+    const got = cache.getAll(keys);
+    if (keys.every(k => got[k] !== undefined && got[k] !== null)) return keys.map(k => got[k]).join('');
+  }
   const json = JSON.stringify(bangunData());
-  try { if (json.length < 95000) cache.put('DASHB2', json, CFG.CACHE_DETIK); } catch (e) { /* tanpa cache */ }
+  try {
+    const parts = {}, size = 90000;
+    for (let i = 0; i * size < json.length; i++) parts['DASHB2_' + i] = json.substr(i * size, size);
+    parts.DASHB2_N = String(Object.keys(parts).length);
+    cache.putAll(parts, CFG.CACHE_DETIK);
+  } catch (e) { /* tanpa cache */ }
   return json;
 }
 
@@ -109,6 +123,7 @@ function bangunData() {
   });
   const lokasiYTD = bacaLokasi(ambil('Rekap_Lokasi_YTD', true) || [], -1);
   const top = ambil('Top_AMT', false);
+  const harian = ambil('Harian', false);
   const catatan = (ambil('Catatan', false) || []).map(r => String(r[0] || '').trim()).filter(s => s);
 
   const bulanAda = [];
@@ -121,6 +136,7 @@ function bangunData() {
     params: par.params, nilai: par.nilai, lain: par.lain,
     regional: reg, lokasiBulan: lokasiBulan, lokasiYTD: lokasiYTD,
     topAMT: top ? bacaTopAMT(top) : null,
+    harian: harian ? bacaHarian(harian) : null,
     catatan: catatan, peringatan: peringatan,
     updated: new Date().toISOString(),
   };
@@ -258,11 +274,31 @@ function bacaTopAMT(v) {
       const col = h => k[h] === undefined ? null : v[j][k[h]];
       const bl = col('BULAN');
       rows.push({
-        b: bl === null ? -1 : bl instanceof Date ? bl.getMonth() : /^\s*(1[0-2]|[1-9])\s*$/.test(String(bl)) ? Number(bl) - 1 : idxBulan(bl),
+        b: bl === null ? -1 : /^\s*YTD/i.test(String(bl)) ? -2 : bl instanceof Date ? bl.getMonth() : /^\s*(1[0-2]|[1-9])\s*$/.test(String(bl)) ? Number(bl) - 1 : idxBulan(bl),
         amt: amt.toUpperCase(), r: namaRegional(col('REGIONAL')), l: teks(col('LOKASI')).toUpperCase(),
         DB: angka(col('DRIVING BEHAVIOUR')) || 0, DD: angka(col('DRIVER DISCIPLINE')) || 0, FM: angka(col('FATIGUE MANAGEMENT')) || 0,
         t: angka(col('TOTAL')) || 0, top: kTop ? teks(v[j][k[kTop]]) : '',
       });
+    }
+    break;
+  }
+  return rows;
+}
+
+/* ---- Harian (opsional) ---- */
+// Tanggal | Regional | Driving Behaviour | Driver Discipline | Fatigue Management | Total
+// Hasil: [[bulan(0-11), tanggal, kode regional, DB, DD, FM], ...]
+function bacaHarian(v) {
+  const rows = [];
+  for (let i = 0; i < v.length; i++) {
+    if (teks(v[i][0]).toUpperCase() !== 'TANGGAL') continue;
+    const k = petaKolom(v[i]);
+    for (let j = i + 1; j < v.length; j++) {
+      let d = v[j][0];
+      if (!(d instanceof Date)) { const t = teks(d).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (!t) continue; d = new Date(+t[1], +t[2] - 1, +t[3]); }
+      const r = namaRegional(v[j][k['REGIONAL']]);
+      if (!r) continue;
+      rows.push([d.getMonth(), d.getDate(), r, angka(v[j][k['DRIVING BEHAVIOUR']]) || 0, angka(v[j][k['DRIVER DISCIPLINE']]) || 0, angka(v[j][k['FATIGUE MANAGEMENT']]) || 0]);
     }
     break;
   }

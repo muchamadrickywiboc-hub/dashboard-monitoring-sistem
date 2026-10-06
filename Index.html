@@ -212,6 +212,9 @@ td{padding:7px 10px}
   <div class="warnbar" id="bwarn" hidden></div>
   <div class="anahead"><h2 style="margin:0;font-size:18px;font-weight:700">Tren &amp; parameter per kategori</h2><span class="hint" id="trendSub"></span></div>
   <div id="btrend" class="trend3"></div>
+  <section class="panel"><div class="ph"><h2 id="bdayH">Event per hari</h2><p id="bdaySub"></p></div>
+    <div class="legend" id="bdayLeg"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span><span id="bdayCmpLeg"><i style="background:none;border-top:2px dashed #1b1f1d;border-radius:0;height:0;width:16px"></i><b id="bdayCmpName"></b></span></div>
+    <div class="chart" id="bday"></div></section>
   <section class="grid g-21">
     <div class="panel"><div class="ph"><h2>Rekap per regional</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></div>
     <div class="panel"><div class="ph"><h2>Parameter lain</h2><p>Di luar 3 kategori, tidak masuk total</p></div><div class="tbl"><table id="blain"></table></div></div>
@@ -264,7 +267,7 @@ const NS = 'http://www.w3.org/2000/svg';
 const rv = r => `var(--r${REG.indexOf(r)})`;
 const nf = n => Math.round(n || 0).toLocaleString('id-ID');
 const d1 = n => (n || 0).toLocaleString('id-ID', {maximumFractionDigits: 1});
-const ax = n => n >= 1e6 ? (n/1e6).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' jt' : n >= 1e3 ? Math.round(n/1e3) + ' rb' : nf(n);
+const ax = n => n >= 1e6 ? (n/1e6).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' jt' : n >= 1e4 ? Math.round(n/1e3) + ' rb' : n >= 1e3 ? (n/1e3).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' rb' : nf(n);
 const cf = n => n >= 1e6 ? (n/1e6).toLocaleString('id-ID', {maximumFractionDigits: 2}) + ' juta' : n >= 1e4 ? Math.round(n/1e3).toLocaleString('id-ID') + ' ribu' : nf(n);
 const pf = (a, b) => { if (!b) return '–'; const v = a/b*100; if (v > 0 && v < 0.1) return '<0,1%'; return v.toLocaleString('id-ID', {maximumFractionDigits: v < 1 ? 1 : 0}) + '%'; };
 const sum = a => a.reduce((x, y) => x + (y || 0), 0);
@@ -365,8 +368,8 @@ function peringatan(el) {
 /* ================= TOP 10 AMT ================= */
 function amtRows(bulan) {
   if (!D.topAMT) return null;
-  const by = {};
-  D.topAMT.filter(o => (bulan === null ? ADA.indexOf(o.b) >= 0 || o.b < 0 : o.b === bulan) && cocokReg(o.r)).forEach(o => {
+  const by = {}, pakaiYTD = bulan === null && mon === LAST && D.topAMT.some(o => o.b === -2);
+  D.topAMT.filter(o => (bulan === null ? (pakaiYTD ? o.b === -2 : (o.b >= 0 && o.b <= mon && ADA.indexOf(o.b) >= 0) || o.b === -1) : o.b === bulan) && cocokReg(o.r)).forEach(o => {
     const k = o.amt + '|' + o.r;
     const x = by[k] = by[k] || {amt: o.amt, r: o.r, l: o.l, DB: 0, DD: 0, FM: 0, t: 0, top: {}, lok: {}};
     x.DB += o.DB; x.DD += o.DD; x.FM += o.FM; x.t += o.t;
@@ -377,13 +380,67 @@ function amtRows(bulan) {
     .sort((a, b) => b.t - a.t).slice(0, 10);
 }
 function renderAMT(host, sub, bulan) {
-  const rows = amtRows(bulan), per = bulan === null ? `${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun}` : `${BLN[bulan]} ${D.tahun}`;
-  sub.textContent = `${per} · ${sel === 'ALL' ? 'semua regional' : RNAME[sel]} · urut dari total pelanggaran 3 kategori`;
+  const rows = amtRows(bulan), per = bulan === null ? `${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}` : `${BLN[bulan]} ${D.tahun}`;
+  const kira = bulan === null && mon !== LAST && D.topAMT && D.topAMT.some(o => o.b === -2);
+  sub.textContent = `${per} · ${sel === 'ALL' ? 'semua regional' : RNAME[sel]} · urut dari total pelanggaran 3 kategori${kira ? ' · dijumlah dari 10 teratas tiap bulan' : ''}`;
   if (rows === null) { host.innerHTML = `<div class="emptyamt"><b>Data AMT belum ada di spreadsheet sumber.</b> Tambahkan sheet <code>Top_AMT</code> dengan kolom: Bulan, Nama AMT, Regional, Lokasi, Driving Behaviour, Driver Discipline, Fatigue Management, Total, Pelanggaran Terbanyak. Satu baris untuk satu AMT per bulan. Panel ini terisi otomatis setelah sheet tersebut ada.</div>`; return; }
   if (!rows.length) { host.innerHTML = `<div class="emptyamt">Tidak ada data AMT untuk ${per}${sel === 'ALL' ? '' : ' di ' + RNAME[sel]}.</div>`; return; }
   const mx = rows[0].t || 1;
   host.innerHTML = `<table class="amttbl"><thead><tr><th>#</th><th>Nama AMT</th><th>Lokasi</th>${CATS.map(c => `<th title="${c.name}">${c.key}</th>`).join('')}<th>Total</th><th>Terbanyak</th></tr></thead><tbody>` +
     rows.map((o, i) => `<tr><td>${i + 1}</td><td style="text-align:left;white-space:normal"><b>${o.amt}</b></td><td style="text-align:left;white-space:normal"><span class="rdot" style="background:${o.r ? rv(o.r) : '#ccc'}"></span>${o.l || '–'}<span class="small">${o.r ? RNAME[o.r] : ''}</span></td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b><span class="amtbar"><i style="width:${o.t/mx*100}%"></i></span></td><td style="text-align:left;white-space:normal">${o.top}</td></tr>`).join('') + '</tbody></table>';
+}
+
+/* ================= HARIAN ================= */
+// D.harian: [[bulan, tanggal, regional, DB, DD, FM], ...]
+function hariBulan(m) {
+  if (!D.harian) return null;
+  const n = nHari(m), out = Array.from({length: n}, () => ({DB: 0, DD: 0, FM: 0, ada: false}));
+  let ada = false;
+  D.harian.forEach(h => { if (h[0] !== m || !cocokReg(h[2]) || h[1] < 1 || h[1] > n) return; const o = out[h[1] - 1]; o.DB += h[3]; o.DD += h[4]; o.FM += h[5]; o.ada = true; ada = true; });
+  out.forEach(o => o.t = o.DB + o.DD + o.FM);
+  return ada ? out : null;
+}
+function renderHarian() {
+  const host = document.getElementById('bday'), sub = document.getElementById('bdaySub'), pm = prevM();
+  host.innerHTML = '';
+  document.getElementById('bdayH').textContent = `Event per hari — ${BLN[mon]} ${D.tahun}`;
+  const cur = hariBulan(mon), prv = pm === null ? null : hariBulan(pm);
+  const scope = sel === 'ALL' ? 'semua regional' : RNAME[sel];
+  document.getElementById('bdayLeg').hidden = !cur;
+  if (!cur) { sub.textContent = scope; host.innerHTML = `<div class="emptyamt">${D.harian ? `Data harian ${BLN[mon]} belum ada di sheet Harian.` : 'Sheet <code>Harian</code> belum ada di spreadsheet sumber (kolom: Tanggal, Regional, Driving Behaviour, Driver Discipline, Fatigue Management, Total).'}</div>`; return; }
+  document.getElementById('bdayCmpLeg').hidden = !prv;
+  document.getElementById('bdayCmpName').textContent = prv ? BLN[pm] + ' (tanggal yang sama)' : '';
+  const isi = cur.filter(o => o.ada), avg = sum(isi.map(o => o.t)) / (isi.length || 1);
+  const mx = isi.reduce((a, o, i) => o.t > a.t ? o : a, isi[0]), mn = isi.reduce((a, o) => o.t < a.t ? o : a, isi[0]);
+  const dOf = o => cur.indexOf(o) + 1;
+  const pIsi = prv ? prv.filter(o => o.ada) : [], pavg = pIsi.length ? sum(pIsi.map(o => o.t)) / pIsi.length : null;
+  sub.innerHTML = `${scope} · tertinggi <b>${dOf(mx)} ${B3[mon]}</b> (${nf(mx.t)}) · terendah <b>${dOf(mn)} ${B3[mon]}</b> (${nf(mn.t)}) · rata-rata <b>${nf(avg)}/hari</b>${pavg === null ? '' : ` vs ${nf(pavg)}/hari di ${BLN[pm]} ${pctTxt(avg, pavg)}`}${isi.length < cur.length ? ` · data ${isi.length} dari ${cur.length} hari` : ''}`;
+  const W = 1180, H = 240, m = {l: 50, r: 12, t: 16, b: 26}, iw = W - m.l - m.r, ih = H - m.t - m.b, n = 31, slot = iw / n, bw = Math.min(24, slot * .7);
+  const top = Math.max(1, ...cur.map(o => o.t), ...(prv || []).map(o => o.t));
+  const ymax = niceMax(top * 1.05), y = v => m.t + ih - v / ymax * ih, NT = nTicks(ymax);
+  const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Event per hari ' + BLN[mon]});
+  for (let i = 0; i <= NT; i++) { const v = ymax * i / NT; svgEl('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: i ? 'gl' : 'base'}, svg); const t = svgEl('text', {x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'tick'}, svg); t.textContent = ax(v); }
+  const cx = i => m.l + slot * i + slot / 2;
+  cur.forEach((o, i) => {
+    let base = 0;
+    CATS.forEach((c, j) => { const v = o[c.key]; if (!v) return; const y0 = y(base), y1 = y(base + v); base += v;
+      const last = CATS.slice(j + 1).every(cc => !o[cc.key]);
+      svgEl('path', {d: last ? topRound(cx(i) - bw / 2, y1, bw, y0 - y1, 3) : `M${cx(i) - bw / 2},${y0}V${y1}H${cx(i) + bw / 2}V${y0}Z`, style: `fill:${c.color}`}, svg); });
+    if (i % (slot < 30 ? 1 : 1) === 0) { const t = svgEl('text', {x: cx(i), y: H - 8, 'text-anchor': 'middle', class: 'tick', style: o === mx ? 'font-weight:700;fill:#1b1f1d' : ''}, svg); t.textContent = i + 1; }
+  });
+  if (prv) {
+    const pts = prv.map((o, i) => o.ada ? `${cx(i).toFixed(1)},${y(o.t).toFixed(1)}` : null);
+    let d = '', pen = false; pts.forEach(p => { if (!p) { pen = false; return; } d += (pen ? 'L' : 'M') + p; pen = true; });
+    svgEl('path', {d, style: 'fill:none;stroke:#1b1f1d;stroke-width:1.6;stroke-dasharray:5 4;pointer-events:none'}, svg);
+  }
+  svgEl('line', {x1: m.l, x2: W - m.r, y1: y(avg), y2: y(avg), style: 'stroke:#c0392b;stroke-width:1;opacity:.7;pointer-events:none'}, svg);
+  const ta = svgEl('text', {x: W - m.r, y: y(avg) - 5, 'text-anchor': 'end', style: 'fill:#c0392b;font-size:11.5px;font-weight:600;pointer-events:none'}, svg); ta.textContent = 'rata² ' + ax(avg) + '/hari';
+  cur.forEach((o, i) => {
+    const hit = svgEl('rect', {x: m.l + slot * i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
+    const p = prv && prv[i];
+    bindTip(hit, () => `<b>${i + 1} ${BLN[mon]} ${D.tahun}</b><br>${o.ada ? CATS.map(c => `${c.name}: ${nf(o[c.key])}`).join('<br>') + `<br><b>Total ${nf(o.t)}</b>` : 'tidak ada data'}${p ? `<br>${i + 1} ${BLN[pm]}: ${p.ada ? nf(p.t) : '–'}` : ''}`);
+  });
+  host.appendChild(svg);
 }
 
 /* ================= BULANAN ================= */
@@ -563,7 +620,7 @@ function setView(v) { view = v; document.getElementById('view-bulan').hidden = v
 document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setView(b.dataset.v));
 document.getElementById('selMon').onchange = e => { mon = +e.target.value; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
-function render() { if (!D || LAST < 0) return; kontrol(); chips(); if (view === 'bulan') renderBulan(); else renderYTD(); }
+function render() { if (!D || LAST < 0) return; kontrol(); chips(); if (view === 'bulan') { renderBulan(); renderHarian(); } else renderYTD(); }
 
 const REFRESH_MS = 5*60*1000;
 function start(json) {
