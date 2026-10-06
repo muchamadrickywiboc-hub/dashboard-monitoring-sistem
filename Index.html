@@ -215,10 +215,7 @@ td{padding:7px 10px}
   <section class="panel"><div class="ph"><h2 id="bdayH">Event per hari</h2><p id="bdaySub"></p></div>
     <div class="legend" id="bdayLeg"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span><span id="bdayCmpLeg"><i style="background:none;border-top:2px dashed #1b1f1d;border-radius:0;height:0;width:16px"></i><b id="bdayCmpName"></b></span></div>
     <div class="chart" id="bday"></div></section>
-  <section class="grid g-21">
-    <div class="panel"><div class="ph"><h2>Rekap per regional</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></div>
-    <div class="panel"><div class="ph"><h2>Parameter lain</h2><p>Di luar 3 kategori, tidak masuk total</p></div><div class="tbl"><table id="blain"></table></div></div>
-  </section>
+  <section class="panel"><div class="ph"><h2>Rekap per regional</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
   <section class="grid g-21">
     <div class="panel"><div class="ph"><h2 id="bamtH">TOP 10 Pelanggaran AMT</h2><p id="bamtSub"></p></div><div class="tbl" id="bamt"></div></div>
     <div class="panel"><div class="ph"><h2 id="bdeltaH">Lokasi yang paling berubah</h2><p id="bdeltaSub"></p></div><div class="tbl"><table id="bdelta"></table></div><div id="bdeltaMore"></div></div>
@@ -491,11 +488,6 @@ function renderBulan() {
       return `<tr data-r="${r}" style="cursor:pointer${sel !== 'ALL' && sel !== r ? ';opacity:.45' : ''}"><td><span class="rdot" style="background:${rv(r)}"></span>${RNAME[r]}</td>${adaKat ? CATS.map(c => `<td>${k ? nf(k[c.key]) : '–'}</td>`).join('') : ''}<td><b>${t === null ? '–' : nf(t)}</b></td><td>${p === null ? '–' : nf(p)}</td><td>${t === null ? '–' : pctTxt(t, p)}</td><td>${o.lokasi || '–'}</td></tr>`; }).join('') +
     `<tr class="tot"><td>TOTAL</td>${adaKat ? CATS.map(c => `<td>${nf(tk[c.key])}</td>`).join('') : ''}<td>${nf(tot)}</td><td>${pm === null ? '–' : nf(totp)}</td><td>${pctTxt(tot, pm === null ? null : totp)}</td><td>${totl || '–'}</td></tr></tbody>`;
   document.querySelectorAll('#breg tbody tr[data-r]').forEach(tr => tr.onclick = () => setSel(tr.dataset.r));
-
-  // parameter lain (nasional)
-  document.getElementById('blain').innerHTML = `<thead><tr><th>Parameter</th><th>${pm === null ? 'Bln lalu' : B3[pm]}</th><th>${B3[mon]}</th><th>Kenaikan</th></tr></thead><tbody>` +
-    Object.keys(D.lain).map(l => { const a = D.lain[l][mon], b = pm === null ? null : D.lain[l][pm];
-      return `<tr><td>${l}</td><td>${b === null || b === undefined ? '–' : nf(b)}</td><td>${a === null || a === undefined ? '–' : nf(a)}</td><td>${a === null || a === undefined ? '<span class="flat">–</span>' : pctTxt(a, b)}</td></tr>`; }).join('') + '</tbody>';
 
   // lokasi bulan ini
   const LB = (D.lokasiBulan[mon] || []).filter(o => cocokReg(o.r));

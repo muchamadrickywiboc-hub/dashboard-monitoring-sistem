@@ -31,7 +31,7 @@
 const CFG = {
   SUMBER_ID: '11tP0FgvjeClzVQ3QSZTWUN_7Jd078ToLR5_NdO5JP88',   // spreadsheet Summary_Dashboard_2026_Rumus_Jan-Okt (berbasis rumus)
   TAHUN: 2026,
-  CACHE_DETIK: 600,
+  CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService); jalankan hapusCache setelah data diperbarui
 };
 
 const REGIONS = ['SUMBAGUT', 'SUMBAGSEL', 'JABALINUS', 'KALIMANTAN', 'SULAWESI', 'MALUPA'];
@@ -52,6 +52,7 @@ function onOpen() {
     SpreadsheetApp.getUi().createMenu('Dashboard')
       .addItem('Hapus cache dashboard', 'hapusCache')
       .addItem('Uji baca sumber', 'UJI_BACA_SUMBER')
+      .addItem('Pasang pemanas cache (tiap jam)', 'pasangPemicu')
       .addToUi();
   } catch (e) { /* dijalankan dari luar spreadsheet */ }
 }
@@ -82,6 +83,26 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+/** Dijalankan pemicu waktu: membangun ulang cache supaya pengunjung tidak menunggu spreadsheet dihitung. */
+function panaskanCache() { simpanCache(JSON.stringify(bangunData())); }
+
+/** Jalankan sekali dari editor: memasang pemicu panaskanCache tiap jam. */
+function pasangPemicu() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'panaskanCache').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('panaskanCache').timeBased().everyHours(1).create();
+  panaskanCache();
+  Logger.log('Pemicu panaskanCache terpasang (tiap jam) dan cache sudah diisi.');
+}
+
+function simpanCache(json) {
+  try {
+    const parts = {}, size = 90000;
+    for (let i = 0; i * size < json.length; i++) parts['DASHB2_' + i] = json.substr(i * size, size);
+    parts.DASHB2_N = String(Object.keys(parts).length);
+    CacheService.getScriptCache().putAll(parts, CFG.CACHE_DETIK);
+  } catch (e) { /* tanpa cache */ }
+}
+
 function getDashboardData() {
   const cache = CacheService.getScriptCache();
   const n = Number(cache.get('DASHB2_N') || 0);
@@ -91,12 +112,7 @@ function getDashboardData() {
     if (keys.every(k => got[k] !== undefined && got[k] !== null)) return keys.map(k => got[k]).join('');
   }
   const json = JSON.stringify(bangunData());
-  try {
-    const parts = {}, size = 90000;
-    for (let i = 0; i * size < json.length; i++) parts['DASHB2_' + i] = json.substr(i * size, size);
-    parts.DASHB2_N = String(Object.keys(parts).length);
-    cache.putAll(parts, CFG.CACHE_DETIK);
-  } catch (e) { /* tanpa cache */ }
+  simpanCache(json);
   return json;
 }
 

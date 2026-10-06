@@ -79,6 +79,14 @@ def sumifs(*crit, col='F', sh=DE):
     for c, v in zip(crit[::2], crit[1::2]): s += f',{sh}!${c}:${c},{v}'
     return s + ')'
 def kat3(*crit, sh=DE): return '+'.join(sumifs(*crit, 'I', f'"{k}"', sh=sh) for k in KATS)
+# Sheet agregat (satu QUERY besar) supaya SUMIFS di sheet ringkasan hanya membaca tabel kecil
+AL, AP, AA, AH = 'Agg_Lokasi', 'Agg_Param', 'Agg_AMT', 'Agg_Harian'
+_ML = {'A': 'A', 'D': 'B', 'G': 'C', 'I': 'D'}; _MA = {'A': 'A', 'D': 'B', 'C': 'C', 'G': 'D', 'I': 'E'}
+def sl(*crit):   # SUMIFS di Agg_Lokasi dengan huruf kolom Data_Event
+    return sumifs(*[(_ML[c] if i % 2 == 0 else c) for i, c in enumerate(crit)], col='E', sh=AL)
+def sa(*crit):   # SUMIFS di Agg_AMT dengan huruf kolom Data_AMT
+    return sumifs(*[(_MA[c] if i % 2 == 0 else c) for i, c in enumerate(crit)], col='F', sh=AA)
+def cntl(m): return f'COUNTIF({AL}!$A:$A,{m})'
 def growth(cur, prev): return f'=IF(OR({prev}="",{prev}=0),IF(N({cur})>0,"baru",""),{cur}/{prev}-1)'
 
 # ===== Panduan =====
@@ -96,6 +104,7 @@ pand = [
  ('Data_AMT   : jumlah event per Bulan × Area × Lokasi × Nama AMT (kolom AMT 1, NIP dalam kurung dibuang) × Case. Kolom A–F diisi, kolom G–I otomatis.', None),
  ('Pemetaan   : kode Case → Parameter & Kategori (termasuk salah ketik di file mentah), Area → Regional, Lokasi → Regional. Tambahkan baris di sini kalau ada Case/Lokasi baru.', None),
  ('Kelengkapan: per bulan & regional: file sumber, jumlah baris, tanggal yang kosong / sangat rendah. Dipakai untuk mengecek data yang kurang.', None),
+ ('Agg_*      : tabel ringkas hasil satu QUERY dari Data_Event/Data_AMT (otomatis). Sheet ringkasan membaca tabel ini agar ringan. Jangan diedit.', None),
  ('Cek        : pemeriksaan otomatis (Case/Regional yang belum terpetakan, lokasi yang belum ada di tabel). Semua harus 0 / OK.', None),
  ('Parameter_Bulanan, Rekap_Regional, Rekap_Lokasi_*, Top_AMT, Harian : sheet yang dibaca dashboard. Jangan ganti nama sheet & judul kolomnya.', None),
  ('', None),
@@ -167,6 +176,14 @@ for c in ws[1][:6]: c.font = HF; c.fill = HFILL
 ws.freeze_panes = 'A2'; widths(ws, [7, 13, 22, 30, 22, 9, 12, 22, 19])
 n_am = len(arows)
 
+# ===== Sheet agregat =====
+for name, f, w in [
+    (AL, f'=QUERY({DE}!$A:$I,"select A, D, G, I, sum(F) where A is not null and I matches \'{KAT3}\' group by A, D, G, I label A \'Bulan\', D \'Lokasi\', G \'Regional\', I \'Kategori\', sum(F) \'Jumlah\'",1)', [7, 24, 13, 20, 10]),
+    (AP, f'=QUERY({DE}!$A:$I,"select A, H, sum(F) where A is not null group by A, H label A \'Bulan\', H \'Parameter\', sum(F) \'Jumlah\'",1)', [7, 24, 10]),
+    (AH, f'=QUERY({DE}!$A:$I,"select B, G, I, sum(F) where B is not null and I matches \'{KAT3}\' group by B, G, I label B \'Tanggal\', G \'Regional\', I \'Kategori\', sum(F) \'Jumlah\'",1)', [12, 13, 20, 10]),
+    (AA, f'=QUERY({DA}!$A:$I,"select A, D, C, G, I, sum(F) where A is not null and I matches \'{KAT3}\' group by A, D, C, G, I label A \'Bulan\', D \'Nama AMT\', C \'Lokasi\', G \'Regional\', I \'Kategori\', sum(F) \'Jumlah\'",1)', [7, 30, 22, 13, 20, 10])]:
+    ws = wb.create_sheet(name); ws['A1'] = f; widths(ws, w)
+
 # ===== Parameter_Bulanan =====
 ws = wb.create_sheet('Parameter_Bulanan', 1)
 ws.append(['Parameter per Kategori per Bulan'])
@@ -177,7 +194,7 @@ ws['A1'].font = H1; ws['A2'].font = NOTE
 for c in ws[3]: c.font = HELP
 head(ws, 4)
 def pcell(r, m):
-    col = CL(m + 1); base = f'{sumifs("A", m, "H", f"$A{r}")}'
+    col = CL(m + 1); base = sumifs("A", m, "B", f"$A{r}", col='C', sh=AP)
     return f'=IF({col}$3=0,"",{base})'
 r = 5; totrows = []
 for k in KATS:
@@ -226,11 +243,11 @@ def lokasi_sheet(name, m, pm, title):
     for i, (rg, l) in enumerate(order):
         r = 5 + i
         crit = ['D', f'$A{r}', 'G', f'$B{r}'] + (['A', '$J$1'] if m else [])
-        row = [l, rg] + [f'={sumifs(*crit, "I", CL(3 + j) + "$4")}' for j in range(3)] + [f'=SUM(C{r}:E{r})']
+        row = [l, rg] + [f'={sl(*crit, "I", CL(3 + j) + "$4")}' for j in range(3)] + [f'=SUM(C{r}:E{r})']
         if m and pm:
-            row += [f'=IF($K$1="","",IF({cnt("$K$1")}=0,"",{kat3("D", f"$A{r}", "G", f"$B{r}", "A", "$K$1")}))', growth(f'F{r}', f'G{r}')]
+            row += [f'=IF($K$1="","",IF({cntl("$K$1")}=0,"",{sl("D", f"$A{r}", "G", f"$B{r}", "A", "$K$1")}))', growth(f'F{r}', f'G{r}')]
         elif not m:
-            row += [f'=IF(H{r}=0,"",F{r}/H{r})', f'=COUNTUNIQUEIFS({DE}!$A:$A,{DE}!$D:$D,$A{r},{DE}!$G:$G,$B{r},{DE}!$F:$F,">0")']
+            row += [f'=IF(H{r}=0,"",F{r}/H{r})', f'=COUNTUNIQUEIFS({AL}!$A:$A,{AL}!$B:$B,$A{r},{AL}!$C:$C,$B{r},{AL}!$E:$E,">0")']
         ws.append(row)
         if m and pm: ws.cell(r, 8).number_format = '0.0%'
         if not m: ws.cell(r, 7).number_format = '#,##0.0'
@@ -256,11 +273,11 @@ for i, m in enumerate(MONTHS):
     for rg in REG:
         R = RN[rg]
         ws.cell(r, 1, R)
-        for j in range(3): ws.cell(r, 2 + j, f'={sumifs("A", f"$J${t}", "G", f"$A{r}", "I", CL(2 + j) + f"${h}")}')
+        for j in range(3): ws.cell(r, 2 + j, f'={sl("A", f"$J${t}", "G", f"$A{r}", "I", CL(2 + j) + f"${h}")}')
         ws.cell(r, 5, f'=SUM(B{r}:D{r})')
         c = 6
         if pm:
-            ws.cell(r, 6, f'=IF({cnt(f"$K${t}")}=0,"",{kat3("A", f"$K${t}", "G", f"$A{r}")})')
+            ws.cell(r, 6, f'=IF({cntl(f"$K${t}")}=0,"",{sl("A", f"$K${t}", "G", f"$A{r}")})')
             ws.cell(r, 7, growth(f'E{r}', f'F{r}')); ws.cell(r, 7).number_format = '0.0%'; c = 8
         ws.cell(r, c, f'=COUNTIFS(Rekap_Lokasi_YTD!$B:$B,$A{r},Rekap_Lokasi_YTD!$F:$F,">0")')
         r += 1
@@ -279,7 +296,7 @@ head(ws, r); r += 1
 for rg in REG:
     R = RN[rg]; ws.cell(r, 1, R)
     for m in range(1, 13):
-        ws.cell(r, 1 + m, f'=IF({cnt(m)}=0,"",{kat3("A", m, "G", f"$A{r}")})')
+        ws.cell(r, 1 + m, f'=IF({cntl(m)}=0,"",{sl("A", m, "G", f"$A{r}")})')
     r += 1
 widths(ws, [22, 17, 17, 19, 15, 15, 11, 13, 8, 7, 7, 11, 11])
 
@@ -302,7 +319,7 @@ for m, label in blocks:
     for rg in REG:
         R = RN[rg]
         cond = (f'A="&$K{r}&" and ' if m != 'YTD' else '')
-        ws.cell(r, 13, f'=IFERROR(QUERY({DA}!$A:$I,"select D, C, sum(F) where {cond}G=\'"&$C{r}&"\' and I matches \'{KAT3}\' group by D, C order by sum(F) desc limit 10 label sum(F) \'\'",0),"")')
+        ws.cell(r, 13, f'=IFERROR(QUERY({AA}!$A:$F,"select B, C, sum(F) where {cond}D=\'"&$C{r}&"\' group by B, C order by sum(F) desc limit 10 label sum(F) \'\'",0),"")')
         for i in range(10):
             rr = r + i
             ws.cell(rr, 11, m if m != 'YTD' else 'YTD'); ws.cell(rr, 12, label)
@@ -313,7 +330,7 @@ for m, label in blocks:
             ws.cell(rr, 4, f'=IF($M{rr}="","",$N{rr})')
             mc = ([ 'A', f'$K{rr}'] if m != 'YTD' else [])
             for j, k in enumerate(KATS):
-                ws.cell(rr, 5 + j, f'=IF($M{rr}="","",{sumifs("D", f"$M{rr}", "C", f"$N{rr}", "G", f"$C{rr}", *mc, "I", chr(34) + k + chr(34), sh=DA)})')
+                ws.cell(rr, 5 + j, f'=IF($M{rr}="","",{sa("D", f"$M{rr}", "C", f"$N{rr}", "G", f"$C{rr}", *mc, "I", chr(34) + k + chr(34))})')
             ws.cell(rr, 8, f'=IF($M{rr}="","",$O{rr})')
             cond2 = (f' and A="&$K{rr}&"' if m != 'YTD' else '')
             ws.cell(rr, 9, f'=IF($M{rr}="","",IFERROR(INDEX(QUERY({DA}!$A:$I,"select H, sum(F) where D="""&$M{rr}&""" and C="""&$N{rr}&""" and G=\'"&$C{rr}&"\'{cond2} and I matches \'{KAT3}\' group by H order by sum(F) desc limit 1 label sum(F) \'\'",0),1,1),""))')
@@ -324,8 +341,8 @@ widths(ws, [10, 30, 12, 22, 16, 16, 18, 9, 22, 2, 9, 10, 24, 20, 9]); ws.freeze_
 # ===== Harian =====
 ws = wb.create_sheet('Harian')
 ws['A1'] = 'Event per Hari per Regional (3 kategori)'; ws['A1'].font = H1
-ws['A2'] = 'Rumus: satu QUERY pivot dari Data_Event di sel A4; bertambah otomatis kalau Data_Event ditambah.'; ws['A2'].font = NOTE
-ws['A4'] = f'=QUERY({DE}!$A:$I,"select B, G, sum(F) where B is not null and I matches \'{KAT3}\' group by B, G pivot I",1)'
+ws['A2'] = 'Rumus: QUERY pivot dari Agg_Harian (ringkasan harian Data_Event) di sel A4; bertambah otomatis kalau Data_Event ditambah.'; ws['A2'].font = NOTE
+ws['A4'] = f'=QUERY({AH}!$A:$D,"select A, B, sum(D) where A is not null group by A, B pivot C label A \'Tanggal\', B \'Regional\'",1)'
 widths(ws, [12, 13, 18, 18, 20])
 
 # ===== Cek =====
@@ -339,6 +356,7 @@ chk = [
  ('Jumlah lokasi di Rekap_Lokasi_YTD', '=COUNTA(Rekap_Lokasi_YTD!$A:$A)-3', 'harus sama dengan baris di atas → kalau kurang, tambahkan baris lokasi baru'),
  ('Total event 3 kategori di Data_Event', f'=SUMIFS({DE}!$F:$F,{DE}!$I:$I,"Driving Behaviour")+SUMIFS({DE}!$F:$F,{DE}!$I:$I,"Driver Discipline")+SUMIFS({DE}!$F:$F,{DE}!$I:$I,"Fatigue Management")', ''),
  ('Total 3 kategori di Rekap_Lokasi_YTD', '=SUM(Rekap_Lokasi_YTD!$F:$F)', 'selisih = event tanpa lokasi/regional'),
+ ('Total 3 kategori di Agg_Lokasi', f'=SUM({AL}!$E:$E)', 'harus sama dengan total di Data_Event'),
 ]
 ws.append([]); ws.append(['Pemeriksaan', 'Nilai', 'Keterangan']); head(ws, 3)
 for t, f, k in chk: ws.append([t, f, k])
@@ -396,9 +414,9 @@ cat = ['PEMETAAN',
 for c in cat: ws.append([c])
 ws['A1'].font = BOLD; ws['A9'].font = BOLD; widths(ws, [150])
 
-order = ['Panduan', 'Cek', 'Parameter_Bulanan', 'Rekap_Regional'] + [f'Rekap_Lokasi_{B3[m-1]}' for m in MONTHS] + ['Rekap_Lokasi_YTD', 'Top_AMT', 'Harian', 'Catatan', 'Kelengkapan', 'Pemetaan', DE, DA]
+order = ['Panduan', 'Cek', 'Parameter_Bulanan', 'Rekap_Regional'] + [f'Rekap_Lokasi_{B3[m-1]}' for m in MONTHS] + ['Rekap_Lokasi_YTD', 'Top_AMT', 'Harian', 'Catatan', 'Kelengkapan', 'Pemetaan', AL, AP, AH, AA, DE, DA]
 wb._sheets = [wb[n] for n in order]
-for n in ('Kelengkapan', 'Pemetaan', DE, DA): wb[n].sheet_properties.tabColor = '999999'
+for n in ('Kelengkapan', 'Pemetaan', AL, AP, AH, AA, DE, DA): wb[n].sheet_properties.tabColor = '999999'
 for n in ('Panduan', 'Cek'): wb[n].sheet_properties.tabColor = 'E8833A'
 wb.save(OUTX)
 print('Data_Event', n_ev, 'Data_AMT', n_am, 'lokasi', len(ALLLOK), 'months', MONTHS, AMONTHS, 'drop', dict(drop))
