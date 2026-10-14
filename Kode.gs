@@ -24,7 +24,7 @@
 const CFG = {
   FOLDER_ID: '1nUJtRTcKwJua4Am9EdiFXoQxcTALgt9e',   // folder Drive "3. Data Dashboard"
   TARIKAN_ID: '11akfRibrQLixrBicdNXazEWX-TGmgfYu4zdYYNaOEy8',   // spreadsheet "Tarikan Sistem": kolom Area | linkgdrive (folder tarikan harian per regional)
-  PAKAI_DATA_LAMA: true,   // true = bulan tanpa data tarikan tetap memakai file "Data <nn> ..." (Jan–Sep); false = hanya data tarikan
+  PAKAI_DATA_LAMA: false,  // true = bulan tanpa data tarikan tetap memakai file "Data <nn> ..." (Jan–Sep); false = hanya data tarikan
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
 };
@@ -157,7 +157,8 @@ function bangunData() {
     });
   });
   if (Object.keys(belum).length) peringatan.push('Case belum ada di Pemetaan (tidak dihitung): ' + Object.keys(belum).slice(0, 15).join(', '));
-  if (!dataBulan.length) peringatan.push('Belum ada file "Data <nomor bulan> ..." atau "Tarikan <nomor bulan> ..." (Google Sheet) di folder data.');
+  if (!dataBulan.length) peringatan.push(CFG.PAKAI_DATA_LAMA ? 'Belum ada file "Data <nomor bulan> ..." atau "Tarikan <nomor bulan> ..." (Google Sheet) di folder data.'
+    : 'Belum ada data tarikan yang selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang (atau fungsi prosesTarikan). Proses berlanjut otomatis setiap 15 menit.');
   const log = bacaLogTarikan(folder);
   if (log.gagal.length) peringatan.push('File tarikan gagal dibaca: ' + log.gagal.slice(0, 5).join('; '));
   return hitung(EV, AM, peta, catatan, peringatan);

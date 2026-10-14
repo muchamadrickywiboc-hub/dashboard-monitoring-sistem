@@ -303,7 +303,7 @@ td{padding:7px 10px}
 </div>
 <footer class="footer">
   <div class="redtab">www.elnusapetrofin.co.id</div>
-  <div class="src">Sumber: folder Google Drive "3. Data Dashboard" (file Data per bulan + Pengaturan Dashboard) — <span id="tSrc">2026</span>.</div>
+  <div class="src">Sumber: file tarikan harian dari folder yang tercantum di spreadsheet "Tarikan Sistem", dirangkum ke folder Google Drive "3. Data Dashboard" — <span id="tSrc">2026</span>.</div>
 </footer>
 <div id="tip" role="tooltip"></div>
 <script>
@@ -323,6 +323,7 @@ const d1 = n => (n || 0).toLocaleString('id-ID', {maximumFractionDigits: 1});
 const ax = n => n >= 1e6 ? (n/1e6).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' jt' : n >= 1e4 ? Math.round(n/1e3) + ' rb' : n >= 1e3 ? (n/1e3).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' rb' : nf(n);
 const cf = n => n >= 1e6 ? (n/1e6).toLocaleString('id-ID', {maximumFractionDigits: 2}) + ' juta' : n >= 1e4 ? Math.round(n/1e3).toLocaleString('id-ID') + ' ribu' : nf(n);
 const pf = (a, b) => { if (!b) return '–'; const v = a/b*100; if (v > 0 && v < 0.1) return '<0,1%'; return v.toLocaleString('id-ID', {maximumFractionDigits: v < 1 ? 1 : 0}) + '%'; };
+const rentang = (a, b, N = BLN) => a === b ? N[b] : N[a] + '–' + N[b];
 const sum = a => a.reduce((x, y) => x + (y || 0), 0);
 const ICON_W = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.8 15 14H1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 6.2v3.6M8 11.6v.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 
@@ -407,7 +408,7 @@ function kontrol() {
     ADA.filter(i => i !== mon).map(i => `<option value="${i}" ${i === cmp ? 'selected' : ''}>${BLN[i]} ${D.tahun}</option>`).reverse().join('');
   sc.value = String(cmp >= 0 && cmp !== mon ? cmp : -1);
   document.querySelectorAll('.tBulan').forEach(e => e.textContent = BLN[mon] + ' ' + D.tahun);
-  document.getElementById('tSrc').textContent = BLN[ADA[0]] + '–' + BLN[LAST] + ' ' + D.tahun;
+  document.getElementById('tSrc').textContent = rentang(ADA[0], LAST) + ' ' + D.tahun;
 }
 const cakupan = () => sel === 'ALL' ? `Nasional<small>${REG.filter(r => D.regional[r] && D.regional[r].lokasi).length} regional · ${sum(REG.map(r => (D.regional[r] || {}).lokasi || 0))} lokasi</small>` : `${RNAME[sel]}<small>${(D.regional[sel] || {}).lokasi || '–'} lokasi</small>`;
 function peringatan(el) {
@@ -433,7 +434,7 @@ function amtRows(bulan) {
     .sort((a, b) => b.t - a.t).slice(0, 10);
 }
 function renderAMT(host, sub, bulan) {
-  const rows = amtRows(bulan), per = bulan === null ? `${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}` : `${BLN[bulan]} ${D.tahun}`;
+  const rows = amtRows(bulan), per = bulan === null ? `${rentang(ADA[0], mon)} ${D.tahun}` : `${BLN[bulan]} ${D.tahun}`;
   const kira = bulan === null && mon !== LAST && D.topAMT && D.topAMT.some(o => o.b === -2);
   sub.textContent = `${per} · ${sel === 'ALL' ? 'semua regional' : RNAME[sel]} · urut dari total pelanggaran 3 kategori${kira ? ' · dijumlah dari 10 teratas tiap bulan' : ''}`;
   if (rows === null) { host.innerHTML = `<div class="emptyamt"><b>Data AMT belum ada.</b> Isi sheet <code>AMT</code> (Area, Lokasi, Nama AMT, Case, Jumlah) di file Data per bulan pada folder data. Panel ini terisi otomatis setelahnya.</div>`; return; }
@@ -515,7 +516,7 @@ function renderRingkas(T, TP, pm, ytd) {
   const KT = sum(kv.map(o => o.v));
   // strip angka utama
   document.getElementById('ovStrip').innerHTML = [{name: 'Total event ' + BLN[mon], v: T, p: TP}].concat(kv).map(o =>
-    `<div><div class="v">${o.v === null ? '–' : nf(o.v)}</div><div class="l">${o.name}</div><div class="n">${o.v === null ? 'belum ada data' : pctTxt(o.v, o.p) + ' vs ' + BP}</div></div>`).join('');
+    `<div><div class="v">${o.v === null ? '–' : nf(o.v)}</div><div class="l">${o.name}</div><div class="n">${o.v === null ? 'belum ada data' : pm === null ? 'belum ada bulan pembanding' : pctTxt(o.v, o.p) + ' vs ' + BP}</div></div>`).join('');
   // 1. total event (donut kategori)
   document.getElementById('ovTotS').textContent = `${BLN[mon]} ${D.tahun} · ${scope}`;
   document.getElementById('ovTot').innerHTML = ringDonut(kv.map(o => ({v: o.v || 0, c: o.color})), 170, 22, KT ? ax(KT) : '–', 'event') +
@@ -539,7 +540,7 @@ function renderRingkas(T, TP, pm, ytd) {
   // 4. porsi per kategori
   document.getElementById('ovKatS').textContent = `Bagian tiap kategori dari total ${BLN[mon]}`;
   document.getElementById('ovKat').innerHTML = kv.map(o => { const f = KT ? (o.v || 0)/KT : 0;
-    return `<div><div class="t">${o.name}</div>${ringDonut([{v: f, c: o.color}, {v: 1 - f, c: 'transparent'}], 104, 14, pf(o.v || 0, KT), 'porsi')}<b>${o.v === null ? '–' : nf(o.v)}</b><small>${o.v === null ? '' : pctTxt(o.v, o.p) + ' vs ' + (pm === null ? 'bln lalu' : B3[pm])}</small></div>`; }).join('');
+    return `<div><div class="t">${o.name}</div>${ringDonut([{v: f, c: o.color}, {v: 1 - f, c: 'transparent'}], 104, 14, pf(o.v || 0, KT), 'porsi')}<b>${o.v === null ? '–' : nf(o.v)}</b><small>${o.v === null || pm === null ? '' : pctTxt(o.v, o.p) + ' vs ' + B3[pm]}</small></div>`; }).join('');
   // 5 & 6. harian + progres
   const cur = hariBulan(mon), nh = nHari(mon);
   const isi = cur ? cur.map((o, i) => ({...o, d: i + 1})).filter(o => o.ada) : [];
@@ -559,7 +560,7 @@ function renderRingkas(T, TP, pm, ytd) {
     `<div class="ovbar" title="Lebar batang = hari terisi; warna = porsi kategori">${kv.map(o => `<i style="width:${KT ? (o.v || 0)/KT*hariData/nh*100 : 0}%;background:${o.color}"></i>`).join('')}</div>` +
     `<div class="ovstat"><div><b>${nf(avg)}</b><span>rata-rata event/hari</span></div><div><b>${pavg === null ? '–' : pctTxt(avg, pavg)}</b><span>rata-rata harian vs ${BP}</span></div>` +
     `<div><b>${sisa ? cf(est) : cf(T)}</b><span>${sisa ? 'perkiraan total akhir bulan' : 'total bulan ini'}</span></div><div><b>${nLok ? d1((T || 0)/nLok) : '–'}</b><span>event per lokasi</span></div></div>` +
-    `<div class="ovfoot"><b>${cf(ytd)}</b> event sepanjang ${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}${TP === null ? '' : ` · ${BP}: ${cf(TP)}`}</div>`;
+    `<div class="ovfoot"><b>${cf(ytd)}</b> event sepanjang ${rentang(ADA[0], mon)} ${D.tahun}${TP === null ? '' : ` · ${BP}: ${cf(TP)}`}</div>`;
 }
 
 /* ================= BULANAN ================= */
@@ -571,7 +572,7 @@ function renderBulan() {
   peringatan(document.getElementById('bwarn'));
 
   // kartu per kategori (nasional): donut, kotak, tren, tabel parameter
-  document.getElementById('trendSub').textContent = `Nasional · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis putus-putus = rata-rata`;
+  document.getElementById('trendSub').textContent = `Nasional · ${rentang(ADA[0], LAST)} ${D.tahun} · batang gelap = ${BLN[mon]}, garis putus-putus = rata-rata`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
   CATS.forEach(cat => {
     const ps = catParams(cat.key), arr = BLN.map((_, m) => nilaiKat(cat.key, m));
@@ -634,7 +635,7 @@ function renderBulan() {
 
 /* ================= REKAP YTD ================= */
 function renderYTD() {
-  const M = ADA.filter(m => m <= mon), per = `${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}`, per3 = `${B3[ADA[0]]}–${B3[mon]}`;
+  const M = ADA.filter(m => m <= mon), per = `${rentang(ADA[0], mon)} ${D.tahun}`, per3 = `${rentang(ADA[0], mon, B3)}`;
   const T = sum(M.map(m => totSel(m))), nb = Math.max(1, M.filter(m => totSel(m) !== null).length);
   const nLok = sel === 'ALL' ? sum(REG.map(r => (D.regional[r] || {}).lokasi || 0)) : (D.regional[sel] || {}).lokasi || 0;
   document.getElementById('kpis').innerHTML = `
@@ -736,9 +737,9 @@ function start(json) {
   if (wasLatest || ADA.indexOf(mon) < 0) mon = Math.max(0, LAST);
   const l = document.getElementById('loading');
   if (LAST < 0) { document.body.classList.add('nodata'); document.getElementById('tUpdate').textContent = 'Menunggu data'; l.hidden = false;
-    l.innerHTML = `<div class="status"><h3>Belum ada data yang bisa ditampilkan</h3><ul>${(D.peringatan || []).map(s => `<li class="err">${s}</li>`).join('') || '<li>Folder data belum berisi file Data per bulan.</li>'}</ul><div>Periksa CFG.FOLDER_ID di Kode.gs, file Pengaturan Dashboard, dan file Data per bulan di folder tersebut.</div></div>`; return; }
+    l.innerHTML = `<div class="status"><h3>Belum ada data yang bisa ditampilkan</h3><ul>${(D.peringatan || []).map(s => `<li class="err">${s}</li>`).join('') || '<li>Belum ada data tarikan yang selesai diproses.</li>'}</ul><div>Data muncul setelah prosesTarikan merangkum file tarikan dari folder di spreadsheet Tarikan Sistem.</div></div>`; return; }
   document.body.classList.remove('nodata'); l.hidden = true;
-  document.getElementById('tPeriode').textContent = `${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun}`;
+  document.getElementById('tPeriode').textContent = `${rentang(ADA[0], LAST)} ${D.tahun}`;
   document.getElementById('tUpdate').textContent = 'Data s/d ' + BLN[LAST] + ' ' + D.tahun + (D.updated ? ' · dibaca ' + new Date(D.updated).toLocaleString('id-ID', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : '');
   render();
 }
