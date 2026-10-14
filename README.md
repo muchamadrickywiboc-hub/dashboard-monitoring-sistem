@@ -10,6 +10,8 @@ Dashboard membaca satu folder Drive (`CFG.FOLDER_ID` di `Kode.gs`, folder "3. Da
 | `Pengaturan Dashboard` | Sheet `Pemetaan` (Case → Parameter → Kategori, Area → Regional, Lokasi → Regional), `Catatan`, `Kelengkapan` |
 | `Data 01 Januari 2026`, `Data 02 Februari 2026`, ... | Satu Google Sheet per bulan. Sheet `Event`: `Tanggal (yyyy-mm-dd) \| Area \| Lokasi \| Case \| Jumlah`. Sheet `AMT`: `Area \| Lokasi \| Nama AMT \| Case \| Jumlah` |
 
+Mulai Oktober 2026 data juga datang dari **tarikan harian**: spreadsheet *Tarikan Sistem* (`CFG.TARIKAN_ID`, kolom `Area | linkgdrive`) berisi folder per regional dengan file `Tarikan_<REGIONAL>_GPS_CCTV_<yyyy-mm-dd>.xlsx` (satu baris per alarm: TBBM, Time, Alarm Status, AMT 1, ...). `prosesTarikan()` (pemicu tiap 15 menit) merangkum file baru/berubah ke `Tarikan <nn> <Bulan> 2026` di folder data dan mencatatnya di `Log Tarikan`. Bulan yang punya file Tarikan memakai data itu; bulan lain memakai file `Data <nn> ...` (atur dengan `CFG.PAKAI_DATA_LAMA`). Butuh layanan lanjutan **Drive API** di Apps Script untuk membaca .xlsx. Teks Alarm Status dipetakan lewat `KASUS_TARIKAN` di `Kode.gs` (bisa ditimpa di sheet Pemetaan).
+
 Nomor bulan diambil dari nama file. Bulan baru = tambah file `Data 11 November 2026`. File .xlsx harus dikonversi ke Google Sheet (setelan Drive "Konversi upload"), atau aktifkan layanan Drive API di Apps Script supaya dikonversi otomatis. Case yang tidak ada di `Pemetaan` dilaporkan di bagian Catatan dashboard.
 
 ## Fitur tampilan
