@@ -173,6 +173,59 @@ td{padding:7px 10px}
 .emptyamt code{background:#eef4ef;padding:1px 5px;border-radius:4px;font-size:11.5px}
 .amtbar{display:block;height:4px;background:#e8eee9;border-radius:2px;margin-top:3px;min-width:50px}
 .amtbar i{display:block;height:100%;background:#c0392b;border-radius:2px}
+.ovstrip{background:linear-gradient(115deg,#3f6e4b 0%,var(--forest) 40%,#5b8f4f 100%);border-radius:16px;box-shadow:0 8px 24px rgba(30,60,40,.10);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:10px 0;color:#fff}
+.ovstrip>div{padding:6px 16px;text-align:center;border-right:1px solid rgba(255,255,255,.28);min-width:0}
+.ovstrip>div:last-child{border-right:0}
+.ovstrip .v{font-size:28px;font-weight:700;color:var(--lime);line-height:1.15;font-variant-numeric:tabular-nums}
+.ovstrip .l{font-size:14px;font-weight:500}
+.ovstrip .n{font-size:12px;color:rgba(255,255,255,.85)}
+.ovstrip .n .up,.ovstrip .n .down,.ovstrip .n .flat{color:#fff}
+.ovgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.ovp{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.ovp h3{margin:0;font-size:16px;font-weight:700}
+.ovs{margin:-6px 0 0;font-size:12.5px;color:var(--muted)}
+.ovdonut{display:flex;align-items:center;gap:16px;flex:1}
+.ovdonut svg{flex:none;width:170px;height:170px}
+.ovleg{display:flex;flex-direction:column;gap:10px;min-width:0;flex:1}
+.ovleg div{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:4px 8px;align-items:center;font-size:13px}
+.ovleg i{width:11px;height:11px;border-radius:3px}
+.ovleg b{font-size:15px;font-variant-numeric:tabular-nums}
+.ovleg small{grid-column:2/4;color:var(--muted);font-size:12px;margin-top:-4px}
+.ovlist{width:100%;font-size:13.5px}
+.ovlist td{padding:6px 8px;white-space:normal}
+.ovlist td:first-child{width:18px;padding-right:0}
+.ovlist .dot{display:inline-block;width:10px;height:10px;border-radius:50%}
+.ovlist td.nm{text-align:left}
+.ovlist td.vl{font-weight:700;width:1%;white-space:nowrap}
+.ovlist td.ch{font-size:12px;width:1%;white-space:nowrap}
+.ovhi{display:flex;justify-content:space-between;gap:10px;align-items:center;background:var(--accent-wash);border-radius:8px;padding:8px 12px;font-size:13px}
+.ovhi.red{background:#fde8e8}
+.ovhi span{min-width:0}.ovhi small{display:block;color:var(--muted);font-size:11.5px}
+.ovhi b{white-space:nowrap}
+.ovblk{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;gap:8px}
+.ovblk+.ovblk{margin-top:8px}
+.ovbig{text-align:center}
+.ovbig b{display:block;font-size:30px;line-height:1.1}
+.ovbig span{font-size:12.5px;color:var(--ink-2)}
+.ovmini{border:1px solid var(--grid);border-radius:8px;overflow:hidden}
+.ovmini td{padding:5px 8px;font-size:12.5px;border-bottom:1px solid var(--grid);white-space:normal}
+.ovmini tr:last-child td{border-bottom:0}
+.ovmini td:first-child{text-align:left}
+.ovkat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center;flex:1;align-items:center}
+.ovkat .t{font-size:13px;font-weight:600;line-height:1.25;min-height:2.5em;display:flex;align-items:flex-end;justify-content:center}
+.ovkat svg{width:100%;max-width:104px;height:auto;margin:6px auto}
+.ovkat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.ovkat small{display:block;font-size:12px;color:var(--muted)}
+.ovtop{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13.5px}
+.ovtop b{font-size:18px}
+.ovbar{display:flex;height:16px;border-radius:4px;overflow:hidden;background:var(--surface-2);margin:4px 0 6px}
+.ovbar i{display:block;height:100%}
+.ovstat{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}
+.ovstat b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.ovstat span{font-size:12.5px;color:var(--ink-2)}
+.ovfoot{font-size:13px;color:var(--ink-2);border-top:1px solid var(--grid);padding-top:8px;margin-top:auto}
+@media (max-width:1100px){.ovgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:720px){.ovgrid{grid-template-columns:minmax(0,1fr)}.ovstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.ovstrip>div:nth-child(2){border-right:0}.ovdonut svg{width:140px;height:140px}}
 </style>
 
 <header class="hero">
@@ -203,18 +256,21 @@ td{padding:7px 10px}
 <div class="wrap" id="loadwrap"><div class="loading" id="loading" role="status"></div></div>
 
 <div class="wrap" id="view-bulan">
-  <section class="infobar">
-    <div><div class="k">Cakupan</div><div class="v" id="bLok"></div></div>
-    <div><div class="k">Bulan</div><div class="v" id="bMon"></div></div>
-    <div><div class="k">Pembanding</div><div class="v" id="bPrev"></div></div>
-    <div><div class="k">Total event bulan ini</div><div class="v" id="bTot"></div></div>
-  </section>
+  <section class="ovstrip" id="ovStrip" aria-label="Angka utama bulan ini"></section>
   <div class="warnbar" id="bwarn" hidden></div>
-  <div class="anahead"><h2 style="margin:0;font-size:18px;font-weight:700">Tren &amp; parameter per kategori</h2><span class="hint" id="trendSub"></span></div>
-  <div id="btrend" class="trend3"></div>
+  <section class="ovgrid">
+    <div class="ovp"><h3>Total Event</h3><p class="ovs" id="ovTotS"></p><div class="ovdonut" id="ovTot"></div></div>
+    <div class="ovp"><h3>Pelanggaran per Parameter</h3><p class="ovs" id="ovParS"></p><div id="ovPar"></div></div>
+    <div class="ovp"><h3>Regional &amp; Lokasi</h3><p class="ovs" id="ovRegS"></p><div id="ovReg"></div></div>
+    <div class="ovp"><h3>Porsi per Kategori</h3><p class="ovs" id="ovKatS"></p><div class="ovkat" id="ovKat"></div></div>
+    <div class="ovp"><h3>Event Harian</h3><p class="ovs" id="ovDayS"></p><div id="ovDay"></div></div>
+    <div class="ovp"><h3>Progres Bulan Ini</h3><p class="ovs" id="ovProgS"></p><div id="ovProg"></div></div>
+  </section>
   <section class="panel"><div class="ph"><h2 id="bdayH">Event per hari</h2><p id="bdaySub"></p></div>
     <div class="legend" id="bdayLeg"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span><span id="bdayCmpLeg"><i style="background:none;border-top:2px dashed #1b1f1d;border-radius:0;height:0;width:16px"></i><b id="bdayCmpName"></b></span></div>
     <div class="chart" id="bday"></div></section>
+  <div class="anahead"><h2 style="margin:0;font-size:18px;font-weight:700">Tren bulanan per kategori</h2><span class="hint" id="trendSub"></span></div>
+  <div id="btrend" class="trend3"></div>
   <section class="panel"><div class="ph"><h2>Rekap per regional</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
   <section class="grid g-21">
     <div class="panel"><div class="ph"><h2 id="bamtH">TOP 10 Pelanggaran AMT</h2><p id="bamtSub"></p></div><div class="tbl" id="bamt"></div></div>
@@ -440,15 +496,78 @@ function renderHarian() {
   host.appendChild(svg);
 }
 
+/* ================= RINGKASAN (gaya KPI) ================= */
+// nilai kategori sesuai filter: nasional dari parameter, regional dari rekap regional
+const katVal = (k, m) => { if (m === null || m === undefined) return null; if (sel === 'ALL') return nilaiKat(k, m); const o = (D.regional[sel] || {}).kat || {}, x = o[m]; return x ? (x[k] || 0) : null; };
+function ringDonut(parts, size, inner, centerTop, centerBot) {
+  const R = 60, w = inner, M = R - w/2, cx = 64, cy = 64, tot = sum(parts.map(p => p.v));
+  let s = `<svg viewBox="0 0 128 128" width="${size}" height="${size}" role="img"><circle cx="${cx}" cy="${cy}" r="${M}" fill="none" stroke="#e6e9e6" stroke-width="${w}"/>`, a0 = 0;
+  if (tot > 0) parts.forEach(p => { const f = p.v / tot; if (f <= 0) return; if (f >= .9999) { s += `<circle cx="${cx}" cy="${cy}" r="${M}" fill="none" stroke="${p.c}" stroke-width="${w}"/>`; a0 += f; return; }
+    const g = Math.min(.004, f/4), A = a => [cx + M*Math.sin(a*2*Math.PI), cy - M*Math.cos(a*2*Math.PI)], [x0, y0] = A(a0 + g), [x1, y1] = A(a0 + f - g);
+    s += `<path d="M${x0.toFixed(2)} ${y0.toFixed(2)} A${M} ${M} 0 ${f > .5 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}" fill="none" stroke="${p.c}" stroke-width="${w}"/>`; a0 += f; });
+  s += `<text x="${cx}" y="${cy + (centerBot ? 2 : 7)}" text-anchor="middle" style="font-size:${centerBot ? 19 : 22}px;font-weight:700;fill:#1b1f1d">${centerTop}</text>`;
+  if (centerBot) s += `<text x="${cx}" y="${cy + 18}" text-anchor="middle" style="font-size:10.5px;fill:#737b76">${centerBot}</text>`;
+  return s + '</svg>';
+}
+function renderRingkas(T, TP, pm, ytd) {
+  const BP = pm === null ? 'bulan lalu' : BLN[pm], scope = sel === 'ALL' ? 'semua regional' : RNAME[sel];
+  const kv = CATS.map(c => ({...c, v: katVal(c.key, mon), p: pm === null ? null : katVal(c.key, pm)}));
+  const KT = sum(kv.map(o => o.v));
+  // strip angka utama
+  document.getElementById('ovStrip').innerHTML = [{name: 'Total event ' + BLN[mon], v: T, p: TP}].concat(kv).map(o =>
+    `<div><div class="v">${o.v === null ? '–' : nf(o.v)}</div><div class="l">${o.name}</div><div class="n">${o.v === null ? 'belum ada data' : pctTxt(o.v, o.p) + ' vs ' + BP}</div></div>`).join('');
+  // 1. total event (donut kategori)
+  document.getElementById('ovTotS').textContent = `${BLN[mon]} ${D.tahun} · ${scope}`;
+  document.getElementById('ovTot').innerHTML = ringDonut(kv.map(o => ({v: o.v || 0, c: o.color})), 170, 22, KT ? ax(KT) : '–', 'event') +
+    `<div class="ovleg">${kv.map(o => `<div><i style="background:${o.color}"></i><span>${o.name}</span><b>${o.v === null ? '–' : nf(o.v)}</b><small>${pf(o.v || 0, KT)} dari total</small></div>`).join('')}</div>`;
+  // 2. parameter (nasional)
+  document.getElementById('ovParS').textContent = `${BLN[mon]} vs ${BP} · angka nasional`;
+  const pr = P.map(p => ({p, a: nilai(p.key, mon), b: pm === null ? null : nilai(p.key, pm), c: (CATS.find(c => c.key === p.kat) || {}).color})).filter(o => o.a || o.b).sort((x, y) => (y.a || 0) - (x.a || 0));
+  let up = null, dn = null; pr.forEach(o => { if (o.a === null || o.b === null) return; const d = o.a - o.b; if (d > 0 && (!up || d > up.d)) up = {...o, d}; if (d < 0 && (!dn || d < dn.d)) dn = {...o, d}; });
+  document.getElementById('ovPar').innerHTML = (pr.length ? `<table class="ovlist"><tbody>${pr.slice(0, 6).map(o => `<tr><td><span class="dot" style="background:${o.c}"></span></td><td class="nm">${o.p.label}</td><td class="vl">${o.a === null ? '–' : nf(o.a)}</td><td class="ch">${o.a === null ? '' : pctTxt(o.a, o.b)}</td></tr>`).join('')}</tbody></table>${pr.length > 6 ? `<div class="hint" style="padding-left:8px">+${pr.length - 6} parameter lain: ${pr.slice(6).map(o => o.p.label + ' ' + nf(o.a)).join(', ')}</div>` : ''}` : '<div class="emptyamt">Belum ada data parameter.</div>') +
+    `<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">` +
+    `<div class="ovhi red"><span><small>Kenaikan tertinggi</small>${up ? up.p.label : 'Tidak ada kenaikan'}</span><b class="up">${up ? '+' + nf(up.d) : ''}</b></div>` +
+    `<div class="ovhi"><span><small>Penurunan tertinggi</small>${dn ? dn.p.label : 'Tidak ada penurunan'}</span><b class="down">${dn ? '−' + nf(-dn.d) : ''}</b></div></div>`;
+  // 3. regional & lokasi
+  const LB = (D.lokasiBulan[mon] || []).filter(o => cocokReg(o.r)), aktif = LB.filter(o => o.t > 0).length;
+  const regs = REG.filter(r => cocokReg(r)).map(r => ({r, t: regTot(r, mon), p: pm === null ? null : regTot(r, pm)})).filter(o => o.t !== null || o.p !== null).sort((a, b) => (b.t || 0) - (a.t || 0));
+  const naik = LB.filter(o => o.p !== null && o.t > o.p).map(o => ({...o, d: o.t - o.p})).sort((a, b) => b.d - a.d);
+  document.getElementById('ovRegS').textContent = `${BLN[mon]} vs ${BP}`;
+  document.getElementById('ovReg').innerHTML =
+    `<div class="ovblk"><div class="ovbig"><b>${LB.length ? nf(aktif) : '–'}</b><span>lokasi ada event</span></div><table class="ovmini"><tbody>${regs.slice(0, 6).map(o => `<tr><td><span class="rdot" style="background:${rv(o.r)}"></span>${RNAME[o.r]}</td><td><b>${o.t === null ? '–' : nf(o.t)}</b></td><td>${pctTxt(o.t || 0, o.p)}</td></tr>`).join('') || '<tr><td>Belum ada data</td></tr>'}</tbody></table></div>` +
+    `<div class="ovblk"><div class="ovbig"><b class="${naik.length ? 'up' : ''}">${LB.length ? nf(naik.length) : '–'}</b><span>lokasi naik</span></div><table class="ovmini"><tbody>${naik.slice(0, 3).map(o => `<tr><td>${o.l}<span class="small">${RNAME[o.r]}</span></td><td class="up">+${nf(o.d)}</td></tr>`).join('') || `<tr><td>${LB.length ? 'Tidak ada lokasi yang naik' : 'Rincian lokasi belum ada'}</td></tr>`}</tbody></table></div>`;
+  // 4. porsi per kategori
+  document.getElementById('ovKatS').textContent = `Bagian tiap kategori dari total ${BLN[mon]}`;
+  document.getElementById('ovKat').innerHTML = kv.map(o => { const f = KT ? (o.v || 0)/KT : 0;
+    return `<div><div class="t">${o.name}</div>${ringDonut([{v: f, c: o.color}, {v: 1 - f, c: 'transparent'}], 104, 14, pf(o.v || 0, KT), 'porsi')}<b>${o.v === null ? '–' : nf(o.v)}</b><small>${o.v === null ? '' : pctTxt(o.v, o.p) + ' vs ' + (pm === null ? 'bln lalu' : B3[pm])}</small></div>`; }).join('');
+  // 5 & 6. harian + progres
+  const cur = hariBulan(mon), nh = nHari(mon);
+  const isi = cur ? cur.map((o, i) => ({...o, d: i + 1})).filter(o => o.ada) : [];
+  const lastDay = isi.length ? isi[isi.length - 1].d : 0, avg = isi.length ? sum(isi.map(o => o.t))/isi.length : (T || 0)/nh;
+  const pv = pm === null ? null : hariBulan(pm), pIsi = pv ? pv.filter(o => o.ada) : [], pavg = pIsi.length ? sum(pIsi.map(o => o.t))/pIsi.length : (TP === null ? null : TP/nHari(pm));
+  document.getElementById('ovDayS').textContent = `${BLN[mon]} ${D.tahun} · ${scope}`;
+  if (!isi.length) document.getElementById('ovDay').innerHTML = `<div class="emptyamt">Data harian ${BLN[mon]} belum ada.</div>`;
+  else { const mx = isi.reduce((a, o) => o.t > a.t ? o : a), mn = isi.reduce((a, o) => o.t < a.t ? o : a), la = isi[isi.length - 1];
+    const rows = [['#c0392b', 'Hari tertinggi', `${mx.d} ${B3[mon]}`, nf(mx.t)], ['#2f7a2f', 'Hari terendah', `${mn.d} ${B3[mon]}`, nf(mn.t)], ['var(--bar)', 'Rata-rata per hari', pavg === null ? '' : pctTxt(avg, pavg) + ' vs ' + B3[pm], nf(avg)],
+      ['var(--lime)', 'Hari terakhir', `${la.d} ${B3[mon]}`, nf(la.t)], ['var(--muted)', 'Hari dengan data', `dari ${nh} hari`, nf(isi.length)]];
+    document.getElementById('ovDay').innerHTML = `<table class="ovlist"><tbody>${rows.map(r => `<tr><td><span class="dot" style="background:${r[0]}"></span></td><td class="nm">${r[1]}<span class="small">${r[2]}</span></td><td class="vl">${r[3]}</td></tr>`).join('')}</tbody></table>`; }
+  const hariData = isi.length ? lastDay : (T ? nh : 0), sisa = Math.max(0, nh - hariData), est = avg*nh;
+  const nLok = sel === 'ALL' ? sum(REG.map(r => (D.regional[r] || {}).lokasi || 0)) : (D.regional[sel] || {}).lokasi || 0;
+  document.getElementById('ovProgS').textContent = `${BLN[mon]} ${D.tahun} · ${scope}`;
+  document.getElementById('ovProg').innerHTML =
+    `<div class="ovtop"><span><b>${nf(hariData)}</b> hari terisi</span><span>${sisa ? nf(sisa) + ' hari tersisa' : 'bulan lengkap'}</span></div>` +
+    `<div class="ovbar" title="Lebar batang = hari terisi; warna = porsi kategori">${kv.map(o => `<i style="width:${KT ? (o.v || 0)/KT*hariData/nh*100 : 0}%;background:${o.color}"></i>`).join('')}</div>` +
+    `<div class="ovstat"><div><b>${nf(avg)}</b><span>rata-rata event/hari</span></div><div><b>${pavg === null ? '–' : pctTxt(avg, pavg)}</b><span>rata-rata harian vs ${BP}</span></div>` +
+    `<div><b>${sisa ? cf(est) : cf(T)}</b><span>${sisa ? 'perkiraan total akhir bulan' : 'total bulan ini'}</span></div><div><b>${nLok ? d1((T || 0)/nLok) : '–'}</b><span>event per lokasi</span></div></div>` +
+    `<div class="ovfoot"><b>${cf(ytd)}</b> event sepanjang ${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}${TP === null ? '' : ` · ${BP}: ${cf(TP)}`}</div>`;
+}
+
 /* ================= BULANAN ================= */
 function renderBulan() {
   const pm = prevM();
   const T = totSel(mon), TP = pm === null ? null : totSel(pm);
   let ytd = 0; ADA.filter(m => m <= mon).forEach(m => ytd += totSel(m) || 0);
-  document.getElementById('bLok').innerHTML = cakupan();
-  document.getElementById('bMon').innerHTML = `${BLN[mon]} ${D.tahun}<small>${nHari(mon)} hari · ${nf(T)} event · ${perHari(T, mon)}/hari</small>`;
-  document.getElementById('bPrev').innerHTML = pm === null ? '–<small>belum ada bulan sebelumnya</small>' : `${BLN[pm]} ${D.tahun}<small>${nHari(pm)} hari · ${nf(TP)} event · ${perHari(TP, pm)}/hari</small>`;
-  document.getElementById('bTot').innerHTML = `${nf(T)}<small>${pctTxt(T, TP)} vs ${pm === null ? 'bulan lalu' : BLN[pm]} · rata-rata harian ${pm === null ? '' : pctTxt(T / nHari(mon), TP / nHari(pm))} · YTD ${cf(ytd)}</small>`;
+  renderRingkas(T, TP, pm, ytd);
   peringatan(document.getElementById('bwarn'));
 
   // kartu per kategori (nasional): donut, kotak, tren, tabel parameter
@@ -465,12 +584,7 @@ function renderBulan() {
     const subTxt = `Donut: ${BLN[mon]} ${isFinite(pct) ? (pct > 1 ? 'lebih banyak dari' : pct < 1 ? 'lebih sedikit dari' : 'sama dengan') : 'dibanding'} ${pm === null ? 'bulan lalu' : BLN[pm]}`;
     const card = document.createElement('section'); card.className = 'ana';
     card.innerHTML = `<h3><i style="background:${cat.color}"></i><span class="hname">${cat.name.toUpperCase()}<small>${subTxt}</small></span><span class="donut sm" title="${subTxt}">${donutSVG(pct, cat)}</span></h3>
-      <div class="boxes"><div><div class="k">Total (${B3[mon]} / ${pm === null ? '–' : B3[pm]})</div><div class="v">${cur === null ? '–' : nf(cur)} / ${prv === null ? '–' : nf(prv)}</div></div>
-      <div><div class="k">Kenaikan tertinggi</div><div class="v up">${up ? up.l + ' +' + nf(up.d) : 'Tidak ada kenaikan'}</div></div>
-      <div><div class="k">Penurunan tertinggi</div><div class="v down">${dn ? dn.l + ' −' + nf(-dn.d) : 'Tidak ada penurunan'}</div></div></div>
-      <div class="anachart"></div>
-      <div class="cattbl"><div class="tbl"><table><thead><tr><th>Parameter</th><th>${pm === null ? 'Bln lalu' : B3[pm]}</th><th>${B3[mon]}</th><th>Kenaikan</th></tr></thead><tbody>${rows}
-      <tr class="tot"><td>TOTAL</td><td>${prv === null ? '–' : nf(prv)}</td><td>${cur === null ? '–' : nf(cur)}</td><td>${pctTxt(cur || 0, prv)}</td></tr></tbody></table></div></div>`;
+      <div class="anachart"></div>`;
     te.appendChild(card); drawBulanan(card.querySelector('.anachart'), arr, cat);
   });
 
