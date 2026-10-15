@@ -385,6 +385,7 @@ function bacaLogTarikan(folder) {
  *   harian : [[bulan, tanggal, indeks area, indeks lokasi, DB, DD, FM]]
  *   amt    : { all, area, lok } -> [[bulan (-2 = YTD), indeks area, indeks lokasi, nama AMT, DB, DD, FM, total, indeks parameter terbanyak]]
  *            10 teratas per bulan untuk semua area, per area, dan per lokasi.
+ *   amtTot : [[bulan, indeks area, indeks lokasi, jumlah event yang punya nama AMT]] (kelengkapan data AMT)
  */
 function hitung(EV, AM, peta, catatan, peringatan) {
   const ada = {}; EV.forEach(e => { ada[e[0]] = 1; });
@@ -428,13 +429,14 @@ function hitung(EV, AM, peta, catatan, peringatan) {
   if (tanpaArea) catatan.push('Data: ' + tanpaArea + ' event tanpa Area dan Lokasi yang jelas tidak dihitung.');
 
   // AMT: jumlah per (bulan & YTD) x area x lokasi x nama, lalu 10 teratas per kelompok
-  const X = {};
+  const X = {}, AT = {};
   AM.forEach(r => {
     const [m, a0, l0, nama, p, k, n] = r, pi = pIdx[p];
     if (pi === undefined) return;
     const l = namaLok(l0), a = areaLok(l0) || a0;
     if (!a) return;
     const ai = AREAS.indexOf(a), L = li(l, ai), kat = params[pi].kat;
+    const tk = m + '|' + L; (AT[tk] || (AT[tk] = [m, ai, L, 0]))[3] += n;
     [m, -2].forEach(b => {
       const key = b + '|' + L + '|' + nama;
       const o = X[key] || (X[key] = { b: b, a: ai, l: L, nama: nama, DB: 0, DD: 0, FM: 0, t: 0, par: {} });
@@ -468,7 +470,7 @@ function hitung(EV, AM, peta, catatan, peringatan) {
 
   return {
     tahun: CFG.TAHUN, areas: AREAS, bulanAda: bulanAda, params: params, lok: lok,
-    fakta: Object.keys(F).map(k => F[k]), harian: Object.keys(H).map(k => H[k]), amt: amt,
+    fakta: Object.keys(F).map(k => F[k]), harian: Object.keys(H).map(k => H[k]), amt: amt, amtTot: Object.keys(AT).map(k => AT[k]),
     catatan: catatan, peringatan: peringatan, updated: new Date().toISOString(),
   };
 }

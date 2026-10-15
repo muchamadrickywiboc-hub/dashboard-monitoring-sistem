@@ -146,7 +146,7 @@ tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
 .more:hover{background:var(--accent-wash)}
 .pick select optgroup{font-weight:700}
 #breg tbody tr[data-r]:hover td,#blok tbody tr[data-k]:hover td{background:var(--accent-wash)}
-.nodata #view-ytd,.nodata #view-bulan,.nodata .filters,.nodata .ctrlrow .pick{display:none!important}
+.nodata #view-ytd,.nodata #view-bulan,.nodata #view-amt,.nodata #pageSeg,.nodata .filters,.nodata .ctrlrow .pick{display:none!important}
 @media (max-width:640px){.boxes{grid-template-columns:minmax(0,1fr)}.boxes>div{border-right:0;border-bottom:1px solid var(--grid)}}
 .trend3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .trend3 .ana h3{padding:10px 14px;font-size:13.5px}
@@ -198,7 +198,10 @@ td{padding:7px 10px}
       <div class="preview" id="tUpdate">Memuat data…</div>
     </div>
     <div class="ctrlrow">
-      <div class="seg" role="tablist" aria-label="Pilih tampilan"><button role="tab" data-v="bulan" aria-selected="true">Bulanan</button><button role="tab" data-v="ytd" aria-selected="false">Rekap YTD</button></div>
+      <div class="seg" id="pageSeg" role="tablist" aria-label="Pilih halaman"><button role="tab" data-p="1" aria-selected="true">Hal. 1 · Area &amp; Lokasi</button><button role="tab" data-p="2" aria-selected="false">Hal. 2 · AMT</button></div>
+    </div>
+    <div class="ctrlrow">
+      <div class="seg" id="viewSeg" role="tablist" aria-label="Pilih tampilan"><button role="tab" data-v="bulan" aria-selected="true">Bulanan</button><button role="tab" data-v="ytd" aria-selected="false">Rekap YTD</button></div>
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
       <label class="pick" for="selCmp">Dibanding <select id="selCmp"></select></label>
     </div>
@@ -229,10 +232,7 @@ td{padding:7px 10px}
     <div class="legend" id="bdayLeg"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span><span id="bdayCmpLeg"><i style="background:none;border-top:2px dashed #1b1f1d;border-radius:0;height:0;width:16px"></i><b id="bdayCmpName"></b></span></div>
     <div class="chart" id="bday"></div></section>
   <section class="panel"><div class="ph"><h2>Rekap per area</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
-  <section class="grid g-21">
-    <div class="panel"><div class="ph"><h2 id="bamtH">TOP 10 Pelanggaran AMT</h2><p id="bamtSub"></p></div><div class="tbl" id="bamt"></div></div>
-    <div class="panel"><div class="ph"><h2 id="bdeltaH">Lokasi yang paling berubah</h2><p id="bdeltaSub"></p></div><div class="tbl"><table id="bdelta"></table></div><div id="bdeltaMore"></div></div>
-  </section>
+  <section class="panel"><div class="ph"><h2 id="bdeltaH">Lokasi yang paling berubah</h2><p id="bdeltaSub"></p></div><div class="tbl"><table id="bdelta"></table></div><div id="bdeltaMore"></div></section>
   <section class="panel"><div class="ph"><h2>Rekap per lokasi</h2><p id="blokSub"></p></div><div class="tbl"><table id="blok"></table></div><div id="blokMore"></div></section>
 </div>
 
@@ -252,11 +252,16 @@ td{padding:7px 10px}
       <section class="takeaways" aria-label="Poin penting"><h2 id="tkTitle">Poin penting</h2><ul id="takeaways"></ul></section>
     </div>
   </section>
-  <section class="grid g-21">
-    <div class="panel"><div class="ph"><h2>TOP 10 Pelanggaran AMT</h2><p id="yamtSub"></p></div><div class="tbl" id="yamt"></div></div>
-    <div class="panel"><div class="ph"><h2>Top 10 Lokasi dengan pelanggaran terbanyak</h2><p id="ylokSub"></p></div><div class="tbl"><table id="ylok"></table></div></div>
-  </section>
+  <section class="panel"><div class="ph"><h2>Top 10 Lokasi dengan pelanggaran terbanyak</h2><p id="ylokSub"></p></div><div class="tbl"><table id="ylok"></table></div></section>
   <section class="panel" aria-label="Catatan data"><div class="ph"><h2>Catatan data</h2><p>Hal yang perlu diperhatikan saat membaca angka</p></div><ul class="notes" id="notes"></ul></section>
+</div>
+<div class="wrap" id="view-amt" hidden>
+  <section class="kpis k3" id="akpi" aria-label="Angka utama AMT"></section>
+  <section class="grid">
+    <div class="panel"><div class="ph"><h2 id="bamtH">TOP 10 Pelanggaran AMT</h2><p id="bamtSub"></p></div><div class="tbl" id="bamt"></div></div>
+    <div class="panel"><div class="ph"><h2 id="yamtH">TOP 10 Pelanggaran AMT</h2><p id="yamtSub"></p></div><div class="tbl" id="yamt"></div></div>
+  </section>
+  <section class="panel"><div class="ph"><h2 id="acovH">Kelengkapan nama AMT</h2><p id="acovSub"></p></div><div class="tbl"><table id="acov"></table></div></section>
 </div>
 <footer class="footer">
   <div class="redtab">www.elnusapetrofin.co.id</div>
@@ -264,7 +269,7 @@ td{padding:7px 10px}
 </footer>
 <div id="tip" role="tooltip"></div>
 <script>
-let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, view = 'bulan', showAllLok = false, showAllDelta = false;
+let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, page = 1, mon = 0, cmp = -1, view = 'bulan', showAllLok = false, showAllDelta = false;
 const rn = r => String(r || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\b(Ii|Iii|Iv)\b/g, x => x.toUpperCase());
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const B3 = BLN.map(b => b.slice(0, 3));
@@ -399,7 +404,8 @@ function derive() {
     const src = selLok >= 0 ? RAW.amt.lok.filter(r => r[2] === selLok) : sel !== 'ALL' ? RAW.amt.area.filter(r => A[r[1]] === sel) : RAW.amt.all;
     topAMT = src.map(([b, ai, li, amt, DB, DD, FM, t, pi]) => ({b, amt, r: A[ai], l: RAW.lok[li] ? RAW.lok[li][0] : '', DB, DD, FM, t, top: P[pi] ? P[pi].label : '–'}));
   }
-  Object.assign(D, {nilai, regional, lokasiBulan, lokasiYTD, harian: Object.values(H), topAMT});
+  const amtTot = (RAW.amtTot || []).filter(r => okLok(r[2]));
+  Object.assign(D, {nilai, regional, lokasiBulan, lokasiYTD, harian: Object.values(H), topAMT, amtTot});
 }
 function kontrol() {
   const sm = document.getElementById('selMon');
@@ -498,6 +504,34 @@ function renderHarian() {
   host.appendChild(svg);
 }
 
+/* ================= HALAMAN 2: AMT ================= */
+function renderHalAMT() {
+  const M = ADA.filter(m => m <= mon), per = `${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}`, per3 = `${B3[ADA[0]]}–${B3[mon]}`;
+  const evB = totSel(mon) || 0, evP = sum(M.map(m => totSel(m)));
+  const okA = r => cocokReg(D.regional ? RAW.areas[r[1]] : null);
+  const amB = sum(D.amtTot.filter(r => r[0] === mon && okA(r)).map(r => r[3])), amP = sum(D.amtTot.filter(r => r[0] <= mon && okA(r)).map(r => r[3]));
+  document.getElementById('akpi').innerHTML = `
+   <div class="kpi"><div class="l">Event ${BLN[mon]} ${D.tahun}</div><div class="v">${cf(evB)}</div><div class="n">${nf(evB)} event · ${scope()}</div></div>
+   <div class="kpi"><div class="l">Event dengan nama AMT · ${B3[mon]}</div><div class="v">${pf(amB, evB)}</div><div class="n">${nf(amB)} dari ${nf(evB)} event tercatat nama AMT-nya</div></div>
+   <div class="kpi"><div class="l">Event dengan nama AMT · ${per3}</div><div class="v">${pf(amP, evP)}</div><div class="n">${nf(amP)} dari ${nf(evP)} event</div></div>`;
+  document.getElementById('bamtH').textContent = `TOP 10 Pelanggaran AMT — ${BLN[mon]} ${D.tahun}`;
+  renderAMT(document.getElementById('bamt'), document.getElementById('bamtSub'), mon);
+  document.getElementById('yamtH').textContent = `TOP 10 Pelanggaran AMT — ${per}`;
+  renderAMT(document.getElementById('yamt'), document.getElementById('yamtSub'), null);
+  // kelengkapan: per area, atau per lokasi bila satu area dipilih
+  const perLok = sel !== 'ALL', grup = {};
+  D.amtTot.filter(r => r[0] === mon && okA(r)).forEach(r => { const k = perLok ? r[2] : r[1]; grup[k] = (grup[k] || 0) + r[3]; });
+  const baris = perLok ? (D.lokasiBulan[mon] || []).filter(o => cocokReg(o.r) && o.t > 0).map(o => ({nama: o.l, r: o.r, ev: o.t, am: grup[o.i] || 0}))
+                       : REG.map((r, ai) => ({nama: rn(r), r, ev: regTot(r, mon) || 0, am: grup[ai] || 0})).filter(o => o.ev > 0);
+  baris.sort((a, b) => b.ev - a.ev);
+  document.getElementById('acovH').textContent = `Kelengkapan nama AMT per ${perLok ? 'lokasi' : 'area'} — ${BLN[mon]}`;
+  document.getElementById('acovSub').textContent = `Bagian event yang kolom AMT 1-nya terisi. Angka TOP 10 AMT hanya menghitung event yang punya nama AMT.`;
+  document.getElementById('acov').innerHTML = `<thead><tr><th>${perLok ? 'Lokasi' : 'Area'}</th><th>Event</th><th>Event dengan nama AMT</th><th>Kelengkapan</th></tr></thead><tbody>` +
+    baris.map(o => { const q = o.ev ? o.am/o.ev : 0;
+      return `<tr><td style="white-space:normal"><span class="rdot" style="background:${rv(o.r)}"></span>${o.nama}</td><td>${nf(o.ev)}</td><td>${nf(o.am)}</td><td><b class="${q < .2 ? 'up' : q >= .8 ? 'down' : ''}">${pf(o.am, o.ev)}</b><span class="amtbar" style="margin-left:auto;max-width:120px"><i style="width:${Math.min(100, q*100)}%;background:${q < .2 ? '#c0392b' : '#4a7a53'}"></i></span></td></tr>`; }).join('') +
+    (baris.length ? '' : `<tr><td colspan="4">Belum ada data untuk ${BLN[mon]}.</td></tr>`) + '</tbody>';
+}
+
 /* ================= TOP 10 AREA & LOKASI ================= */
 function topList(host, rows, kosongTxt) {
   host.innerHTML = '';
@@ -556,9 +590,6 @@ function renderBulan() {
     te.appendChild(card); drawBulanan(card.querySelector('.anachart'), arr, cat);
   });
 
-  // TOP 10 AMT bulan ini
-  document.getElementById('bamtH').textContent = `TOP 10 Pelanggaran AMT — ${BLN[mon]}`;
-  renderAMT(document.getElementById('bamt'), document.getElementById('bamtSub'), mon);
 
   // per area
   const adaKat = REG.some(r => D.regional[r] && D.regional[r].kat[mon]);
@@ -667,8 +698,6 @@ function renderYTD() {
   svgEl('line', {x1: lw, x2: lw, y1: 0, y2: PH, class: 'base'}, ps);
   ph.appendChild(ps);
 
-  // TOP 10 AMT periode berjalan
-  renderAMT(document.getElementById('yamt'), document.getElementById('yamtSub'), null);
 
   // lokasi YTD
   const ly = D.lokasiYTD.filter(o => cocokReg(o.r)).sort((a, b) => b.t - a.t).slice(0, 10);
@@ -687,14 +716,23 @@ function renderYTD() {
 }
 
 /* ================= TAMPILAN & MUAT DATA ================= */
-function setView(v) { view = v; document.getElementById('view-bulan').hidden = v !== 'bulan'; document.getElementById('view-ytd').hidden = v !== 'ytd';
-  document.getElementById('selCmp').parentElement.hidden = v !== 'bulan';
-  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-selected', b.dataset.v === v)); render(); }
-document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setView(b.dataset.v));
+function tataHalaman() {
+  document.getElementById('view-bulan').hidden = page !== 1 || view !== 'bulan';
+  document.getElementById('view-ytd').hidden = page !== 1 || view !== 'ytd';
+  document.getElementById('view-amt').hidden = page !== 2;
+  document.getElementById('viewSeg').hidden = page !== 1;
+  document.getElementById('selCmp').parentElement.hidden = page !== 1 || view !== 'bulan';
+  document.querySelectorAll('#viewSeg button').forEach(b => b.setAttribute('aria-selected', b.dataset.v === view));
+  document.querySelectorAll('#pageSeg button').forEach(b => b.setAttribute('aria-selected', String(+b.dataset.p === page)));
+}
+function setView(v) { view = v; tataHalaman(); render(); }
+function setPage(n) { page = n; tataHalaman(); render(); window.scrollTo(0, 0); }
+document.querySelectorAll('#viewSeg button').forEach(b => b.onclick = () => setView(b.dataset.v));
+document.querySelectorAll('#pageSeg button').forEach(b => b.onclick = () => setPage(+b.dataset.p));
 document.getElementById('selMon').onchange = e => { mon = +e.target.value; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
 document.getElementById('selLok').onchange = e => setLok(+e.target.value);
-function render() { if (!D || LAST < 0) return; derive(); kontrol(); chips(); pilihanLokasi(); if (view === 'bulan') { renderBulan(); renderHarian(); } else renderYTD(); }
+function render() { if (!D || LAST < 0) return; derive(); kontrol(); chips(); pilihanLokasi(); if (page === 2) renderHalAMT(); else if (view === 'bulan') { renderBulan(); renderHarian(); } else renderYTD(); }
 
 const REFRESH_MS = 5*60*1000;
 function start(json) {
