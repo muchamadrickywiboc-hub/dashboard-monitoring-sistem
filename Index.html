@@ -193,12 +193,12 @@ td{padding:7px 10px}
       <div>
         <div class="eyebrow">RTC Pusat · Monitoring Armada</div>
         <h1>Monitoring Driving Behaviour, Driver Discipline &amp; Fatigue — <span class="tBulan">September 2026</span></h1>
-        <div class="sub">Rekap bulanan per lokasi · Driving Behaviour · Driver Discipline · Fatigue Management · data <span id="tPeriode">…</span></div>
+        <div class="sub"><span id="tHal">Sebaran pelanggaran Driving Behaviour, Driver Discipline &amp; Fatigue per area dan lokasi</span> · data <span id="tPeriode">…</span></div>
       </div>
       <div class="preview" id="tUpdate">Memuat data…</div>
     </div>
     <div class="ctrlrow">
-      <div class="seg" id="pageSeg" role="tablist" aria-label="Pilih halaman"><button role="tab" data-p="1" aria-selected="true">Hal. 1 · Area &amp; Lokasi</button><button role="tab" data-p="2" aria-selected="false">Hal. 2 · AMT</button></div>
+      <div class="seg" id="pageSeg" role="tablist" aria-label="Pilih halaman"><button role="tab" data-p="1" aria-selected="true">Pelanggaran Area &amp; Lokasi</button><button role="tab" data-p="2" aria-selected="false">Pelanggaran Driver</button></div>
     </div>
     <div class="ctrlrow">
       <div class="seg" id="viewSeg" role="tablist" aria-label="Pilih tampilan"><button role="tab" data-v="bulan" aria-selected="true">Bulanan</button><button role="tab" data-v="ytd" aria-selected="false">Rekap YTD</button></div>
@@ -256,12 +256,12 @@ td{padding:7px 10px}
   <section class="panel" aria-label="Catatan data"><div class="ph"><h2>Catatan data</h2><p>Hal yang perlu diperhatikan saat membaca angka</p></div><ul class="notes" id="notes"></ul></section>
 </div>
 <div class="wrap" id="view-amt" hidden>
-  <section class="kpis k3" id="akpi" aria-label="Angka utama AMT"></section>
+  <section class="kpis k3" id="akpi" aria-label="Angka utama Driver"></section>
   <section class="grid">
-    <div class="panel"><div class="ph"><h2 id="bamtH">TOP 10 Pelanggaran AMT</h2><p id="bamtSub"></p></div><div class="tbl" id="bamt"></div></div>
-    <div class="panel"><div class="ph"><h2 id="yamtH">TOP 10 Pelanggaran AMT</h2><p id="yamtSub"></p></div><div class="tbl" id="yamt"></div></div>
+    <div class="panel"><div class="ph"><h2 id="bamtH">TOP 10 Pelanggaran Driver</h2><p id="bamtSub"></p></div><div class="tbl" id="bamt"></div></div>
+    <div class="panel"><div class="ph"><h2 id="yamtH">TOP 10 Pelanggaran Driver</h2><p id="yamtSub"></p></div><div class="tbl" id="yamt"></div></div>
   </section>
-  <section class="panel"><div class="ph"><h2 id="acovH">Kelengkapan nama AMT</h2><p id="acovSub"></p></div><div class="tbl"><table id="acov"></table></div></section>
+  <section class="panel"><div class="ph"><h2 id="acovH">Kelengkapan nama Driver</h2><p id="acovSub"></p></div><div class="tbl"><table id="acov"></table></div></section>
 </div>
 <footer class="footer">
   <div class="redtab">www.elnusapetrofin.co.id</div>
@@ -445,9 +445,9 @@ function renderAMT(host, sub, bulan) {
   const kira = bulan === null && mon !== LAST && D.topAMT && D.topAMT.some(o => o.b === -2);
   sub.textContent = `${per} · ${scope()} · urut dari total pelanggaran 3 kategori${kira ? ' · dijumlah dari 10 teratas tiap bulan' : ''}`;
   if (rows === null) { host.innerHTML = `<div class="emptyamt"><b>Data AMT belum ada.</b> Isi sheet <code>AMT</code> (Area, Lokasi, Nama AMT, Case, Jumlah) di file Data per bulan pada folder data. Panel ini terisi otomatis setelahnya.</div>`; return; }
-  if (!rows.length) { host.innerHTML = `<div class="emptyamt">Tidak ada data AMT untuk ${per}${sel === 'ALL' ? '' : ' di ' + rn(sel)}.</div>`; return; }
+  if (!rows.length) { host.innerHTML = `<div class="emptyamt">Tidak ada data Driver untuk ${per}${sel === 'ALL' ? '' : ' di ' + rn(sel)}.</div>`; return; }
   const mx = rows[0].t || 1;
-  host.innerHTML = `<table class="amttbl"><thead><tr><th>#</th><th>Nama AMT</th><th>Lokasi</th>${CATS.map(c => `<th title="${c.name}">${c.key}</th>`).join('')}<th>Total</th><th>Terbanyak</th></tr></thead><tbody>` +
+  host.innerHTML = `<table class="amttbl"><thead><tr><th>#</th><th>Nama Driver</th><th>Lokasi</th>${CATS.map(c => `<th title="${c.name}">${c.key}</th>`).join('')}<th>Total</th><th>Terbanyak</th></tr></thead><tbody>` +
     rows.map((o, i) => `<tr><td>${i + 1}</td><td style="text-align:left;white-space:normal"><b>${o.amt}</b></td><td style="text-align:left;white-space:normal"><span class="rdot" style="background:${o.r ? rv(o.r) : '#ccc'}"></span>${o.l || '–'}<span class="small">${o.r ? rn(o.r) : ''}</span></td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b><span class="amtbar"><i style="width:${o.t/mx*100}%"></i></span></td><td style="text-align:left;white-space:normal">${o.top}</td></tr>`).join('') + '</tbody></table>';
 }
 
@@ -512,11 +512,11 @@ function renderHalAMT() {
   const amB = sum(D.amtTot.filter(r => r[0] === mon && okA(r)).map(r => r[3])), amP = sum(D.amtTot.filter(r => r[0] <= mon && okA(r)).map(r => r[3]));
   document.getElementById('akpi').innerHTML = `
    <div class="kpi"><div class="l">Event ${BLN[mon]} ${D.tahun}</div><div class="v">${cf(evB)}</div><div class="n">${nf(evB)} event · ${scope()}</div></div>
-   <div class="kpi"><div class="l">Event dengan nama AMT · ${B3[mon]}</div><div class="v">${pf(amB, evB)}</div><div class="n">${nf(amB)} dari ${nf(evB)} event tercatat nama AMT-nya</div></div>
-   <div class="kpi"><div class="l">Event dengan nama AMT · ${per3}</div><div class="v">${pf(amP, evP)}</div><div class="n">${nf(amP)} dari ${nf(evP)} event</div></div>`;
-  document.getElementById('bamtH').textContent = `TOP 10 Pelanggaran AMT — ${BLN[mon]} ${D.tahun}`;
+   <div class="kpi"><div class="l">Event dengan nama Driver · ${B3[mon]}</div><div class="v">${pf(amB, evB)}</div><div class="n">${nf(amB)} dari ${nf(evB)} event tercatat nama Driver-nya</div></div>
+   <div class="kpi"><div class="l">Event dengan nama Driver · ${per3}</div><div class="v">${pf(amP, evP)}</div><div class="n">${nf(amP)} dari ${nf(evP)} event</div></div>`;
+  document.getElementById('bamtH').textContent = `TOP 10 Pelanggaran Driver — ${BLN[mon]} ${D.tahun}`;
   renderAMT(document.getElementById('bamt'), document.getElementById('bamtSub'), mon);
-  document.getElementById('yamtH').textContent = `TOP 10 Pelanggaran AMT — ${per}`;
+  document.getElementById('yamtH').textContent = `TOP 10 Pelanggaran Driver — ${per}`;
   renderAMT(document.getElementById('yamt'), document.getElementById('yamtSub'), null);
   // kelengkapan: per area, atau per lokasi bila satu area dipilih
   const perLok = sel !== 'ALL', grup = {};
@@ -524,9 +524,9 @@ function renderHalAMT() {
   const baris = perLok ? (D.lokasiBulan[mon] || []).filter(o => cocokReg(o.r) && o.t > 0).map(o => ({nama: o.l, r: o.r, ev: o.t, am: grup[o.i] || 0}))
                        : REG.map((r, ai) => ({nama: rn(r), r, ev: regTot(r, mon) || 0, am: grup[ai] || 0})).filter(o => o.ev > 0);
   baris.sort((a, b) => b.ev - a.ev);
-  document.getElementById('acovH').textContent = `Kelengkapan nama AMT per ${perLok ? 'lokasi' : 'area'} — ${BLN[mon]}`;
-  document.getElementById('acovSub').textContent = `Bagian event yang kolom AMT 1-nya terisi. Angka TOP 10 AMT hanya menghitung event yang punya nama AMT.`;
-  document.getElementById('acov').innerHTML = `<thead><tr><th>${perLok ? 'Lokasi' : 'Area'}</th><th>Event</th><th>Event dengan nama AMT</th><th>Kelengkapan</th></tr></thead><tbody>` +
+  document.getElementById('acovH').textContent = `Kelengkapan nama Driver per ${perLok ? 'lokasi' : 'area'} — ${BLN[mon]}`;
+  document.getElementById('acovSub').textContent = `Bagian event yang kolom AMT 1-nya terisi. Angka TOP 10 Driver hanya menghitung event yang punya nama Driver.`;
+  document.getElementById('acov').innerHTML = `<thead><tr><th>${perLok ? 'Lokasi' : 'Area'}</th><th>Event</th><th>Event dengan nama Driver</th><th>Kelengkapan</th></tr></thead><tbody>` +
     baris.map(o => { const q = o.ev ? o.am/o.ev : 0;
       return `<tr><td style="white-space:normal"><span class="rdot" style="background:${rv(o.r)}"></span>${o.nama}</td><td>${nf(o.ev)}</td><td>${nf(o.am)}</td><td><b class="${q < .2 ? 'up' : q >= .8 ? 'down' : ''}">${pf(o.am, o.ev)}</b><span class="amtbar" style="margin-left:auto;max-width:120px"><i style="width:${Math.min(100, q*100)}%;background:${q < .2 ? '#c0392b' : '#4a7a53'}"></i></span></td></tr>`; }).join('') +
     (baris.length ? '' : `<tr><td colspan="4">Belum ada data untuk ${BLN[mon]}.</td></tr>`) + '</tbody>';
@@ -709,7 +709,7 @@ function renderYTD() {
   // catatan
   const notes = [];
   if (P.some(p => p.kat !== p.katAsal)) notes.push('<b>Driving &gt; 4 Hours dihitung di Driving Behaviour</b> di semua grafik dan tabel.');
-  if (!D.topAMT) notes.push('<b>TOP 10 Pelanggaran AMT belum terisi.</b> Sheet AMT di file Data per bulan masih kosong.');
+  if (!D.topAMT) notes.push('<b>TOP 10 Pelanggaran Driver belum terisi.</b> Sheet AMT di file Data per bulan masih kosong.');
   (D.peringatan || []).forEach(s => notes.push(`<b>Sumber:</b> ${s}`));
   (D.catatan || []).forEach(s => { if (/^[A-Z ]+$/.test(s)) return; notes.push(s.replace(/^(\d+\.\s*)?([^:]{3,60}:)/, '$1<b>$2</b>')); });
   document.getElementById('notes').innerHTML = notes.map(n => `<li>${n}</li>`).join('');
@@ -720,6 +720,7 @@ function tataHalaman() {
   document.getElementById('view-bulan').hidden = page !== 1 || view !== 'bulan';
   document.getElementById('view-ytd').hidden = page !== 1 || view !== 'ytd';
   document.getElementById('view-amt').hidden = page !== 2;
+  document.getElementById('tHal').textContent = page === 2 ? 'Driver dengan pelanggaran terbanyak dan kelengkapan pencatatan nama Driver' : 'Sebaran pelanggaran Driving Behaviour, Driver Discipline & Fatigue per area dan lokasi';
   document.getElementById('viewSeg').hidden = page !== 1;
   document.getElementById('selCmp').parentElement.hidden = page !== 1 || view !== 'bulan';
   document.querySelectorAll('#viewSeg button').forEach(b => b.setAttribute('aria-selected', b.dataset.v === view));
