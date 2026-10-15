@@ -140,7 +140,7 @@ tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
 .boxes .k{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .boxes .v{font-size:15px;font-weight:700;margin-top:2px;overflow-wrap:anywhere}
 .boxes .v.up{color:var(--red)}.boxes .v.down{color:#2f7a2f}
-.anahead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.anahead{display:flex;align-items:baseline;gap:6px 12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 22px}
 .hint{font-size:13px;color:var(--muted)}
 .more{align-self:flex-start;font:600 13px var(--f-ui);border:1px solid var(--forest);background:#fff;color:var(--forest);padding:7px 14px;border-radius:8px;cursor:pointer}
 .more:hover{background:var(--accent-wash)}
@@ -229,7 +229,6 @@ td{padding:7px 10px}
   <div id="bdrv" class="drvgrid"></div>
   <section class="panel"><div class="ph"><h2>Rekap per area</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
   <section class="panel"><div class="ph"><h2>Rekap per lokasi</h2><p id="blokSub"></p></div><div class="tbl"><table id="blok"></table></div><div id="blokMore"></div></section>
-  <section class="panel"><div class="ph"><h2 id="bdeltaH">Lokasi yang paling berubah</h2><p id="bdeltaSub"></p></div><div class="tbl"><table id="bdelta"></table></div><div id="bdeltaMore"></div></section>
 </div>
 <footer class="footer">
   <div class="redtab">www.elnusapetrofin.co.id</div>
@@ -266,6 +265,8 @@ function topRound(x, y, w, h, r) { r = Math.min(r, h, w/2); if (h <= 0) return '
 function rightRound(x, y, w, h, r) { r = Math.min(r, w, h/2); if (w <= 0) return ''; return `M${x},${y}H${x+w-r}Q${x+w},${y} ${x+w},${y+r}V${y+h-r}Q${x+w},${y+h} ${x+w-r},${y+h}H${x}Z`; }
 function nTicks(m) { const ok = x => { const p = Math.pow(10, Math.floor(Math.log10(x))); const r = Math.round(x/p*100)/100; return [1,2,2.5,5,10].includes(r); }; return [4,5,3,6].find(n => ok(m/n)) || 4; }
 function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); const m = v/p; return [1,1.2,1.5,2,2.5,3,4,5,6,8,10].find(x => m <= x) * p; }
+// kunci urut kenaikan: lokasi/area baru di atas, tanpa pembanding di bawah
+const naikKey = (t, y) => y === null || y === undefined ? -Infinity : !y ? (t ? Infinity : 0) : t/y - 1;
 function pctTxt(t, y) {
   if (y === null || y === undefined) return '<span class="flat">–</span>';
   if (!y && !t) return '<span class="flat">0%</span>';
@@ -451,7 +452,7 @@ function renderDriver() {
   document.getElementById('drvSub').textContent = `${B} · ${scope()} · nama Driver dari kolom AMT 1, event tanpa nama Driver tidak dihitung`;
   if (!D.drv) { host.innerHTML = `<section class="panel"><div class="emptyamt">Data Driver belum ada.</div></section>`; return; }
   const by = {}; D.drv.filter(r => r[0] === mon).forEach(r => (by[r[3]] = by[r[3]] || []).push(r));
-  host.innerHTML = CATS.map(cat => catParams(cat.key).map(p => {
+  host.innerHTML = CATS.map(cat => catParams(cat.key).filter(p => !/^harsh/i.test(p.label)).map(p => {
     const rows = (by[P.indexOf(p)] || []).sort((a, b) => b[5] - a[5]), mx = rows.length ? rows[0][5] : 1;
     return `<section class="panel drv"><div class="ph"><h2><i style="background:${cat.color}"></i>${p.label}</h2><p>${cat.name}</p></div>` + (rows.length
       ? `<table class="drvtbl"><thead><tr><th>#</th><th>Nama Driver</th><th>Lokasi</th><th>Jumlah</th></tr></thead><tbody>` +
@@ -516,10 +517,10 @@ function renderBulan() {
 
   // per area
   const adaKat = REG.some(r => D.regional[r] && D.regional[r].kat[mon]);
-  document.getElementById('bregSub').textContent = `${BLN[mon]} ${D.tahun} dibanding ${pm === null ? 'bulan lalu' : BLN[pm]} · ${adaKat ? 'DB/DD/FM = Driving Behaviour/Driver Discipline/Fatigue Mgmt · ' : ''}klik baris untuk memfilter`;
+  document.getElementById('bregSub').textContent = `${BLN[mon]} ${D.tahun} dibanding ${pm === null ? 'bulan lalu' : BLN[pm]} · urut dari kenaikan tertinggi · klik baris untuk memfilter`;
   let tot = 0, totp = 0, totl = 0; const tk = {DB: 0, DD: 0, FM: 0};
-  document.getElementById('breg').innerHTML = `<thead><tr><th>Regional</th>${adaKat ? CATS.map(c => `<th title="${c.name}">${c.key}</th>`).join('') : ''}<th>${B3[mon]}</th><th>${pm === null ? 'Bln lalu' : B3[pm]}</th><th>Kenaikan</th><th>Lokasi</th></tr></thead><tbody>` +
-    REG.map(r => { const o = D.regional[r] || {total: [], kat: {}}, t = regTot(r, mon), p = pm === null ? null : regTot(r, pm), k = o.kat[mon];
+  document.getElementById('breg').innerHTML = `<thead><tr><th>Regional</th>${adaKat ? CATS.map(c => `<th>${c.name}</th>`).join('') : ''}<th>${B3[mon]}</th><th>${pm === null ? 'Bln lalu' : B3[pm]}</th><th>Kenaikan</th><th>Lokasi</th></tr></thead><tbody>` +
+    REG.slice().sort((a, b) => naikKey(regTot(b, mon) || 0, pm === null ? null : regTot(b, pm)) - naikKey(regTot(a, mon) || 0, pm === null ? null : regTot(a, pm))).map(r => { const o = D.regional[r] || {total: [], kat: {}}, t = regTot(r, mon), p = pm === null ? null : regTot(r, pm), k = o.kat[mon];
       tot += t || 0; totp += p || 0; totl += o.lokasi || 0; if (k) CATS.forEach(c => tk[c.key] += k[c.key] || 0);
       return `<tr data-r="${r}" style="cursor:pointer${sel !== 'ALL' && sel !== r ? ';opacity:.45' : ''}"><td><span class="rdot" style="background:${rv(r)}"></span>${rn(r)}</td>${adaKat ? CATS.map(c => `<td>${k ? nf(k[c.key]) : '–'}</td>`).join('') : ''}<td><b>${t === null ? '–' : nf(t)}</b></td><td>${p === null ? '–' : nf(p)}</td><td>${t === null ? '–' : pctTxt(t, p)}</td><td>${o.lokasi || '–'}</td></tr>`; }).join('') +
     `<tr class="tot"><td>TOTAL</td>${adaKat ? CATS.map(c => `<td>${nf(tk[c.key])}</td>`).join('') : ''}<td>${nf(tot)}</td><td>${pm === null ? '–' : nf(totp)}</td><td>${pctTxt(tot, pm === null ? null : totp)}</td><td>${totl || '–'}</td></tr></tbody>`;
@@ -528,26 +529,11 @@ function renderBulan() {
   // lokasi bulan ini
   const LB = (D.lokasiBulan[mon] || []).filter(o => cocokReg(o.r));
   const lbAda = !!D.lokasiBulan[mon], pmL = LB.length ? LB[0].pm : null;
-  // lokasi yang paling berubah (bulan ini vs bulan pembanding yang tersedia di sheet lokasi)
-  const dh = document.getElementById('bdelta'), dsub = document.getElementById('bdeltaSub'), dmore = document.getElementById('bdeltaMore');
-  if (!lbAda || pmL === null) { dh.innerHTML = ''; dmore.innerHTML = ''; dsub.textContent = `Rincian lokasi per bulan belum ada untuk ${BLN[mon]}. Data bulan sebelumnya belum ada di folder data sebagai pembanding.`; }
-  else {
-    const rows = LB.filter(o => o.p !== null).map(o => ({...o, d: o.t - o.p})).filter(o => o.d).sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
-    const N = showAllDelta ? rows.length : Math.min(8, rows.length);
-    const naik = sum(rows.filter(o => o.d > 0).map(o => o.d)), turun = sum(rows.filter(o => o.d < 0).map(o => o.d));
-    document.getElementById('bdeltaH').textContent = `Lokasi yang paling berubah, ${BLN[pmL]} → ${BLN[mon]}`;
-    dsub.innerHTML = `Total kenaikan <b class="up">+${nf(naik)}</b>, total penurunan <b class="down">−${nf(-turun)}</b> event${pm !== null && pm !== pmL ? ` · sheet lokasi hanya membandingkan dengan ${BLN[pmL]}` : ''}.`;
-    dh.innerHTML = `<thead><tr><th>Lokasi</th><th>${B3[pmL]}</th><th>${B3[mon]}</th><th>Selisih</th><th>Kenaikan</th></tr></thead><tbody>` +
-      rows.slice(0, N).map(o => `<tr><td style="white-space:normal"><span class="rdot" style="background:${rv(o.r)}"></span>${o.l}<span class="small">${rn(o.r)}</span></td><td>${nf(o.p)}</td><td>${nf(o.t)}</td><td class="${o.d > 0 ? 'up' : 'down'}">${o.d > 0 ? '+' : '−'}${nf(Math.abs(o.d))}</td><td>${pctTxt(o.t, o.p)}</td></tr>`).join('') + '</tbody>';
-    dmore.innerHTML = rows.length > 8 ? `<button type="button" class="more" id="btnDelta">${showAllDelta ? 'Tampilkan 8 teratas saja' : 'Tampilkan semua ' + rows.length + ' lokasi'}</button>` : '';
-    const b = document.getElementById('btnDelta'); if (b) b.onclick = () => { showAllDelta = !showAllDelta; renderBulan(); };
-  }
-
   // rekap per lokasi
   const ls = document.getElementById('blokSub'), lt = document.getElementById('blok'), lm = document.getElementById('blokMore');
   if (!lbAda) { ls.textContent = `Rincian lokasi untuk ${BLN[mon]} belum ada di sumber (tersedia: ${Object.keys(D.lokasiBulan).map(m => BLN[m]).join(', ') || '–'}).`; lt.innerHTML = ''; lm.innerHTML = ''; return; }
-  const lr = LB.slice().sort((a, b) => b.t - a.t), N = showAllLok ? lr.length : Math.min(10, lr.length);
-  ls.textContent = `${BLN[mon]} ${D.tahun} · ${lr.length} lokasi, urut dari event terbanyak`;
+  const lr = LB.slice().sort((a, b) => naikKey(b.t, b.p) - naikKey(a.t, a.p) || b.t - a.t), N = showAllLok ? lr.length : Math.min(10, lr.length);
+  ls.textContent = `${BLN[mon]} ${D.tahun} · ${lr.length} lokasi, urut dari kenaikan tertinggi sampai penurunan terbesar${pmL === null ? '' : ' (dibanding ' + BLN[pmL] + ')'}`;
   lt.innerHTML = `<thead><tr><th>Lokasi</th><th>Regional</th>${CATS.map(c => `<th>${c.name}</th>`).join('')}<th>Total</th><th>${pmL === null ? 'Bln lalu' : B3[pmL]}</th><th>Kenaikan</th></tr></thead><tbody>` +
     lr.slice(0, N).map(o => `<tr><td>${o.l}</td><td style="text-align:left"><span class="rdot" style="background:${rv(o.r)}"></span>${rn(o.r)}</td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b></td><td>${o.p === null ? '–' : nf(o.p)}</td><td>${pctTxt(o.t, o.p)}</td></tr>`).join('') + '</tbody>';
   lm.innerHTML = lr.length > 10 ? `<button type="button" class="more" id="btnMore">${showAllLok ? 'Tampilkan 10 teratas saja' : 'Tampilkan semua ' + lr.length + ' lokasi'}</button>` : '';
