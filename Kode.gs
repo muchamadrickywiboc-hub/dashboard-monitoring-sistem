@@ -55,8 +55,8 @@ function onOpen() {
 }
 
 function hapusCache() {
-  CacheService.getScriptCache().remove('DASHB3_N');
-  CacheService.getScriptCache().remove('DASHB3');
+  CacheService.getScriptCache().remove('DASHB4_N');
+  CacheService.getScriptCache().remove('DASHB4');
   try { SpreadsheetApp.getActiveSpreadsheet().toast('Cache dihapus. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Cache dihapus.'); }
 }
 
@@ -66,7 +66,7 @@ function UJI_BACA_SUMBER() {
   Logger.log('Bulan berisi data: ' + d.bulanAda.map(m => BULAN[m]).join(', '));
   Logger.log('Parameter: ' + d.params.map(p => p.label + ' (' + p.kat + ')').join('; '));
   Logger.log('Lokasi: ' + d.lok.length + ' | baris fakta: ' + d.fakta.length + ' | baris harian: ' + d.harian.length);
-  Logger.log('Top AMT: ' + (d.amt ? d.amt.all.length + ' / ' + d.amt.area.length + ' / ' + d.amt.lok.length + ' baris (semua / area / lokasi)' : 'data AMT belum ada'));
+  Logger.log('Top Driver: ' + (d.driver ? d.driver.all.length + ' / ' + d.driver.area.length + ' / ' + d.driver.lok.length + ' baris (semua / area / lokasi), ' + d.driver.nama.length + ' nama' : 'data AMT belum ada'));
   if (d.peringatan.length) Logger.log('Peringatan: ' + d.peringatan.join(' | '));
 }
 
@@ -93,17 +93,17 @@ function pasangPemicu() {
 function simpanCache(json) {
   try {
     const parts = {}, size = 90000;
-    for (let i = 0; i * size < json.length; i++) parts['DASHB3_' + i] = json.substr(i * size, size);
-    parts.DASHB3_N = String(Object.keys(parts).length);
+    for (let i = 0; i * size < json.length; i++) parts['DASHB4_' + i] = json.substr(i * size, size);
+    parts.DASHB4_N = String(Object.keys(parts).length);
     CacheService.getScriptCache().putAll(parts, CFG.CACHE_DETIK);
   } catch (e) { /* tanpa cache */ }
 }
 
 function getDashboardData() {
   const cache = CacheService.getScriptCache();
-  const n = Number(cache.get('DASHB3_N') || 0);
+  const n = Number(cache.get('DASHB4_N') || 0);
   if (n) {
-    const keys = []; for (let i = 0; i < n; i++) keys.push('DASHB3_' + i);
+    const keys = []; for (let i = 0; i < n; i++) keys.push('DASHB4_' + i);
     const got = cache.getAll(keys);
     if (keys.every(k => got[k] !== undefined && got[k] !== null)) return keys.map(k => got[k]).join('');
   }
@@ -165,7 +165,7 @@ function bangunData() {
 }
 
 function kosong(peringatan) {
-  return { tahun: CFG.TAHUN, areas: AREAS, bulanAda: [], params: [], lok: [], fakta: [], harian: [], amt: null, catatan: [], peringatan: peringatan, updated: new Date().toISOString() };
+  return { tahun: CFG.TAHUN, areas: AREAS, bulanAda: [], params: [], lok: [], fakta: [], harian: [], driver: null, catatan: [], peringatan: peringatan, updated: new Date().toISOString() };
 }
 
 function nilaiSheet(ss, nama) {
@@ -383,9 +383,8 @@ function bacaLogTarikan(folder) {
  *   lok    : [[nama lokasi, indeks area]]
  *   fakta  : [[bulan, indeks area, indeks lokasi, indeks parameter, jumlah]]
  *   harian : [[bulan, tanggal, indeks area, indeks lokasi, DB, DD, FM]]
- *   amt    : { all, area, lok } -> [[bulan (-2 = YTD), indeks area, indeks lokasi, nama AMT, DB, DD, FM, total, indeks parameter terbanyak]]
- *            10 teratas per bulan untuk semua area, per area, dan per lokasi.
- *   amtTot : [[bulan, indeks area, indeks lokasi, jumlah event yang punya nama AMT]] (kelengkapan data AMT)
+ *   driver : { all, area, lok, nama } -> [[bulan, indeks area, indeks lokasi, indeks parameter, indeks nama, jumlah]]
+ *            10 Driver teratas per bulan x parameter, untuk semua area, per area, dan per lokasi (kolom AMT 1).
  */
 function hitung(EV, AM, peta, catatan, peringatan) {
   const ada = {}; EV.forEach(e => { ada[e[0]] = 1; });
@@ -428,49 +427,38 @@ function hitung(EV, AM, peta, catatan, peringatan) {
   });
   if (tanpaArea) catatan.push('Data: ' + tanpaArea + ' event tanpa Area dan Lokasi yang jelas tidak dihitung.');
 
-  // AMT: jumlah per (bulan & YTD) x area x lokasi x nama, lalu 10 teratas per kelompok
-  const X = {}, AT = {};
+  // Driver: jumlah per bulan x lokasi x parameter x nama, lalu 10 teratas per parameter
+  //         untuk semua area, per area, dan per lokasi. Nama disimpan sekali di daftar `nama`.
+  const X = {};
   AM.forEach(r => {
     const [m, a0, l0, nama, p, k, n] = r, pi = pIdx[p];
     if (pi === undefined) return;
     const l = namaLok(l0), a = areaLok(l0) || a0;
     if (!a) return;
-    const ai = AREAS.indexOf(a), L = li(l, ai), kat = params[pi].kat;
-    const tk = m + '|' + L; (AT[tk] || (AT[tk] = [m, ai, L, 0]))[3] += n;
-    [m, -2].forEach(b => {
-      const key = b + '|' + L + '|' + nama;
-      const o = X[key] || (X[key] = { b: b, a: ai, l: L, nama: nama, DB: 0, DD: 0, FM: 0, t: 0, par: {} });
-      o[kat] += n; o.t += n; o.par[pi] = (o.par[pi] || 0) + n;
-    });
+    const ai = AREAS.indexOf(a), L = li(l, ai), key = m + '|' + L + '|' + pi + '|' + nama;
+    (X[key] || (X[key] = { m: m, a: ai, l: L, p: pi, nama: nama, n: 0 })).n += n;
   });
   const terbesar = obj => +(Object.keys(obj).sort((a, b) => obj[b] - obj[a])[0] || 0);
-  const gabung = (rows, kunci) => {   // gabung baris lokasi menjadi per area / semua area
+  const xr = Object.keys(X).map(k => X[k]), nama = [], nIdx = {};
+  const ni = s => { if (nIdx[s] === undefined) { nIdx[s] = nama.length; nama.push(s); } return nIdx[s]; };
+  const top10 = grup => {
     const G = {};
-    rows.forEach(o => {
-      const key = kunci(o) + '|' + o.nama;
-      const g = G[key] || (G[key] = { b: o.b, nama: o.nama, DB: 0, DD: 0, FM: 0, t: 0, par: {}, lokT: {}, areaT: {} });
-      g.DB += o.DB; g.DD += o.DD; g.FM += o.FM; g.t += o.t;
-      Object.keys(o.par).forEach(p => g.par[p] = (g.par[p] || 0) + o.par[p]);
-      g.lokT[o.l] = (g.lokT[o.l] || 0) + o.t; g.areaT[o.a] = (g.areaT[o.a] || 0) + o.t;
+    xr.forEach(o => {
+      const g = grup(o) + '|' + o.p, key = g + '|' + o.nama;
+      const x = G[key] || (G[key] = { g: g, m: o.m, p: o.p, nama: o.nama, n: 0, lokT: {}, areaT: {} });
+      x.n += o.n; x.lokT[o.l] = (x.lokT[o.l] || 0) + o.n; x.areaT[o.a] = (x.areaT[o.a] || 0) + o.n;
     });
-    return Object.keys(G).map(k => { const g = G[k]; return { b: g.b, a: terbesar(g.areaT), l: terbesar(g.lokT), nama: g.nama, DB: g.DB, DD: g.DD, FM: g.FM, t: g.t, par: g.par }; });
-  };
-  const top10 = (rows, grup) => {
-    const G = {}; rows.forEach(o => (G[grup(o)] = G[grup(o)] || []).push(o));
+    const K = {}; Object.keys(G).forEach(k => (K[G[k].g] = K[G[k].g] || []).push(G[k]));
     const out = [];
-    Object.keys(G).forEach(g => G[g].sort((a, b) => b.t - a.t).slice(0, 10).forEach(o => out.push([o.b, o.a, o.l, o.nama, o.DB, o.DD, o.FM, o.t, terbesar(o.par)])));
+    Object.keys(K).forEach(g => K[g].sort((a, b) => b.n - a.n).slice(0, 10)
+      .forEach(o => out.push([o.m, terbesar(o.areaT), terbesar(o.lokT), o.p, ni(o.nama), o.n])));
     return out;
   };
-  const xr = Object.keys(X).map(k => X[k]);
-  const amt = AM.length ? {
-    lok: top10(xr, o => o.b + '|' + o.l),
-    area: top10(gabung(xr, o => o.b + '|' + o.a), o => o.b + '|' + o.a),
-    all: top10(gabung(xr, o => o.b), o => o.b),
-  } : null;
+  const driver = xr.length ? { all: top10(o => o.m), area: top10(o => o.m + '|' + o.a), lok: top10(o => o.m + '|' + o.l), nama: nama } : null;
 
   return {
     tahun: CFG.TAHUN, areas: AREAS, bulanAda: bulanAda, params: params, lok: lok,
-    fakta: Object.keys(F).map(k => F[k]), harian: Object.keys(H).map(k => H[k]), amt: amt, amtTot: Object.keys(AT).map(k => AT[k]),
+    fakta: Object.keys(F).map(k => F[k]), harian: Object.keys(H).map(k => H[k]), driver: driver,
     catatan: catatan, peringatan: peringatan, updated: new Date().toISOString(),
   };
 }

@@ -146,7 +146,7 @@ tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
 .more:hover{background:var(--accent-wash)}
 .pick select optgroup{font-weight:700}
 #breg tbody tr[data-r]:hover td,#blok tbody tr[data-k]:hover td{background:var(--accent-wash)}
-.nodata #view-ytd,.nodata #view-bulan,.nodata #view-amt,.nodata #pageSeg,.nodata .filters,.nodata .ctrlrow .pick{display:none!important}
+.nodata #view-bulan,.nodata .filters,.nodata .ctrlrow .pick{display:none!important}
 @media (max-width:640px){.boxes{grid-template-columns:minmax(0,1fr)}.boxes>div{border-right:0;border-bottom:1px solid var(--grid)}}
 .trend3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .trend3 .ana h3{padding:10px 14px;font-size:13.5px}
@@ -171,6 +171,10 @@ td{padding:7px 10px}
 .cattbl td:first-child{white-space:normal}
 .emptyamt{padding:14px 16px;color:var(--muted,#6b7a72);font-size:12.5px;line-height:1.55}
 .emptyamt code{background:#eef4ef;padding:1px 5px;border-radius:4px;font-size:11.5px}
+.drvgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:20px}
+.drv .ph h2{display:flex;align-items:center;gap:8px}.drv .ph h2 i{width:10px;height:10px;border-radius:3px;flex:none}
+.drvtbl{width:100%;border-collapse:collapse;font-size:13px}.drvtbl th{text-align:left;font-size:11.5px;color:var(--muted);font-weight:600;padding:0 6px 6px;border-bottom:1px solid var(--line)}
+.drvtbl td{white-space:normal;overflow-wrap:anywhere;padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}.drvtbl td:first-child{color:var(--muted);width:22px}.drvtbl th:last-child,.drvtbl td:last-child{text-align:right;width:72px;white-space:nowrap}.drvtbl .amtbar{min-width:0}
 .amtbar{display:block;height:4px;background:#e8eee9;border-radius:2px;margin-top:3px;min-width:50px}
 .amtbar i{display:block;height:100%;background:#c0392b;border-radius:2px}
 .g-11{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -193,15 +197,11 @@ td{padding:7px 10px}
       <div>
         <div class="eyebrow">RTC Pusat · Monitoring Armada</div>
         <h1>Monitoring Driving Behaviour, Driver Discipline &amp; Fatigue — <span class="tBulan">September 2026</span></h1>
-        <div class="sub"><span id="tHal">Sebaran pelanggaran Driving Behaviour, Driver Discipline &amp; Fatigue per area dan lokasi</span> · data <span id="tPeriode">…</span></div>
+        <div class="sub">Sebaran pelanggaran Driving Behaviour, Driver Discipline &amp; Fatigue per area, lokasi dan Driver · data <span id="tPeriode">…</span></div>
       </div>
       <div class="preview" id="tUpdate">Memuat data…</div>
     </div>
     <div class="ctrlrow">
-      <div class="seg" id="pageSeg" role="tablist" aria-label="Pilih halaman"><button role="tab" data-p="1" aria-selected="true">Pelanggaran Area &amp; Lokasi</button><button role="tab" data-p="2" aria-selected="false">Pelanggaran Driver</button></div>
-    </div>
-    <div class="ctrlrow">
-      <div class="seg" id="viewSeg" role="tablist" aria-label="Pilih tampilan"><button role="tab" data-v="bulan" aria-selected="true">Bulanan</button><button role="tab" data-v="ytd" aria-selected="false">Rekap YTD</button></div>
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
       <label class="pick" for="selCmp">Dibanding <select id="selCmp"></select></label>
     </div>
@@ -215,53 +215,21 @@ td{padding:7px 10px}
 <div class="wrap" id="loadwrap"><div class="loading" id="loading" role="status"></div></div>
 
 <div class="wrap" id="view-bulan">
-  <section class="infobar">
-    <div><div class="k">Cakupan</div><div class="v" id="bLok"></div></div>
-    <div><div class="k">Bulan</div><div class="v" id="bMon"></div></div>
-    <div><div class="k">Pembanding</div><div class="v" id="bPrev"></div></div>
-    <div><div class="k">Total event bulan ini</div><div class="v" id="bTot"></div></div>
-  </section>
   <div class="warnbar" id="bwarn" hidden></div>
-  <section class="grid g-11">
-    <div class="panel"><div class="ph"><h2 id="btopAH">Top 10 Area dengan pelanggaran terbanyak</h2><p id="btopAS"></p></div><div class="rank wide" id="btopA"></div></div>
-    <div class="panel"><div class="ph"><h2 id="btopLH">Top 10 Lokasi dengan pelanggaran terbanyak</h2><p id="btopLS"></p></div><div class="rank wide" id="btopL"></div></div>
-  </section>
   <div class="anahead"><h2 style="margin:0;font-size:18px;font-weight:700">Tren &amp; parameter per kategori</h2><span class="hint" id="trendSub"></span></div>
   <div id="btrend" class="trend3"></div>
   <section class="panel"><div class="ph"><h2 id="bdayH">Event per hari</h2><p id="bdaySub"></p></div>
     <div class="legend" id="bdayLeg"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span><span id="bdayCmpLeg"><i style="background:none;border-top:2px dashed #1b1f1d;border-radius:0;height:0;width:16px"></i><b id="bdayCmpName"></b></span></div>
     <div class="chart" id="bday"></div></section>
+  <section class="grid g-11">
+    <div class="panel"><div class="ph"><h2 id="btopAH">Top 10 Area dengan pelanggaran terbanyak</h2><p id="btopAS"></p></div><div class="rank wide" id="btopA"></div></div>
+    <div class="panel"><div class="ph"><h2 id="btopLH">Top 10 Lokasi dengan pelanggaran terbanyak</h2><p id="btopLS"></p></div><div class="rank wide" id="btopL"></div></div>
+  </section>
+  <div class="anahead"><h2 id="drvH" style="margin:0;font-size:18px;font-weight:700">TOP 10 Pelanggaran Driver per parameter</h2><span class="hint" id="drvSub"></span></div>
+  <div id="bdrv" class="drvgrid"></div>
   <section class="panel"><div class="ph"><h2>Rekap per area</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
-  <section class="panel"><div class="ph"><h2 id="bdeltaH">Lokasi yang paling berubah</h2><p id="bdeltaSub"></p></div><div class="tbl"><table id="bdelta"></table></div><div id="bdeltaMore"></div></section>
   <section class="panel"><div class="ph"><h2>Rekap per lokasi</h2><p id="blokSub"></p></div><div class="tbl"><table id="blok"></table></div><div id="blokMore"></div></section>
-</div>
-
-<div class="wrap" id="view-ytd" hidden>
-  <section class="grid g-21">
-    <div class="panel"><div class="ph"><h2>Berapa event setiap bulan?</h2><p id="ymonSub"></p></div><div class="chart" id="ymon"></div></div>
-    <div class="panel"><div class="ph"><h2>Top 10 Area dengan pelanggaran terbanyak</h2><p id="yrankSub"></p></div><div class="rank wide" id="rank"></div></div>
-  </section>
-  <section class="grid g-21">
-    <div class="panel">
-      <div class="ph"><h2>Parameter apa yang paling sering?</h2><p id="yparSub"></p></div>
-      <div class="legend"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span></div>
-      <div class="chart" id="ypar"></div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
-      <section class="kpis k3" id="kpis" aria-label="Angka utama"></section>
-      <section class="takeaways" aria-label="Poin penting"><h2 id="tkTitle">Poin penting</h2><ul id="takeaways"></ul></section>
-    </div>
-  </section>
-  <section class="panel"><div class="ph"><h2>Top 10 Lokasi dengan pelanggaran terbanyak</h2><p id="ylokSub"></p></div><div class="tbl"><table id="ylok"></table></div></section>
-  <section class="panel" aria-label="Catatan data"><div class="ph"><h2>Catatan data</h2><p>Hal yang perlu diperhatikan saat membaca angka</p></div><ul class="notes" id="notes"></ul></section>
-</div>
-<div class="wrap" id="view-amt" hidden>
-  <section class="kpis k3" id="akpi" aria-label="Angka utama Driver"></section>
-  <section class="grid">
-    <div class="panel"><div class="ph"><h2 id="bamtH">TOP 10 Pelanggaran Driver</h2><p id="bamtSub"></p></div><div class="tbl" id="bamt"></div></div>
-    <div class="panel"><div class="ph"><h2 id="yamtH">TOP 10 Pelanggaran Driver</h2><p id="yamtSub"></p></div><div class="tbl" id="yamt"></div></div>
-  </section>
-  <section class="panel"><div class="ph"><h2 id="acovH">Kelengkapan nama Driver</h2><p id="acovSub"></p></div><div class="tbl"><table id="acov"></table></div></section>
+  <section class="panel"><div class="ph"><h2 id="bdeltaH">Lokasi yang paling berubah</h2><p id="bdeltaSub"></p></div><div class="tbl"><table id="bdelta"></table></div><div id="bdeltaMore"></div></section>
 </div>
 <footer class="footer">
   <div class="redtab">www.elnusapetrofin.co.id</div>
@@ -269,7 +237,7 @@ td{padding:7px 10px}
 </footer>
 <div id="tip" role="tooltip"></div>
 <script>
-let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, page = 1, mon = 0, cmp = -1, view = 'bulan', showAllLok = false, showAllDelta = false;
+let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, showAllLok = false, showAllDelta = false;
 const rn = r => String(r || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\b(Ii|Iii|Iv)\b/g, x => x.toUpperCase());
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const B3 = BLN.map(b => b.slice(0, 3));
@@ -399,13 +367,9 @@ function derive() {
     return {i: o.i, l: o.l, r: o.r, ...s, n, avg: n ? s.t/n : null}; }).filter(o => o.t).sort((a, b) => b.t - a.t);
   const H = {};
   RAW.harian.forEach(([m, d, ai, li, a, b, c]) => { if (!okLok(li)) return; const k = m + '|' + d + '|' + ai; const h = H[k] || (H[k] = [m, d, A[ai], 0, 0, 0]); h[3] += a; h[4] += b; h[5] += c; });
-  let topAMT = null;
-  if (RAW.amt) {
-    const src = selLok >= 0 ? RAW.amt.lok.filter(r => r[2] === selLok) : sel !== 'ALL' ? RAW.amt.area.filter(r => A[r[1]] === sel) : RAW.amt.all;
-    topAMT = src.map(([b, ai, li, amt, DB, DD, FM, t, pi]) => ({b, amt, r: A[ai], l: RAW.lok[li] ? RAW.lok[li][0] : '', DB, DD, FM, t, top: P[pi] ? P[pi].label : '–'}));
-  }
-  const amtTot = (RAW.amtTot || []).filter(r => okLok(r[2]));
-  Object.assign(D, {nilai, regional, lokasiBulan, lokasiYTD, harian: Object.values(H), topAMT, amtTot});
+  const X = RAW.driver;
+  const drv = !X ? null : selLok >= 0 ? X.lok.filter(r => r[2] === selLok) : sel !== 'ALL' ? X.area.filter(r => A[r[1]] === sel) : X.all;
+  Object.assign(D, {nilai, regional, lokasiBulan, lokasiYTD, harian: Object.values(H), drv});
 }
 function kontrol() {
   const sm = document.getElementById('selMon');
@@ -424,31 +388,6 @@ function peringatan(el) {
   else if (sel === 'ALL') { const k = REG.filter(r => !regTot(r, mon)); if (k.length) msg.push(`<b>${k.map(r => rn(r)).join(', ')}</b> tidak punya data ${BLN[mon]} di sumber.`); }
   else if (!regTot(sel, mon)) msg.push(`<b>${rn(sel)}</b> tidak punya data ${BLN[mon]} di sumber.`);
   el.hidden = !msg.length; el.innerHTML = msg.length ? `${ICON_W}<span>${msg.join(' ')}</span>` : '';
-}
-
-/* ================= TOP 10 AMT ================= */
-function amtRows(bulan) {
-  if (!D.topAMT) return null;
-  const by = {}, pakaiYTD = bulan === null && mon === LAST && D.topAMT.some(o => o.b === -2);
-  D.topAMT.filter(o => (bulan === null ? (pakaiYTD ? o.b === -2 : (o.b >= 0 && o.b <= mon && ADA.indexOf(o.b) >= 0) || o.b === -1) : o.b === bulan) && cocokReg(o.r)).forEach(o => {
-    const k = o.amt + '|' + o.r;
-    const x = by[k] = by[k] || {amt: o.amt, r: o.r, l: o.l, DB: 0, DD: 0, FM: 0, t: 0, top: {}, lok: {}};
-    x.DB += o.DB; x.DD += o.DD; x.FM += o.FM; x.t += o.t;
-    if (o.top) x.top[o.top] = (x.top[o.top] || 0) + o.t;
-    if (o.l) x.lok[o.l] = (x.lok[o.l] || 0) + o.t;
-  });
-  return Object.values(by).map(x => ({...x, top: Object.keys(x.top).sort((a, b) => x.top[b] - x.top[a])[0] || '–', l: Object.keys(x.lok).sort((a, b) => x.lok[b] - x.lok[a])[0] || x.l}))
-    .sort((a, b) => b.t - a.t).slice(0, 10);
-}
-function renderAMT(host, sub, bulan) {
-  const rows = amtRows(bulan), per = bulan === null ? `${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}` : `${BLN[bulan]} ${D.tahun}`;
-  const kira = bulan === null && mon !== LAST && D.topAMT && D.topAMT.some(o => o.b === -2);
-  sub.textContent = `${per} · ${scope()} · urut dari total pelanggaran 3 kategori${kira ? ' · dijumlah dari 10 teratas tiap bulan' : ''}`;
-  if (rows === null) { host.innerHTML = `<div class="emptyamt"><b>Data AMT belum ada.</b> Isi sheet <code>AMT</code> (Area, Lokasi, Nama AMT, Case, Jumlah) di file Data per bulan pada folder data. Panel ini terisi otomatis setelahnya.</div>`; return; }
-  if (!rows.length) { host.innerHTML = `<div class="emptyamt">Tidak ada data Driver untuk ${per}${sel === 'ALL' ? '' : ' di ' + rn(sel)}.</div>`; return; }
-  const mx = rows[0].t || 1;
-  host.innerHTML = `<table class="amttbl"><thead><tr><th>#</th><th>Nama Driver</th><th>Lokasi</th>${CATS.map(c => `<th title="${c.name}">${c.key}</th>`).join('')}<th>Total</th><th>Terbanyak</th></tr></thead><tbody>` +
-    rows.map((o, i) => `<tr><td>${i + 1}</td><td style="text-align:left;white-space:normal"><b>${o.amt}</b></td><td style="text-align:left;white-space:normal"><span class="rdot" style="background:${o.r ? rv(o.r) : '#ccc'}"></span>${o.l || '–'}<span class="small">${o.r ? rn(o.r) : ''}</span></td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b><span class="amtbar"><i style="width:${o.t/mx*100}%"></i></span></td><td style="text-align:left;white-space:normal">${o.top}</td></tr>`).join('') + '</tbody></table>';
 }
 
 /* ================= HARIAN ================= */
@@ -504,32 +443,21 @@ function renderHarian() {
   host.appendChild(svg);
 }
 
-/* ================= HALAMAN 2: AMT ================= */
-function renderHalAMT() {
-  const M = ADA.filter(m => m <= mon), per = `${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}`, per3 = `${B3[ADA[0]]}–${B3[mon]}`;
-  const evB = totSel(mon) || 0, evP = sum(M.map(m => totSel(m)));
-  const okA = r => cocokReg(D.regional ? RAW.areas[r[1]] : null);
-  const amB = sum(D.amtTot.filter(r => r[0] === mon && okA(r)).map(r => r[3])), amP = sum(D.amtTot.filter(r => r[0] <= mon && okA(r)).map(r => r[3]));
-  document.getElementById('akpi').innerHTML = `
-   <div class="kpi"><div class="l">Event ${BLN[mon]} ${D.tahun}</div><div class="v">${cf(evB)}</div><div class="n">${nf(evB)} event · ${scope()}</div></div>
-   <div class="kpi"><div class="l">Event dengan nama Driver · ${B3[mon]}</div><div class="v">${pf(amB, evB)}</div><div class="n">${nf(amB)} dari ${nf(evB)} event tercatat nama Driver-nya</div></div>
-   <div class="kpi"><div class="l">Event dengan nama Driver · ${per3}</div><div class="v">${pf(amP, evP)}</div><div class="n">${nf(amP)} dari ${nf(evP)} event</div></div>`;
-  document.getElementById('bamtH').textContent = `TOP 10 Pelanggaran Driver — ${BLN[mon]} ${D.tahun}`;
-  renderAMT(document.getElementById('bamt'), document.getElementById('bamtSub'), mon);
-  document.getElementById('yamtH').textContent = `TOP 10 Pelanggaran Driver — ${per}`;
-  renderAMT(document.getElementById('yamt'), document.getElementById('yamtSub'), null);
-  // kelengkapan: per area, atau per lokasi bila satu area dipilih
-  const perLok = sel !== 'ALL', grup = {};
-  D.amtTot.filter(r => r[0] === mon && okA(r)).forEach(r => { const k = perLok ? r[2] : r[1]; grup[k] = (grup[k] || 0) + r[3]; });
-  const baris = perLok ? (D.lokasiBulan[mon] || []).filter(o => cocokReg(o.r) && o.t > 0).map(o => ({nama: o.l, r: o.r, ev: o.t, am: grup[o.i] || 0}))
-                       : REG.map((r, ai) => ({nama: rn(r), r, ev: regTot(r, mon) || 0, am: grup[ai] || 0})).filter(o => o.ev > 0);
-  baris.sort((a, b) => b.ev - a.ev);
-  document.getElementById('acovH').textContent = `Kelengkapan nama Driver per ${perLok ? 'lokasi' : 'area'} — ${BLN[mon]}`;
-  document.getElementById('acovSub').textContent = `Bagian event yang kolom AMT 1-nya terisi. Angka TOP 10 Driver hanya menghitung event yang punya nama Driver.`;
-  document.getElementById('acov').innerHTML = `<thead><tr><th>${perLok ? 'Lokasi' : 'Area'}</th><th>Event</th><th>Event dengan nama Driver</th><th>Kelengkapan</th></tr></thead><tbody>` +
-    baris.map(o => { const q = o.ev ? o.am/o.ev : 0;
-      return `<tr><td style="white-space:normal"><span class="rdot" style="background:${rv(o.r)}"></span>${o.nama}</td><td>${nf(o.ev)}</td><td>${nf(o.am)}</td><td><b class="${q < .2 ? 'up' : q >= .8 ? 'down' : ''}">${pf(o.am, o.ev)}</b><span class="amtbar" style="margin-left:auto;max-width:120px"><i style="width:${Math.min(100, q*100)}%;background:${q < .2 ? '#c0392b' : '#4a7a53'}"></i></span></td></tr>`; }).join('') +
-    (baris.length ? '' : `<tr><td colspan="4">Belum ada data untuk ${BLN[mon]}.</td></tr>`) + '</tbody>';
+/* ================= TOP 10 DRIVER PER PARAMETER ================= */
+// D.drv: [[bulan, indeks area, indeks lokasi, indeks parameter, indeks nama, jumlah]] sudah sesuai filter (dari Kode.gs: 10 teratas per kelompok)
+function renderDriver() {
+  const host = document.getElementById('bdrv'), B = BLN[mon] + ' ' + D.tahun, A = RAW.areas;
+  document.getElementById('drvH').textContent = `TOP 10 Pelanggaran Driver per parameter — ${BLN[mon]}`;
+  document.getElementById('drvSub').textContent = `${B} · ${scope()} · nama Driver dari kolom AMT 1, event tanpa nama Driver tidak dihitung`;
+  if (!D.drv) { host.innerHTML = `<section class="panel"><div class="emptyamt">Data Driver belum ada.</div></section>`; return; }
+  const by = {}; D.drv.filter(r => r[0] === mon).forEach(r => (by[r[3]] = by[r[3]] || []).push(r));
+  host.innerHTML = CATS.map(cat => catParams(cat.key).map(p => {
+    const rows = (by[P.indexOf(p)] || []).sort((a, b) => b[5] - a[5]), mx = rows.length ? rows[0][5] : 1;
+    return `<section class="panel drv"><div class="ph"><h2><i style="background:${cat.color}"></i>${p.label}</h2><p>${cat.name}</p></div>` + (rows.length
+      ? `<table class="drvtbl"><thead><tr><th>#</th><th>Nama Driver</th><th>Lokasi</th><th>Jumlah</th></tr></thead><tbody>` +
+        rows.map((r, i) => `<tr><td>${i + 1}</td><td><b>${RAW.driver.nama[r[4]]}</b></td><td><span class="rdot" style="background:${rv(A[r[1]])}"></span>${lokNama(r[2])}<span class="small">${rn(A[r[1]])}</span></td><td><b>${nf(r[5])}</b><span class="amtbar"><i style="width:${r[5]/mx*100}%;background:${cat.color}"></i></span></td></tr>`).join('') + '</tbody></table>'
+      : `<div class="emptyamt">Tidak ada Driver tercatat untuk ${p.label} di ${B}${sel === 'ALL' ? '' : ' · ' + scope()}.</div>`) + '</section>';
+  }).join('')).join('');
 }
 
 /* ================= TOP 10 AREA & LOKASI ================= */
@@ -559,11 +487,6 @@ function renderTopBulan(pm) {
 function renderBulan() {
   const pm = prevM();
   const T = totSel(mon), TP = pm === null ? null : totSel(pm);
-  let ytd = 0; ADA.filter(m => m <= mon).forEach(m => ytd += totSel(m) || 0);
-  document.getElementById('bLok').innerHTML = cakupan();
-  document.getElementById('bMon').innerHTML = `${BLN[mon]} ${D.tahun}<small>${nHari(mon)} hari · ${nf(T)} event · ${perHari(T, mon)}/hari</small>`;
-  document.getElementById('bPrev').innerHTML = pm === null ? '–<small>belum ada bulan sebelumnya</small>' : `${BLN[pm]} ${D.tahun}<small>${nHari(pm)} hari · ${nf(TP)} event · ${perHari(TP, pm)}/hari</small>`;
-  document.getElementById('bTot').innerHTML = `${nf(T)}<small>${pctTxt(T, TP)} vs ${pm === null ? 'bulan lalu' : BLN[pm]} · rata-rata harian ${pm === null ? '' : pctTxt(T / nHari(mon), TP / nHari(pm))} · YTD ${cf(ytd)}</small>`;
   peringatan(document.getElementById('bwarn'));
   renderTopBulan(pm);
 
@@ -622,7 +545,7 @@ function renderBulan() {
 
   // rekap per lokasi
   const ls = document.getElementById('blokSub'), lt = document.getElementById('blok'), lm = document.getElementById('blokMore');
-  if (!lbAda) { ls.textContent = `Rincian lokasi untuk ${BLN[mon]} belum ada di sumber (tersedia: ${Object.keys(D.lokasiBulan).map(m => BLN[m]).join(', ') || '–'}). Lihat Rekap YTD untuk total per lokasi.`; lt.innerHTML = ''; lm.innerHTML = ''; return; }
+  if (!lbAda) { ls.textContent = `Rincian lokasi untuk ${BLN[mon]} belum ada di sumber (tersedia: ${Object.keys(D.lokasiBulan).map(m => BLN[m]).join(', ') || '–'}).`; lt.innerHTML = ''; lm.innerHTML = ''; return; }
   const lr = LB.slice().sort((a, b) => b.t - a.t), N = showAllLok ? lr.length : Math.min(10, lr.length);
   ls.textContent = `${BLN[mon]} ${D.tahun} · ${lr.length} lokasi, urut dari event terbanyak`;
   lt.innerHTML = `<thead><tr><th>Lokasi</th><th>Regional</th>${CATS.map(c => `<th>${c.name}</th>`).join('')}<th>Total</th><th>${pmL === null ? 'Bln lalu' : B3[pmL]}</th><th>Kenaikan</th></tr></thead><tbody>` +
@@ -631,109 +554,11 @@ function renderBulan() {
   const bm = document.getElementById('btnMore'); if (bm) bm.onclick = () => { showAllLok = !showAllLok; renderBulan(); };
 }
 
-/* ================= REKAP YTD ================= */
-function renderYTD() {
-  const M = ADA.filter(m => m <= mon), per = `${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}`, per3 = `${B3[ADA[0]]}–${B3[mon]}`;
-  const T = sum(M.map(m => totSel(m))), nb = Math.max(1, M.filter(m => totSel(m) !== null).length);
-  const nLok = sel === 'ALL' ? sum(REG.map(r => (D.regional[r] || {}).lokasi || 0)) : (D.regional[sel] || {}).lokasi || 0;
-  document.getElementById('kpis').innerHTML = `
-   <div class="kpi"><div class="l">Total event ${per3} ${D.tahun}</div><div class="v">${cf(T)}</div><div class="n">${nf(T)} event · ${nb} bulan</div></div>
-   <div class="kpi"><div class="l">Lokasi terpantau</div><div class="v">${nf(nLok)}</div><div class="n">${sel === 'ALL' ? REG.filter(r => (D.regional[r] || {}).lokasi).length + ' regional' : rn(sel)}</div></div>
-   <div class="kpi"><div class="l">Rata-rata per bulan</div><div class="v">${cf(T/nb)}</div><div class="n">${nLok ? d1(T/nb/nLok) + ' event per lokasi per bulan' : ''}</div></div>`;
-
-  // parameter
-  const params = P.map(p => ({p, s: sum(M.map(m => nilai(p.key, m)))})).sort((a, b) => b.s - a.s), TN = sum(params.map(o => o.s));
-  const perR = REG.map(r => { const o = D.regional[r] || {}; const v = M.map(m => regTot(r, m)).filter(x => x !== null && x > 0); const s = sum(v); return {r, s, v: o.lokasi && v.length ? s/o.lokasi/v.length : 0, l: o.lokasi || 0}; }).filter(o => o.s > 0).sort((a, b) => b.v - a.v);
-  const arr = BLN.map((_, m) => M.indexOf(m) >= 0 ? totSel(m) : null);
-  const prev = M.slice(0, -1).map(m => totSel(m)).filter(v => v !== null), prevAvg = prev.length ? sum(prev)/prev.length : 0, lonjak = prevAvg && arr[mon] !== null ? arr[mon]/prevAvg : 0;
-  const items = [];
-  if (perR.length) items.push(['top', sel === 'ALL' ? `<b>${rn(perR[0].r)}</b> paling tinggi dengan rata-rata <b>${nf(perR[0].v)} event per lokasi per bulan</b>; terendah ${rn(perR[perR.length - 1].r)} (${nf(perR[perR.length - 1].v)}).` : `${rn(sel)} berada di <b>peringkat ${perR.findIndex(x => x.r === sel) + 1} dari ${perR.length}</b> area (rata-rata ${nf((perR.find(x => x.r === sel) || {}).v)} event per lokasi per bulan).`]);
-  if (params.length > 1) items.push(['case', `Parameter terbanyak adalah <b>${params[0].p.label}</b> (${pf(params[0].s, TN)}), disusul ${params[1].p.label} (${pf(params[1].s, TN)}).`]);
-  const bmax = arr.reduce((b, v, i) => v !== null && (b < 0 || v > arr[b]) ? i : b, -1);
-  if (bmax >= 0) items.push(['clock', `Bulan dengan event terbanyak adalah <b>${BLN[bmax]}</b> (${cf(arr[bmax])} event).`]);
-  if (lonjak > 2) items.push(['alert', `<b>${BLN[mon]} naik ${d1(lonjak)}×</b> dibanding rata-rata bulan sebelumnya. Cek catatan data sebelum menyimpulkan.`]);
-  else if (lonjak) items.push(['top', `${BLN[mon]} ${lonjak >= 1 ? 'naik' : 'turun'} <b>${pf(Math.abs(lonjak - 1)*prevAvg, prevAvg)}</b> dibanding rata-rata bulan sebelumnya.`]);
-  const IC = {
-    top: '<svg viewBox="0 0 16 16" fill="none"><path d="M2 12l4-4 3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    case: '<svg viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="2.4" rx="1" fill="currentColor"/><rect x="2" y="7" width="8" height="2.4" rx="1" fill="currentColor"/><rect x="2" y="11" width="5" height="2.4" rx="1" fill="currentColor"/></svg>',
-    clock: '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.6"/><path d="M8 4.8V8l2.4 1.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
-    alert: ICON_W };
-  document.getElementById('tkTitle').textContent = 'Poin penting — ' + per + (sel === 'ALL' ? '' : ' · ' + rn(sel));
-  document.getElementById('takeaways').innerHTML = items.map(([i, t]) => `<li><span class="ic ${i === 'alert' ? 'alert' : ''}">${IC[i]}</span><span>${t}</span></li>`).join('');
-
-  // tren bulanan total
-  document.getElementById('ymonSub').textContent = `Total 3 kategori per bulan · ${scope()} · klik batang untuk memilih bulan`;
-  const host = document.getElementById('ymon'); host.innerHTML = '';
-  const W = 1100, H = 300, m = {l: 56, r: 10, t: 22, b: 30}, iw = W - m.l - m.r, ih = H - m.t - m.b, slot = iw/12, bw = Math.min(30, slot*.62);
-  const full = BLN.map((_, i) => ADA.indexOf(i) >= 0 ? totSel(i) : null);
-  const ymax = niceMax(Math.max(1, ...full.map(v => v || 0))*1.08), yy = v => m.t + ih - v/ymax*ih, NT = nTicks(ymax);
-  const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Event per bulan'});
-  for (let i = 0; i <= NT; i++) { const v = ymax*i/NT; svgEl('line', {x1: m.l, x2: W - m.r, y1: yy(v), y2: yy(v), class: i ? 'gl' : 'base'}, svg); const t = svgEl('text', {x: m.l - 8, y: yy(v) + 4, 'text-anchor': 'end', class: 'tick'}, svg); t.textContent = ax(v); }
-  full.forEach((v, i) => { const cx = m.l + slot*i + slot/2;
-    if (v) { svgEl('path', {d: topRound(cx - bw/2, yy(v), bw, yy(0) - yy(v), 4), style: `fill:var(--bar);opacity:${i <= mon ? 1 : .35}`}, svg);
-      const lb = svgEl('text', {x: cx, y: yy(v) - 6, 'text-anchor': 'middle', style: 'fill:#1b1f1d;font-size:12px;font-weight:600'}, svg); lb.textContent = ax(v); }
-    const t = svgEl('text', {x: cx, y: H - 10, 'text-anchor': 'middle', class: 'tick'}, svg); t.textContent = B3[i];
-    const hit = svgEl('rect', {x: m.l + slot*i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
-    hit.addEventListener('click', () => { if (ADA.indexOf(i) >= 0) { mon = i; render(); } });
-    bindTip(hit, () => `<b>${BLN[i]} ${D.tahun}</b>` + (v === null ? '<br>belum ada data' : `<br>${nf(v)} event` + (sel === 'ALL' ? REG.map(r => { const x = regTot(r, i); return x === null ? '' : `<div style="display:flex;justify-content:space-between;gap:12px"><span>${rn(r)}</span><span>${nf(x)}</span></div>`; }).join('') : ''))); });
-  host.appendChild(svg);
-
-  // top 10 area periode berjalan
-  document.getElementById('yrankSub').textContent = `${per} · total pelanggaran 3 kategori · klik untuk memfilter`;
-  topList(document.getElementById('rank'), perR.slice().sort((a, b) => b.s - a.s).slice(0, 10).map(o => ({key: o.r, nama: rn(o.r), warna: rv(o.r), v: o.s,
-    sub: `rata-rata ${nf(o.v)} event per lokasi per bulan · ${o.l} lokasi`, pilih: sel === o.r, redup: sel !== 'ALL' && sel !== o.r, klik: () => setSel(o.r)})), 'Belum ada data area.');
-
-  // parameter
-  document.getElementById('yparSub').textContent = `${per} · ${scope()}`;
-  const ph = document.getElementById('ypar'); ph.innerHTML = '';
-  const rowH = 28, PW = 1060, lw = 190, rw = 130, PH = params.length*rowH + 4, pmx = Math.max(1, params[0] ? params[0].s : 1);
-  const ps = svgEl('svg', {viewBox: `0 0 ${PW} ${PH}`, role: 'img', 'aria-label': 'Parameter terbanyak'});
-  params.forEach((o, i) => { const y0 = i*rowH, w = Math.max(2, o.s/pmx*(PW - lw - rw)), cat = CATS.find(c => c.key === o.p.kat);
-    const lt = svgEl('text', {x: lw - 12, y: y0 + rowH/2 + 5, 'text-anchor': 'end', style: 'fill:#1b1f1d;font-size:14px;font-weight:500'}, ps); lt.textContent = o.p.label;
-    svgEl('path', {d: rightRound(lw, y0 + 7, w, rowH - 14, 4), style: `fill:${cat.color}`}, ps);
-    const vt = svgEl('text', {x: lw + w + 10, y: y0 + rowH/2 + 5, style: 'fill:#1b1f1d;font-size:14px;font-weight:700'}, ps); vt.textContent = pf(o.s, TN);
-    const v2 = svgEl('text', {x: lw + w + 72, y: y0 + rowH/2 + 5, style: 'fill:#737b76;font-size:13px'}, ps); v2.textContent = ax(o.s);
-    const hit = svgEl('rect', {x: 0, y: y0, width: PW, height: rowH, class: 'hit'}, ps);
-    bindTip(hit, () => `<b>${o.p.label}</b><br>${nf(o.s)} event<br>${cat.name}`); });
-  svgEl('line', {x1: lw, x2: lw, y1: 0, y2: PH, class: 'base'}, ps);
-  ph.appendChild(ps);
-
-
-  // lokasi YTD
-  const ly = D.lokasiYTD.filter(o => cocokReg(o.r)).sort((a, b) => b.t - a.t).slice(0, 10);
-  document.getElementById('ylokSub').textContent = `${per} · ${sel === 'ALL' ? 'semua area' : rn(sel)} · DB/DD/FM = 3 kategori · klik baris untuk memfilter lokasi`;
-  document.getElementById('ylok').innerHTML = `<thead><tr><th>Lokasi</th>${CATS.map(c => `<th title="${c.name}">${c.key}</th>`).join('')}<th>Total</th></tr></thead><tbody>` +
-    ly.map((o, i) => `<tr data-li="${o.i}" style="cursor:pointer${selLok >= 0 && selLok !== o.i ? ';opacity:.45' : ''}"><td style="white-space:normal"><span class="rnum" style="margin-right:8px">${i + 1}</span><span class="rdot" style="background:${rv(o.r)}"></span>${o.l}<span class="small">${rn(o.r)}${o.avg === null ? '' : ' · rata² ' + nf(o.avg) + '/bln'}</span></td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b></td></tr>`).join('') + '</tbody>';
-  document.querySelectorAll('#ylok tbody tr[data-li]').forEach(tr => tr.onclick = () => setLok(+tr.dataset.li));
-
-  // catatan
-  const notes = [];
-  if (P.some(p => p.kat !== p.katAsal)) notes.push('<b>Driving &gt; 4 Hours dihitung di Driving Behaviour</b> di semua grafik dan tabel.');
-  if (!D.topAMT) notes.push('<b>TOP 10 Pelanggaran Driver belum terisi.</b> Sheet AMT di file Data per bulan masih kosong.');
-  (D.peringatan || []).forEach(s => notes.push(`<b>Sumber:</b> ${s}`));
-  (D.catatan || []).forEach(s => { if (/^[A-Z ]+$/.test(s)) return; notes.push(s.replace(/^(\d+\.\s*)?([^:]{3,60}:)/, '$1<b>$2</b>')); });
-  document.getElementById('notes').innerHTML = notes.map(n => `<li>${n}</li>`).join('');
-}
-
 /* ================= TAMPILAN & MUAT DATA ================= */
-function tataHalaman() {
-  document.getElementById('view-bulan').hidden = page !== 1 || view !== 'bulan';
-  document.getElementById('view-ytd').hidden = page !== 1 || view !== 'ytd';
-  document.getElementById('view-amt').hidden = page !== 2;
-  document.getElementById('tHal').textContent = page === 2 ? 'Driver dengan pelanggaran terbanyak dan kelengkapan pencatatan nama Driver' : 'Sebaran pelanggaran Driving Behaviour, Driver Discipline & Fatigue per area dan lokasi';
-  document.getElementById('viewSeg').hidden = page !== 1;
-  document.getElementById('selCmp').parentElement.hidden = page !== 1 || view !== 'bulan';
-  document.querySelectorAll('#viewSeg button').forEach(b => b.setAttribute('aria-selected', b.dataset.v === view));
-  document.querySelectorAll('#pageSeg button').forEach(b => b.setAttribute('aria-selected', String(+b.dataset.p === page)));
-}
-function setView(v) { view = v; tataHalaman(); render(); }
-function setPage(n) { page = n; tataHalaman(); render(); window.scrollTo(0, 0); }
-document.querySelectorAll('#viewSeg button').forEach(b => b.onclick = () => setView(b.dataset.v));
-document.querySelectorAll('#pageSeg button').forEach(b => b.onclick = () => setPage(+b.dataset.p));
 document.getElementById('selMon').onchange = e => { mon = +e.target.value; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
 document.getElementById('selLok').onchange = e => setLok(+e.target.value);
-function render() { if (!D || LAST < 0) return; derive(); kontrol(); chips(); pilihanLokasi(); if (page === 2) renderHalAMT(); else if (view === 'bulan') { renderBulan(); renderHarian(); } else renderYTD(); }
+function render() { if (!D || LAST < 0) return; derive(); kontrol(); chips(); pilihanLokasi(); renderBulan(); renderHarian(); renderDriver(); }
 
 const REFRESH_MS = 5*60*1000;
 function start(json) {
