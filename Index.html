@@ -2,7 +2,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
 <style>
-:root{color-scheme:light;--bg:#f6f7f6;--surface:#fff;--surface-2:#f3f5f3;--ink:#1b1f1d;--ink-2:#47504b;--muted:#737b76;--grid:#e6e9e6;--axis:#c9cec9;--line:rgba(27,31,29,.09);--forest:#4a7a53;--leaf:#6aa459;--lime:#b8ca10;--red:#e03d3e;--accent-wash:#eef4e6;--bar:#0f78bf;--bar-soft:#cfe4f3;--r0:#0f78bf;--r1:#e8833a;--r2:#1aa58a;--r3:#c99a00;--r4:#d9579a;--r5:#3f8a3a;--cctv:#0f78bf;--gps:#93b833;--warn-ink:#7a5200;--serious-ink:#b42324;--f-ui:"Poppins",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;--gut:clamp(20px,2.2vw,56px)}
+:root{color-scheme:light;--bg:#f6f7f6;--surface:#fff;--surface-2:#f3f5f3;--ink:#1b1f1d;--ink-2:#47504b;--muted:#737b76;--grid:#e6e9e6;--axis:#c9cec9;--line:rgba(27,31,29,.09);--forest:#4a7a53;--leaf:#6aa459;--lime:#b8ca10;--red:#e03d3e;--accent-wash:#eef4e6;--bar:#0f78bf;--bar-soft:#cfe4f3;--r0:#0f78bf;--r1:#e8833a;--r2:#1aa58a;--r3:#c99a00;--r4:#d9579a;--r5:#3f8a3a;--r6:#7a5cc4;--cctv:#0f78bf;--gps:#93b833;--warn-ink:#7a5200;--serious-ink:#b42324;--f-ui:"Poppins",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;--gut:clamp(20px,2.2vw,56px)}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
@@ -173,6 +173,14 @@ td{padding:7px 10px}
 .emptyamt code{background:#eef4ef;padding:1px 5px;border-radius:4px;font-size:11.5px}
 .amtbar{display:block;height:4px;background:#e8eee9;border-radius:2px;margin-top:3px;min-width:50px}
 .amtbar i{display:block;height:100%;background:#c0392b;border-radius:2px}
+.g-11{grid-template-columns:repeat(2,minmax(0,1fr))}
+.rank.wide .rrow{grid-template-columns:minmax(120px,200px) minmax(0,1fr) 76px}
+.rank.wide .rname{white-space:normal;line-height:1.25}
+.rank.wide .rrow{padding:5px 8px;row-gap:2px}.rank.wide .rsub{margin-top:-2px}
+.rnum{display:inline-grid;place-items:center;min-width:22px;height:22px;border-radius:6px;background:var(--surface-2);font-size:12px;font-weight:700;color:var(--ink-2)}
+.pick select#selLok{max-width:260px}
+@media (max-width:1000px){.g-11{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){.rank.wide .rrow{grid-template-columns:110px minmax(0,1fr) 60px}}
 </style>
 
 <header class="hero">
@@ -183,7 +191,7 @@ td{padding:7px 10px}
   <div class="heroin">
     <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px 24px">
       <div>
-        <div class="eyebrow">PKDA &amp; RTC Region · Monitoring Armada</div>
+        <div class="eyebrow">RTC Pusat · Monitoring Armada</div>
         <h1>Monitoring Driving Behaviour, Driver Discipline &amp; Fatigue — <span class="tBulan">September 2026</span></h1>
         <div class="sub">Rekap bulanan per lokasi · Driving Behaviour · Driver Discipline · Fatigue Management · data <span id="tPeriode">…</span></div>
       </div>
@@ -194,9 +202,10 @@ td{padding:7px 10px}
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
       <label class="pick" for="selCmp">Dibanding <select id="selCmp"></select></label>
     </div>
-    <nav class="filters" aria-label="Filter regional">
-      <span class="flabel">Tampilkan:</span>
+    <nav class="filters" aria-label="Filter area dan lokasi">
+      <span class="flabel">Area:</span>
       <div id="chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <label class="pick" for="selLok">Lokasi <select id="selLok"></select></label>
     </nav>
   </div>
 </header>
@@ -210,12 +219,16 @@ td{padding:7px 10px}
     <div><div class="k">Total event bulan ini</div><div class="v" id="bTot"></div></div>
   </section>
   <div class="warnbar" id="bwarn" hidden></div>
+  <section class="grid g-11">
+    <div class="panel"><div class="ph"><h2 id="btopAH">Top 10 Area dengan pelanggaran terbanyak</h2><p id="btopAS"></p></div><div class="rank wide" id="btopA"></div></div>
+    <div class="panel"><div class="ph"><h2 id="btopLH">Top 10 Lokasi dengan pelanggaran terbanyak</h2><p id="btopLS"></p></div><div class="rank wide" id="btopL"></div></div>
+  </section>
   <div class="anahead"><h2 style="margin:0;font-size:18px;font-weight:700">Tren &amp; parameter per kategori</h2><span class="hint" id="trendSub"></span></div>
   <div id="btrend" class="trend3"></div>
   <section class="panel"><div class="ph"><h2 id="bdayH">Event per hari</h2><p id="bdaySub"></p></div>
     <div class="legend" id="bdayLeg"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span><span id="bdayCmpLeg"><i style="background:none;border-top:2px dashed #1b1f1d;border-radius:0;height:0;width:16px"></i><b id="bdayCmpName"></b></span></div>
     <div class="chart" id="bday"></div></section>
-  <section class="panel"><div class="ph"><h2>Rekap per regional</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
+  <section class="panel"><div class="ph"><h2>Rekap per area</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
   <section class="grid g-21">
     <div class="panel"><div class="ph"><h2 id="bamtH">TOP 10 Pelanggaran AMT</h2><p id="bamtSub"></p></div><div class="tbl" id="bamt"></div></div>
     <div class="panel"><div class="ph"><h2 id="bdeltaH">Lokasi yang paling berubah</h2><p id="bdeltaSub"></p></div><div class="tbl"><table id="bdelta"></table></div><div id="bdeltaMore"></div></div>
@@ -226,7 +239,7 @@ td{padding:7px 10px}
 <div class="wrap" id="view-ytd" hidden>
   <section class="grid g-21">
     <div class="panel"><div class="ph"><h2>Berapa event setiap bulan?</h2><p id="ymonSub"></p></div><div class="chart" id="ymon"></div></div>
-    <div class="panel"><div class="ph"><h2>Regional mana paling tinggi?</h2><p>Rata-rata event per lokasi per bulan, agar adil walau jumlah lokasi berbeda. Klik untuk memfilter.</p></div><div class="rank" id="rank"></div></div>
+    <div class="panel"><div class="ph"><h2>Top 10 Area dengan pelanggaran terbanyak</h2><p id="yrankSub"></p></div><div class="rank wide" id="rank"></div></div>
   </section>
   <section class="grid g-21">
     <div class="panel">
@@ -241,7 +254,7 @@ td{padding:7px 10px}
   </section>
   <section class="grid g-21">
     <div class="panel"><div class="ph"><h2>TOP 10 Pelanggaran AMT</h2><p id="yamtSub"></p></div><div class="tbl" id="yamt"></div></div>
-    <div class="panel"><div class="ph"><h2>Lokasi dengan event terbanyak</h2><p id="ylokSub"></p></div><div class="tbl"><table id="ylok"></table></div></div>
+    <div class="panel"><div class="ph"><h2>Top 10 Lokasi dengan pelanggaran terbanyak</h2><p id="ylokSub"></p></div><div class="tbl"><table id="ylok"></table></div></div>
   </section>
   <section class="panel" aria-label="Catatan data"><div class="ph"><h2>Catatan data</h2><p>Hal yang perlu diperhatikan saat membaca angka</p></div><ul class="notes" id="notes"></ul></section>
 </div>
@@ -251,8 +264,8 @@ td{padding:7px 10px}
 </footer>
 <div id="tip" role="tooltip"></div>
 <script>
-let D, REG, P, ADA = [], LAST = -1, sel = 'ALL', mon = 0, cmp = -1, view = 'bulan', showAllLok = false, showAllDelta = false;
-const RNAME = {SUMBAGUT:'Sumbagut',SUMBAGSEL:'Sumbagsel',JABALINUS:'Jabalinus',KALIMANTAN:'Kalimantan',SULAWESI:'Sulawesi',MALUPA:'Malupa'};
+let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, view = 'bulan', showAllLok = false, showAllDelta = false;
+const rn = r => String(r || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\b(Ii|Iii|Iv)\b/g, x => x.toUpperCase());
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const B3 = BLN.map(b => b.slice(0, 3));
 const CATS = [
@@ -319,19 +332,20 @@ function drawBulanan(host, arr, cat) {
 
 
 /* ---- akses data ---- */
-// Parameter & kategori: angka nasional (sheet Parameter_Bulanan). Regional & lokasi: sheet Rekap_Regional / Rekap_Lokasi_*.
+// Semua angka di D sudah mengikuti filter area / lokasi (lihat derive).
 const catParams = k => P.filter(p => p.kat === k);
 const nilai = (label, m) => { const a = D.nilai[label]; return a && a[m] !== null && a[m] !== undefined ? a[m] : null; };
 const nilaiKat = (k, m) => { let s = 0, ada = false; catParams(k).forEach(p => { const v = nilai(p.key, m); if (v !== null) { s += v; ada = true; } }); return ada ? s : null; };
 const nilaiNas = m => { let s = 0, ada = false; CATS.forEach(c => { const v = nilaiKat(c.key, m); if (v !== null) { s += v; ada = true; } }); return ada ? s : null; };
 const regTot = (r, m) => { const o = D.regional[r]; return o && o.total[m] !== null && o.total[m] !== undefined ? o.total[m] : null; };
-// total 3 kategori sesuai filter regional
+// total 3 kategori sesuai filter area / lokasi
 const totSel = m => sel === 'ALL' ? nilaiNas(m) : regTot(sel, m);
 const prevM = () => { if (cmp >= 0 && cmp !== mon && ADA.indexOf(cmp) >= 0) return cmp; const i = ADA.indexOf(mon); return i > 0 ? ADA[i - 1] : null; };
 const nHari = m => new Date(D.tahun, m + 1, 0).getDate();
 const perHari = (v, m) => v === null || v === undefined ? '–' : d1(v / nHari(m));
 const cocokReg = r => sel === 'ALL' || r === sel;
-const katSel = '<span class="flat">nasional</span>';
+const lokNama = i => i >= 0 ? RAW.lok[i][0] : '';
+const scope = () => selLok >= 0 ? lokNama(selLok) + ' (' + rn(sel) + ')' : sel === 'ALL' ? 'semua area' : rn(sel);
 
 /* ================= KONTROL ================= */
 function chips() {
@@ -339,10 +353,54 @@ function chips() {
   const mk = (key, label, color, lag) => { const b = document.createElement('button'); b.className = 'chip'; b.setAttribute('aria-pressed', sel === key);
     b.innerHTML = (color ? `<span class="sw" style="background:${color}"></span>` : '') + label + (lag ? `<span class="lag">${lag}</span>` : '');
     b.onclick = () => setSel(key); c.appendChild(b); };
-  mk('ALL', 'Semua regional');
-  REG.forEach(r => mk(r, RNAME[r], rv(r), !regTot(r, mon) ? 'tidak ada ' + B3[mon] : null));
+  mk('ALL', 'Semua area');
+  REG.forEach(r => mk(r, rn(r), rv(r), !RAW.fakta.some(f => f[0] === mon && RAW.areas[f[1]] === r) ? 'tidak ada ' + B3[mon] : null));
 }
-function setSel(k) { sel = (sel === k && k !== 'ALL') ? 'ALL' : k; showAllLok = false; showAllDelta = false; render(); }
+function setSel(k) { sel = (sel === k && k !== 'ALL') ? 'ALL' : k; if (selLok >= 0 && (sel === 'ALL' || RAW.areas[RAW.lok[selLok][1]] !== sel)) selLok = -1; showAllLok = false; showAllDelta = false; render(); }
+function setLok(i) { selLok = (selLok === i) ? -1 : i; if (selLok >= 0) sel = RAW.areas[RAW.lok[selLok][1]]; showAllLok = false; showAllDelta = false; render(); }
+function pilihanLokasi() {
+  const el = document.getElementById('selLok');
+  const daftar = RAW.lok.map((x, i) => ({i, n: x[0], a: RAW.areas[x[1]]})).filter(o => sel === 'ALL' || o.a === sel);
+  const grup = {}; daftar.forEach(o => (grup[o.a] = grup[o.a] || []).push(o));
+  el.innerHTML = `<option value="-1">Semua lokasi${sel === 'ALL' ? '' : ' di ' + rn(sel)}</option>` + REG.filter(a => grup[a]).map(a =>
+    `<optgroup label="${rn(a)}">${grup[a].sort((x, y) => x.n < y.n ? -1 : 1).map(o => `<option value="${o.i}" ${o.i === selLok ? 'selected' : ''}>${o.n}</option>`).join('')}</optgroup>`).join('');
+  el.value = String(selLok);
+}
+
+/* ================= TURUNKAN DATA SESUAI FILTER ================= */
+// RAW berisi tabel fakta dari Kode.gs; di sini dijumlahkan sesuai filter area (sel) dan lokasi (selLok) ke bentuk yang dipakai panel.
+function derive() {
+  const A = RAW.areas, ada = {}; ADA.forEach(m => ada[m] = 1);
+  const nul12 = () => BLN.map((_, m) => ada[m] ? 0 : null);
+  const okLok = li => selLok < 0 || li === selLok, okArea = ai => sel === 'ALL' || A[ai] === sel;
+  const nilai = {}; P.forEach(p => nilai[p.key] = nul12());
+  const regional = {}; A.forEach(a => regional[a] = {total: nul12(), kat: {}, lokasi: 0});
+  const L = {};   // per lokasi: {i, l, r, m: {bulan: {DB, DD, FM, t}}}
+  RAW.fakta.forEach(([m, ai, li, pi, n]) => {
+    if (!okLok(li)) return;
+    const k = P[pi].kat, a = A[ai];
+    if (okArea(ai)) nilai[P[pi].key][m] += n;
+    const o = regional[a]; o.total[m] += n; const km = o.kat[m] || (o.kat[m] = {DB: 0, DD: 0, FM: 0}); km[k] += n;
+    const x = L[li] || (L[li] = {i: li, l: RAW.lok[li][0], r: a, m: {}}); const y = x.m[m] || (x.m[m] = {DB: 0, DD: 0, FM: 0, t: 0}); y[k] += n; y.t += n;
+  });
+  const LL = Object.values(L);
+  LL.forEach(o => { if (Object.values(o.m).some(y => y.t > 0)) regional[o.r].lokasi++; });
+  const lokasiBulan = {};
+  ADA.forEach(m => { const pm = m > 0 && ada[m - 1] ? m - 1 : null;
+    lokasiBulan[m] = LL.map(o => { const x = o.m[m] || {DB: 0, DD: 0, FM: 0, t: 0}, p = pm === null ? null : (o.m[pm] ? o.m[pm].t : 0);
+      return {i: o.i, l: o.l, r: o.r, DB: x.DB, DD: x.DD, FM: x.FM, t: x.t, p, pm}; }).filter(o => o.t || o.p).sort((a, b) => b.t - a.t); });
+  const lokasiYTD = LL.map(o => { const s = {DB: 0, DD: 0, FM: 0, t: 0}; let n = 0;
+    Object.keys(o.m).forEach(m => { if (+m > mon) return; const x = o.m[m]; s.DB += x.DB; s.DD += x.DD; s.FM += x.FM; s.t += x.t; if (x.t > 0) n++; });
+    return {i: o.i, l: o.l, r: o.r, ...s, n, avg: n ? s.t/n : null}; }).filter(o => o.t).sort((a, b) => b.t - a.t);
+  const H = {};
+  RAW.harian.forEach(([m, d, ai, li, a, b, c]) => { if (!okLok(li)) return; const k = m + '|' + d + '|' + ai; const h = H[k] || (H[k] = [m, d, A[ai], 0, 0, 0]); h[3] += a; h[4] += b; h[5] += c; });
+  let topAMT = null;
+  if (RAW.amt) {
+    const src = selLok >= 0 ? RAW.amt.lok.filter(r => r[2] === selLok) : sel !== 'ALL' ? RAW.amt.area.filter(r => A[r[1]] === sel) : RAW.amt.all;
+    topAMT = src.map(([b, ai, li, amt, DB, DD, FM, t, pi]) => ({b, amt, r: A[ai], l: RAW.lok[li] ? RAW.lok[li][0] : '', DB, DD, FM, t, top: P[pi] ? P[pi].label : '–'}));
+  }
+  Object.assign(D, {nilai, regional, lokasiBulan, lokasiYTD, harian: Object.values(H), topAMT});
+}
 function kontrol() {
   const sm = document.getElementById('selMon');
   sm.innerHTML = ADA.map(i => `<option value="${i}" ${i === mon ? 'selected' : ''}>${BLN[i]} ${D.tahun}</option>`).reverse().join('');
@@ -353,12 +411,12 @@ function kontrol() {
   document.querySelectorAll('.tBulan').forEach(e => e.textContent = BLN[mon] + ' ' + D.tahun);
   document.getElementById('tSrc').textContent = BLN[ADA[0]] + '–' + BLN[LAST] + ' ' + D.tahun;
 }
-const cakupan = () => sel === 'ALL' ? `Nasional<small>${REG.filter(r => D.regional[r] && D.regional[r].lokasi).length} regional · ${sum(REG.map(r => (D.regional[r] || {}).lokasi || 0))} lokasi</small>` : `${RNAME[sel]}<small>${(D.regional[sel] || {}).lokasi || '–'} lokasi</small>`;
+const cakupan = () => selLok >= 0 ? `${lokNama(selLok)}<small>Lokasi · ${rn(sel)}</small>` : sel === 'ALL' ? `Semua area<small>${REG.filter(r => D.regional[r] && D.regional[r].lokasi).length} area · ${sum(REG.map(r => (D.regional[r] || {}).lokasi || 0))} lokasi</small>` : `${rn(sel)}<small>${(D.regional[sel] || {}).lokasi || '–'} lokasi</small>`;
 function peringatan(el) {
   const msg = (D.peringatan || []).slice();
-  if (sel === 'ALL') { const k = REG.filter(r => !regTot(r, mon)); if (k.length) msg.push(`<b>${k.map(r => RNAME[r]).join(', ')}</b> tidak punya data ${BLN[mon]} di sumber.`); }
-  else if (!regTot(sel, mon)) msg.push(`<b>${RNAME[sel]}</b> tidak punya data ${BLN[mon]} di sumber.`);
-  if (sel !== 'ALL') msg.push('Grafik dan tabel parameter per kategori adalah angka <b>nasional</b>, karena sumber belum memuat rincian parameter per regional.');
+  if (selLok >= 0) { if (!totSel(mon)) msg.push(`<b>${lokNama(selLok)}</b> tidak punya data ${BLN[mon]} di sumber.`); }
+  else if (sel === 'ALL') { const k = REG.filter(r => !regTot(r, mon)); if (k.length) msg.push(`<b>${k.map(r => rn(r)).join(', ')}</b> tidak punya data ${BLN[mon]} di sumber.`); }
+  else if (!regTot(sel, mon)) msg.push(`<b>${rn(sel)}</b> tidak punya data ${BLN[mon]} di sumber.`);
   el.hidden = !msg.length; el.innerHTML = msg.length ? `${ICON_W}<span>${msg.join(' ')}</span>` : '';
 }
 
@@ -379,16 +437,16 @@ function amtRows(bulan) {
 function renderAMT(host, sub, bulan) {
   const rows = amtRows(bulan), per = bulan === null ? `${BLN[ADA[0]]}–${BLN[mon]} ${D.tahun}` : `${BLN[bulan]} ${D.tahun}`;
   const kira = bulan === null && mon !== LAST && D.topAMT && D.topAMT.some(o => o.b === -2);
-  sub.textContent = `${per} · ${sel === 'ALL' ? 'semua regional' : RNAME[sel]} · urut dari total pelanggaran 3 kategori${kira ? ' · dijumlah dari 10 teratas tiap bulan' : ''}`;
+  sub.textContent = `${per} · ${scope()} · urut dari total pelanggaran 3 kategori${kira ? ' · dijumlah dari 10 teratas tiap bulan' : ''}`;
   if (rows === null) { host.innerHTML = `<div class="emptyamt"><b>Data AMT belum ada.</b> Isi sheet <code>AMT</code> (Area, Lokasi, Nama AMT, Case, Jumlah) di file Data per bulan pada folder data. Panel ini terisi otomatis setelahnya.</div>`; return; }
-  if (!rows.length) { host.innerHTML = `<div class="emptyamt">Tidak ada data AMT untuk ${per}${sel === 'ALL' ? '' : ' di ' + RNAME[sel]}.</div>`; return; }
+  if (!rows.length) { host.innerHTML = `<div class="emptyamt">Tidak ada data AMT untuk ${per}${sel === 'ALL' ? '' : ' di ' + rn(sel)}.</div>`; return; }
   const mx = rows[0].t || 1;
   host.innerHTML = `<table class="amttbl"><thead><tr><th>#</th><th>Nama AMT</th><th>Lokasi</th>${CATS.map(c => `<th title="${c.name}">${c.key}</th>`).join('')}<th>Total</th><th>Terbanyak</th></tr></thead><tbody>` +
-    rows.map((o, i) => `<tr><td>${i + 1}</td><td style="text-align:left;white-space:normal"><b>${o.amt}</b></td><td style="text-align:left;white-space:normal"><span class="rdot" style="background:${o.r ? rv(o.r) : '#ccc'}"></span>${o.l || '–'}<span class="small">${o.r ? RNAME[o.r] : ''}</span></td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b><span class="amtbar"><i style="width:${o.t/mx*100}%"></i></span></td><td style="text-align:left;white-space:normal">${o.top}</td></tr>`).join('') + '</tbody></table>';
+    rows.map((o, i) => `<tr><td>${i + 1}</td><td style="text-align:left;white-space:normal"><b>${o.amt}</b></td><td style="text-align:left;white-space:normal"><span class="rdot" style="background:${o.r ? rv(o.r) : '#ccc'}"></span>${o.l || '–'}<span class="small">${o.r ? rn(o.r) : ''}</span></td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b><span class="amtbar"><i style="width:${o.t/mx*100}%"></i></span></td><td style="text-align:left;white-space:normal">${o.top}</td></tr>`).join('') + '</tbody></table>';
 }
 
 /* ================= HARIAN ================= */
-// D.harian: [[bulan, tanggal, regional, DB, DD, FM], ...]
+// D.harian: [[bulan, tanggal, area, DB, DD, FM], ...] (sudah difilter lokasi oleh derive)
 function hariBulan(m) {
   if (!D.harian) return null;
   const n = nHari(m), out = Array.from({length: n}, () => ({DB: 0, DD: 0, FM: 0, ada: false}));
@@ -402,16 +460,16 @@ function renderHarian() {
   host.innerHTML = '';
   document.getElementById('bdayH').textContent = `Event per hari — ${BLN[mon]} ${D.tahun}`;
   const cur = hariBulan(mon), prv = pm === null ? null : hariBulan(pm);
-  const scope = sel === 'ALL' ? 'semua regional' : RNAME[sel];
+  const lingkup = scope();
   document.getElementById('bdayLeg').hidden = !cur;
-  if (!cur) { sub.textContent = scope; host.innerHTML = `<div class="emptyamt">${D.harian ? `Data harian ${BLN[mon]} belum ada. Pastikan file Data bulan ini ada di folder data dan sheet Event berisi kolom Tanggal.` : 'Data harian belum ada di folder data.'}</div>`; return; }
+  if (!cur) { sub.textContent = lingkup; host.innerHTML = `<div class="emptyamt">${D.harian ? `Data harian ${BLN[mon]} belum ada. Pastikan file Data bulan ini ada di folder data dan sheet Event berisi kolom Tanggal.` : 'Data harian belum ada di folder data.'}</div>`; return; }
   document.getElementById('bdayCmpLeg').hidden = !prv;
   document.getElementById('bdayCmpName').textContent = prv ? BLN[pm] + ' (tanggal yang sama)' : '';
   const isi = cur.filter(o => o.ada), avg = sum(isi.map(o => o.t)) / (isi.length || 1);
   const mx = isi.reduce((a, o, i) => o.t > a.t ? o : a, isi[0]), mn = isi.reduce((a, o) => o.t < a.t ? o : a, isi[0]);
   const dOf = o => cur.indexOf(o) + 1;
   const pIsi = prv ? prv.filter(o => o.ada) : [], pavg = pIsi.length ? sum(pIsi.map(o => o.t)) / pIsi.length : null;
-  sub.innerHTML = `${scope} · tertinggi <b>${dOf(mx)} ${B3[mon]}</b> (${nf(mx.t)}) · terendah <b>${dOf(mn)} ${B3[mon]}</b> (${nf(mn.t)}) · rata-rata <b>${nf(avg)}/hari</b>${pavg === null ? '' : ` vs ${nf(pavg)}/hari di ${BLN[pm]} ${pctTxt(avg, pavg)}`}${isi.length < cur.length ? ` · data ${isi.length} dari ${cur.length} hari` : ''}`;
+  sub.innerHTML = `${lingkup} · tertinggi <b>${dOf(mx)} ${B3[mon]}</b> (${nf(mx.t)}) · terendah <b>${dOf(mn)} ${B3[mon]}</b> (${nf(mn.t)}) · rata-rata <b>${nf(avg)}/hari</b>${pavg === null ? '' : ` vs ${nf(pavg)}/hari di ${BLN[pm]} ${pctTxt(avg, pavg)}`}${isi.length < cur.length ? ` · data ${isi.length} dari ${cur.length} hari` : ''}`;
   const W = 1180, H = 240, m = {l: 50, r: 12, t: 16, b: 26}, iw = W - m.l - m.r, ih = H - m.t - m.b, n = 31, slot = iw / n, bw = Math.min(24, slot * .7);
   const top = Math.max(1, ...cur.map(o => o.t), ...(prv || []).map(o => o.t));
   const ymax = niceMax(top * 1.05), y = v => m.t + ih - v / ymax * ih, NT = nTicks(ymax);
@@ -440,6 +498,29 @@ function renderHarian() {
   host.appendChild(svg);
 }
 
+/* ================= TOP 10 AREA & LOKASI ================= */
+function topList(host, rows, kosongTxt) {
+  host.innerHTML = '';
+  if (!rows.length) { host.innerHTML = `<div class="emptyamt">${kosongTxt}</div>`; return; }
+  const mx = Math.max(1, ...rows.map(o => o.v));
+  rows.forEach((o, i) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'rrow' + (o.pilih ? ' sel' : '') + (o.redup ? ' dim' : '');
+    b.innerHTML = `<span class="rname"><span class="rnum">${i + 1}</span>${o.nama}</span><span class="rtrack"><span class="rfill" style="display:block;width:${o.v/mx*100}%;background:${o.warna}"></span></span><span class="rval">${ax(o.v)}</span><span class="rsub">${o.sub}</span>`;
+    b.onclick = o.klik; host.appendChild(b); });
+}
+function renderTopBulan(pm) {
+  const B = BLN[mon] + ' ' + D.tahun, BP = pm === null ? 'bulan lalu' : BLN[pm];
+  document.getElementById('btopAH').textContent = `Top 10 Area dengan pelanggaran terbanyak — ${BLN[mon]}`;
+  document.getElementById('btopAS').textContent = `${B} · total 3 kategori${selLok >= 0 ? ' · ' + lokNama(selLok) : ''} · klik untuk memfilter`;
+  topList(document.getElementById('btopA'), REG.map(r => ({r, t: regTot(r, mon), p: pm === null ? null : regTot(r, pm)})).filter(o => o.t > 0).sort((a, b) => b.t - a.t).slice(0, 10).map(o => ({
+    key: o.r, nama: rn(o.r), warna: rv(o.r), v: o.t, sub: `${nf(o.t)} event · ${pctTxt(o.t, o.p)} vs ${BP} · ${(D.regional[o.r] || {}).lokasi || 0} lokasi`,
+    pilih: sel === o.r, redup: sel !== 'ALL' && sel !== o.r, klik: () => setSel(o.r)})), `Tidak ada data area untuk ${B}.`);
+  document.getElementById('btopLH').textContent = `Top 10 Lokasi dengan pelanggaran terbanyak — ${BLN[mon]}`;
+  document.getElementById('btopLS').textContent = `${B} · ${sel === 'ALL' ? 'semua area' : rn(sel)} · klik untuk memfilter lokasi`;
+  topList(document.getElementById('btopL'), (D.lokasiBulan[mon] || []).filter(o => cocokReg(o.r) && o.t > 0).slice(0, 10).map(o => ({
+    key: o.i, nama: o.l, warna: rv(o.r), v: o.t, sub: `${rn(o.r)} · ${nf(o.t)} event · ${pctTxt(o.t, o.p)}${o.pm === null ? '' : ' vs ' + BLN[o.pm]}`,
+    pilih: selLok === o.i, redup: selLok >= 0 && selLok !== o.i, klik: () => setLok(o.i)})), `Tidak ada data lokasi untuk ${B}.`);
+}
+
 /* ================= BULANAN ================= */
 function renderBulan() {
   const pm = prevM();
@@ -450,9 +531,10 @@ function renderBulan() {
   document.getElementById('bPrev').innerHTML = pm === null ? '–<small>belum ada bulan sebelumnya</small>' : `${BLN[pm]} ${D.tahun}<small>${nHari(pm)} hari · ${nf(TP)} event · ${perHari(TP, pm)}/hari</small>`;
   document.getElementById('bTot').innerHTML = `${nf(T)}<small>${pctTxt(T, TP)} vs ${pm === null ? 'bulan lalu' : BLN[pm]} · rata-rata harian ${pm === null ? '' : pctTxt(T / nHari(mon), TP / nHari(pm))} · YTD ${cf(ytd)}</small>`;
   peringatan(document.getElementById('bwarn'));
+  renderTopBulan(pm);
 
-  // kartu per kategori (nasional): donut, kotak, tren, tabel parameter
-  document.getElementById('trendSub').textContent = `Nasional · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis putus-putus = rata-rata`;
+  // kartu per kategori: donut, kotak, tren, tabel parameter
+  document.getElementById('trendSub').textContent = `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis putus-putus = rata-rata`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
   CATS.forEach(cat => {
     const ps = catParams(cat.key), arr = BLN.map((_, m) => nilaiKat(cat.key, m));
@@ -478,14 +560,14 @@ function renderBulan() {
   document.getElementById('bamtH').textContent = `TOP 10 Pelanggaran AMT — ${BLN[mon]}`;
   renderAMT(document.getElementById('bamt'), document.getElementById('bamtSub'), mon);
 
-  // per regional
+  // per area
   const adaKat = REG.some(r => D.regional[r] && D.regional[r].kat[mon]);
   document.getElementById('bregSub').textContent = `${BLN[mon]} ${D.tahun} dibanding ${pm === null ? 'bulan lalu' : BLN[pm]} · ${adaKat ? 'DB/DD/FM = Driving Behaviour/Driver Discipline/Fatigue Mgmt · ' : ''}klik baris untuk memfilter`;
   let tot = 0, totp = 0, totl = 0; const tk = {DB: 0, DD: 0, FM: 0};
   document.getElementById('breg').innerHTML = `<thead><tr><th>Regional</th>${adaKat ? CATS.map(c => `<th title="${c.name}">${c.key}</th>`).join('') : ''}<th>${B3[mon]}</th><th>${pm === null ? 'Bln lalu' : B3[pm]}</th><th>Kenaikan</th><th>Lokasi</th></tr></thead><tbody>` +
     REG.map(r => { const o = D.regional[r] || {total: [], kat: {}}, t = regTot(r, mon), p = pm === null ? null : regTot(r, pm), k = o.kat[mon];
       tot += t || 0; totp += p || 0; totl += o.lokasi || 0; if (k) CATS.forEach(c => tk[c.key] += k[c.key] || 0);
-      return `<tr data-r="${r}" style="cursor:pointer${sel !== 'ALL' && sel !== r ? ';opacity:.45' : ''}"><td><span class="rdot" style="background:${rv(r)}"></span>${RNAME[r]}</td>${adaKat ? CATS.map(c => `<td>${k ? nf(k[c.key]) : '–'}</td>`).join('') : ''}<td><b>${t === null ? '–' : nf(t)}</b></td><td>${p === null ? '–' : nf(p)}</td><td>${t === null ? '–' : pctTxt(t, p)}</td><td>${o.lokasi || '–'}</td></tr>`; }).join('') +
+      return `<tr data-r="${r}" style="cursor:pointer${sel !== 'ALL' && sel !== r ? ';opacity:.45' : ''}"><td><span class="rdot" style="background:${rv(r)}"></span>${rn(r)}</td>${adaKat ? CATS.map(c => `<td>${k ? nf(k[c.key]) : '–'}</td>`).join('') : ''}<td><b>${t === null ? '–' : nf(t)}</b></td><td>${p === null ? '–' : nf(p)}</td><td>${t === null ? '–' : pctTxt(t, p)}</td><td>${o.lokasi || '–'}</td></tr>`; }).join('') +
     `<tr class="tot"><td>TOTAL</td>${adaKat ? CATS.map(c => `<td>${nf(tk[c.key])}</td>`).join('') : ''}<td>${nf(tot)}</td><td>${pm === null ? '–' : nf(totp)}</td><td>${pctTxt(tot, pm === null ? null : totp)}</td><td>${totl || '–'}</td></tr></tbody>`;
   document.querySelectorAll('#breg tbody tr[data-r]').forEach(tr => tr.onclick = () => setSel(tr.dataset.r));
 
@@ -502,7 +584,7 @@ function renderBulan() {
     document.getElementById('bdeltaH').textContent = `Lokasi yang paling berubah, ${BLN[pmL]} → ${BLN[mon]}`;
     dsub.innerHTML = `Total kenaikan <b class="up">+${nf(naik)}</b>, total penurunan <b class="down">−${nf(-turun)}</b> event${pm !== null && pm !== pmL ? ` · sheet lokasi hanya membandingkan dengan ${BLN[pmL]}` : ''}.`;
     dh.innerHTML = `<thead><tr><th>Lokasi</th><th>${B3[pmL]}</th><th>${B3[mon]}</th><th>Selisih</th><th>Kenaikan</th></tr></thead><tbody>` +
-      rows.slice(0, N).map(o => `<tr><td style="white-space:normal"><span class="rdot" style="background:${rv(o.r)}"></span>${o.l}<span class="small">${RNAME[o.r]}</span></td><td>${nf(o.p)}</td><td>${nf(o.t)}</td><td class="${o.d > 0 ? 'up' : 'down'}">${o.d > 0 ? '+' : '−'}${nf(Math.abs(o.d))}</td><td>${pctTxt(o.t, o.p)}</td></tr>`).join('') + '</tbody>';
+      rows.slice(0, N).map(o => `<tr><td style="white-space:normal"><span class="rdot" style="background:${rv(o.r)}"></span>${o.l}<span class="small">${rn(o.r)}</span></td><td>${nf(o.p)}</td><td>${nf(o.t)}</td><td class="${o.d > 0 ? 'up' : 'down'}">${o.d > 0 ? '+' : '−'}${nf(Math.abs(o.d))}</td><td>${pctTxt(o.t, o.p)}</td></tr>`).join('') + '</tbody>';
     dmore.innerHTML = rows.length > 8 ? `<button type="button" class="more" id="btnDelta">${showAllDelta ? 'Tampilkan 8 teratas saja' : 'Tampilkan semua ' + rows.length + ' lokasi'}</button>` : '';
     const b = document.getElementById('btnDelta'); if (b) b.onclick = () => { showAllDelta = !showAllDelta; renderBulan(); };
   }
@@ -513,7 +595,7 @@ function renderBulan() {
   const lr = LB.slice().sort((a, b) => b.t - a.t), N = showAllLok ? lr.length : Math.min(10, lr.length);
   ls.textContent = `${BLN[mon]} ${D.tahun} · ${lr.length} lokasi, urut dari event terbanyak`;
   lt.innerHTML = `<thead><tr><th>Lokasi</th><th>Regional</th>${CATS.map(c => `<th>${c.name}</th>`).join('')}<th>Total</th><th>${pmL === null ? 'Bln lalu' : B3[pmL]}</th><th>Kenaikan</th></tr></thead><tbody>` +
-    lr.slice(0, N).map(o => `<tr><td>${o.l}</td><td style="text-align:left"><span class="rdot" style="background:${rv(o.r)}"></span>${RNAME[o.r]}</td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b></td><td>${o.p === null ? '–' : nf(o.p)}</td><td>${pctTxt(o.t, o.p)}</td></tr>`).join('') + '</tbody>';
+    lr.slice(0, N).map(o => `<tr><td>${o.l}</td><td style="text-align:left"><span class="rdot" style="background:${rv(o.r)}"></span>${rn(o.r)}</td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b></td><td>${o.p === null ? '–' : nf(o.p)}</td><td>${pctTxt(o.t, o.p)}</td></tr>`).join('') + '</tbody>';
   lm.innerHTML = lr.length > 10 ? `<button type="button" class="more" id="btnMore">${showAllLok ? 'Tampilkan 10 teratas saja' : 'Tampilkan semua ' + lr.length + ' lokasi'}</button>` : '';
   const bm = document.getElementById('btnMore'); if (bm) bm.onclick = () => { showAllLok = !showAllLok; renderBulan(); };
 }
@@ -525,17 +607,17 @@ function renderYTD() {
   const nLok = sel === 'ALL' ? sum(REG.map(r => (D.regional[r] || {}).lokasi || 0)) : (D.regional[sel] || {}).lokasi || 0;
   document.getElementById('kpis').innerHTML = `
    <div class="kpi"><div class="l">Total event ${per3} ${D.tahun}</div><div class="v">${cf(T)}</div><div class="n">${nf(T)} event · ${nb} bulan</div></div>
-   <div class="kpi"><div class="l">Lokasi terpantau</div><div class="v">${nf(nLok)}</div><div class="n">${sel === 'ALL' ? REG.filter(r => (D.regional[r] || {}).lokasi).length + ' regional' : RNAME[sel]}</div></div>
+   <div class="kpi"><div class="l">Lokasi terpantau</div><div class="v">${nf(nLok)}</div><div class="n">${sel === 'ALL' ? REG.filter(r => (D.regional[r] || {}).lokasi).length + ' regional' : rn(sel)}</div></div>
    <div class="kpi"><div class="l">Rata-rata per bulan</div><div class="v">${cf(T/nb)}</div><div class="n">${nLok ? d1(T/nb/nLok) + ' event per lokasi per bulan' : ''}</div></div>`;
 
-  // parameter (nasional)
+  // parameter
   const params = P.map(p => ({p, s: sum(M.map(m => nilai(p.key, m)))})).sort((a, b) => b.s - a.s), TN = sum(params.map(o => o.s));
   const perR = REG.map(r => { const o = D.regional[r] || {}; const v = M.map(m => regTot(r, m)).filter(x => x !== null && x > 0); const s = sum(v); return {r, s, v: o.lokasi && v.length ? s/o.lokasi/v.length : 0, l: o.lokasi || 0}; }).filter(o => o.s > 0).sort((a, b) => b.v - a.v);
   const arr = BLN.map((_, m) => M.indexOf(m) >= 0 ? totSel(m) : null);
   const prev = M.slice(0, -1).map(m => totSel(m)).filter(v => v !== null), prevAvg = prev.length ? sum(prev)/prev.length : 0, lonjak = prevAvg && arr[mon] !== null ? arr[mon]/prevAvg : 0;
   const items = [];
-  if (perR.length) items.push(['top', sel === 'ALL' ? `<b>${RNAME[perR[0].r]}</b> paling tinggi dengan rata-rata <b>${nf(perR[0].v)} event per lokasi per bulan</b>; terendah ${RNAME[perR[perR.length - 1].r]} (${nf(perR[perR.length - 1].v)}).` : `${RNAME[sel]} berada di <b>peringkat ${perR.findIndex(x => x.r === sel) + 1} dari ${perR.length}</b> regional (rata-rata ${nf((perR.find(x => x.r === sel) || {}).v)} event per lokasi per bulan).`]);
-  if (params.length > 1) items.push(['case', `Parameter terbanyak (nasional) adalah <b>${params[0].p.label}</b> (${pf(params[0].s, TN)}), disusul ${params[1].p.label} (${pf(params[1].s, TN)}).`]);
+  if (perR.length) items.push(['top', sel === 'ALL' ? `<b>${rn(perR[0].r)}</b> paling tinggi dengan rata-rata <b>${nf(perR[0].v)} event per lokasi per bulan</b>; terendah ${rn(perR[perR.length - 1].r)} (${nf(perR[perR.length - 1].v)}).` : `${rn(sel)} berada di <b>peringkat ${perR.findIndex(x => x.r === sel) + 1} dari ${perR.length}</b> area (rata-rata ${nf((perR.find(x => x.r === sel) || {}).v)} event per lokasi per bulan).`]);
+  if (params.length > 1) items.push(['case', `Parameter terbanyak adalah <b>${params[0].p.label}</b> (${pf(params[0].s, TN)}), disusul ${params[1].p.label} (${pf(params[1].s, TN)}).`]);
   const bmax = arr.reduce((b, v, i) => v !== null && (b < 0 || v > arr[b]) ? i : b, -1);
   if (bmax >= 0) items.push(['clock', `Bulan dengan event terbanyak adalah <b>${BLN[bmax]}</b> (${cf(arr[bmax])} event).`]);
   if (lonjak > 2) items.push(['alert', `<b>${BLN[mon]} naik ${d1(lonjak)}×</b> dibanding rata-rata bulan sebelumnya. Cek catatan data sebelum menyimpulkan.`]);
@@ -545,11 +627,11 @@ function renderYTD() {
     case: '<svg viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="2.4" rx="1" fill="currentColor"/><rect x="2" y="7" width="8" height="2.4" rx="1" fill="currentColor"/><rect x="2" y="11" width="5" height="2.4" rx="1" fill="currentColor"/></svg>',
     clock: '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.6"/><path d="M8 4.8V8l2.4 1.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
     alert: ICON_W };
-  document.getElementById('tkTitle').textContent = 'Poin penting — ' + per + (sel === 'ALL' ? '' : ' · ' + RNAME[sel]);
+  document.getElementById('tkTitle').textContent = 'Poin penting — ' + per + (sel === 'ALL' ? '' : ' · ' + rn(sel));
   document.getElementById('takeaways').innerHTML = items.map(([i, t]) => `<li><span class="ic ${i === 'alert' ? 'alert' : ''}">${IC[i]}</span><span>${t}</span></li>`).join('');
 
   // tren bulanan total
-  document.getElementById('ymonSub').textContent = `Total 3 kategori per bulan · ${sel === 'ALL' ? 'semua regional' : RNAME[sel]} · klik batang untuk memilih bulan`;
+  document.getElementById('ymonSub').textContent = `Total 3 kategori per bulan · ${scope()} · klik batang untuk memilih bulan`;
   const host = document.getElementById('ymon'); host.innerHTML = '';
   const W = 1100, H = 300, m = {l: 56, r: 10, t: 22, b: 30}, iw = W - m.l - m.r, ih = H - m.t - m.b, slot = iw/12, bw = Math.min(30, slot*.62);
   const full = BLN.map((_, i) => ADA.indexOf(i) >= 0 ? totSel(i) : null);
@@ -562,18 +644,16 @@ function renderYTD() {
     const t = svgEl('text', {x: cx, y: H - 10, 'text-anchor': 'middle', class: 'tick'}, svg); t.textContent = B3[i];
     const hit = svgEl('rect', {x: m.l + slot*i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
     hit.addEventListener('click', () => { if (ADA.indexOf(i) >= 0) { mon = i; render(); } });
-    bindTip(hit, () => `<b>${BLN[i]} ${D.tahun}</b>` + (v === null ? '<br>belum ada data' : `<br>${nf(v)} event` + (sel === 'ALL' ? REG.map(r => { const x = regTot(r, i); return x === null ? '' : `<div style="display:flex;justify-content:space-between;gap:12px"><span>${RNAME[r]}</span><span>${nf(x)}</span></div>`; }).join('') : ''))); });
+    bindTip(hit, () => `<b>${BLN[i]} ${D.tahun}</b>` + (v === null ? '<br>belum ada data' : `<br>${nf(v)} event` + (sel === 'ALL' ? REG.map(r => { const x = regTot(r, i); return x === null ? '' : `<div style="display:flex;justify-content:space-between;gap:12px"><span>${rn(r)}</span><span>${nf(x)}</span></div>`; }).join('') : ''))); });
   host.appendChild(svg);
 
-  // ranking regional
-  const rk = document.getElementById('rank'); rk.innerHTML = '';
-  const mx = Math.max(1, ...perR.map(x => x.v));
-  perR.forEach(o => { const b = document.createElement('button'); b.className = 'rrow' + (sel === o.r ? ' sel' : '') + (sel !== 'ALL' && sel !== o.r ? ' dim' : '');
-    b.innerHTML = `<span class="rname"><i style="background:${rv(o.r)}"></i>${RNAME[o.r]}</span><span class="rtrack"><span class="rfill" style="display:block;width:${o.v/mx*100}%;background:${rv(o.r)}"></span></span><span class="rval">${ax(o.v)}</span><span class="rsub">${cf(o.s)} event · ${o.l} lokasi</span>`;
-    b.onclick = () => setSel(o.r); rk.appendChild(b); });
+  // top 10 area periode berjalan
+  document.getElementById('yrankSub').textContent = `${per} · total pelanggaran 3 kategori · klik untuk memfilter`;
+  topList(document.getElementById('rank'), perR.slice().sort((a, b) => b.s - a.s).slice(0, 10).map(o => ({key: o.r, nama: rn(o.r), warna: rv(o.r), v: o.s,
+    sub: `rata-rata ${nf(o.v)} event per lokasi per bulan · ${o.l} lokasi`, pilih: sel === o.r, redup: sel !== 'ALL' && sel !== o.r, klik: () => setSel(o.r)})), 'Belum ada data area.');
 
   // parameter
-  document.getElementById('yparSub').textContent = `${per} · nasional`;
+  document.getElementById('yparSub').textContent = `${per} · ${scope()}`;
   const ph = document.getElementById('ypar'); ph.innerHTML = '';
   const rowH = 28, PW = 1060, lw = 190, rw = 130, PH = params.length*rowH + 4, pmx = Math.max(1, params[0] ? params[0].s : 1);
   const ps = svgEl('svg', {viewBox: `0 0 ${PW} ${PH}`, role: 'img', 'aria-label': 'Parameter terbanyak'});
@@ -592,13 +672,14 @@ function renderYTD() {
 
   // lokasi YTD
   const ly = D.lokasiYTD.filter(o => cocokReg(o.r)).sort((a, b) => b.t - a.t).slice(0, 10);
-  document.getElementById('ylokSub').textContent = `10 teratas · seluruh periode · DB/DD/FM = 3 kategori · ${sel === 'ALL' ? 'semua regional' : RNAME[sel]}`;
+  document.getElementById('ylokSub').textContent = `${per} · ${sel === 'ALL' ? 'semua area' : rn(sel)} · DB/DD/FM = 3 kategori · klik baris untuk memfilter lokasi`;
   document.getElementById('ylok').innerHTML = `<thead><tr><th>Lokasi</th>${CATS.map(c => `<th title="${c.name}">${c.key}</th>`).join('')}<th>Total</th></tr></thead><tbody>` +
-    ly.map(o => `<tr><td style="white-space:normal"><span class="rdot" style="background:${rv(o.r)}"></span>${o.l}<span class="small">${RNAME[o.r]}${o.avg === null ? '' : ' · rata² ' + nf(o.avg) + '/bln'}</span></td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b></td></tr>`).join('') + '</tbody>';
+    ly.map((o, i) => `<tr data-li="${o.i}" style="cursor:pointer${selLok >= 0 && selLok !== o.i ? ';opacity:.45' : ''}"><td style="white-space:normal"><span class="rnum" style="margin-right:8px">${i + 1}</span><span class="rdot" style="background:${rv(o.r)}"></span>${o.l}<span class="small">${rn(o.r)}${o.avg === null ? '' : ' · rata² ' + nf(o.avg) + '/bln'}</span></td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b></td></tr>`).join('') + '</tbody>';
+  document.querySelectorAll('#ylok tbody tr[data-li]').forEach(tr => tr.onclick = () => setLok(+tr.dataset.li));
 
   // catatan
   const notes = [];
-  if (P.some(p => p.kat !== p.katAsal)) notes.push(`<b>Driving &gt; 4 Hours dihitung di Driving Behaviour</b> pada grafik dan tabel parameter. Di tabel regional dan lokasi, angkanya masih ikut Fatigue Management karena sumber sudah menjumlahkannya per kategori.`);
+  if (P.some(p => p.kat !== p.katAsal)) notes.push('<b>Driving &gt; 4 Hours dihitung di Driving Behaviour</b> di semua grafik dan tabel.');
   if (!D.topAMT) notes.push('<b>TOP 10 Pelanggaran AMT belum terisi.</b> Sheet AMT di file Data per bulan masih kosong.');
   (D.peringatan || []).forEach(s => notes.push(`<b>Sumber:</b> ${s}`));
   (D.catatan || []).forEach(s => { if (/^[A-Z ]+$/.test(s)) return; notes.push(s.replace(/^(\d+\.\s*)?([^:]{3,60}:)/, '$1<b>$2</b>')); });
@@ -612,13 +693,14 @@ function setView(v) { view = v; document.getElementById('view-bulan').hidden = v
 document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setView(b.dataset.v));
 document.getElementById('selMon').onchange = e => { mon = +e.target.value; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
-function render() { if (!D || LAST < 0) return; kontrol(); chips(); if (view === 'bulan') { renderBulan(); renderHarian(); } else renderYTD(); }
+document.getElementById('selLok').onchange = e => setLok(+e.target.value);
+function render() { if (!D || LAST < 0) return; derive(); kontrol(); chips(); pilihanLokasi(); if (view === 'bulan') { renderBulan(); renderHarian(); } else renderYTD(); }
 
 const REFRESH_MS = 5*60*1000;
 function start(json) {
   const p = JSON.parse(json);
   const wasLatest = !D || mon === LAST;
-  D = p; REG = D.regions; P = D.params; ADA = D.bulanAda || []; LAST = ADA.length ? ADA[ADA.length - 1] : -1;
+  RAW = p; D = Object.assign({}, p); REG = p.areas; P = p.params; if (selLok >= p.lok.length) selLok = -1; ADA = D.bulanAda || []; LAST = ADA.length ? ADA[ADA.length - 1] : -1;
   if (wasLatest || ADA.indexOf(mon) < 0) mon = Math.max(0, LAST);
   const l = document.getElementById('loading');
   if (LAST < 0) { document.body.classList.add('nodata'); document.getElementById('tUpdate').textContent = 'Menunggu data'; l.hidden = false;

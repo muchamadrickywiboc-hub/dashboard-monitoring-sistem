@@ -29,6 +29,8 @@ const CFG = {
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
 };
 const REGIONS = ['SUMBAGUT', 'SUMBAGSEL', 'JABALINUS', 'KALIMANTAN', 'SULAWESI', 'MALUPA'];
+/** Area = satuan filter dashboard (kolom Area di data). */
+const AREAS = ['SUMBAGUT I', 'SUMBAGUT II', 'SUMBAGSEL', 'JABALINUS', 'KALIMANTAN', 'SULAWESI', 'MALUPA'];
 const BULAN = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
 const KATEGORI = { 'DRIVING BEHAVIOUR': 'DB', 'DRIVER DISCIPLINE': 'DD', 'FATIGUE MANAGEMENT': 'FM' };
 /** Parameter yang dipindah kategorinya di dashboard (nama parameter huruf besar -> kode kategori). */
@@ -53,8 +55,8 @@ function onOpen() {
 }
 
 function hapusCache() {
-  CacheService.getScriptCache().remove('DASHB2_N');
-  CacheService.getScriptCache().remove('DASHB2');
+  CacheService.getScriptCache().remove('DASHB3_N');
+  CacheService.getScriptCache().remove('DASHB3');
   try { SpreadsheetApp.getActiveSpreadsheet().toast('Cache dihapus. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Cache dihapus.'); }
 }
 
@@ -63,10 +65,8 @@ function UJI_BACA_SUMBER() {
   const d = bangunData();
   Logger.log('Bulan berisi data: ' + d.bulanAda.map(m => BULAN[m]).join(', '));
   Logger.log('Parameter: ' + d.params.map(p => p.label + ' (' + p.kat + ')').join('; '));
-  Logger.log('Regional: ' + Object.keys(d.regional).join(', '));
-  Logger.log('Rekap lokasi per bulan: ' + Object.keys(d.lokasiBulan).map(m => BULAN[m]).join(', ') + ' | YTD: ' + d.lokasiYTD.length + ' lokasi');
-  Logger.log('Top AMT: ' + (d.topAMT ? d.topAMT.length + ' baris' : 'data AMT belum ada'));
-  Logger.log('Harian: ' + (d.harian ? d.harian.length + ' baris' : 'data harian belum ada'));
+  Logger.log('Lokasi: ' + d.lok.length + ' | baris fakta: ' + d.fakta.length + ' | baris harian: ' + d.harian.length);
+  Logger.log('Top AMT: ' + (d.amt ? d.amt.all.length + ' / ' + d.amt.area.length + ' / ' + d.amt.lok.length + ' baris (semua / area / lokasi)' : 'data AMT belum ada'));
   if (d.peringatan.length) Logger.log('Peringatan: ' + d.peringatan.join(' | '));
 }
 
@@ -93,17 +93,17 @@ function pasangPemicu() {
 function simpanCache(json) {
   try {
     const parts = {}, size = 90000;
-    for (let i = 0; i * size < json.length; i++) parts['DASHB2_' + i] = json.substr(i * size, size);
-    parts.DASHB2_N = String(Object.keys(parts).length);
+    for (let i = 0; i * size < json.length; i++) parts['DASHB3_' + i] = json.substr(i * size, size);
+    parts.DASHB3_N = String(Object.keys(parts).length);
     CacheService.getScriptCache().putAll(parts, CFG.CACHE_DETIK);
   } catch (e) { /* tanpa cache */ }
 }
 
 function getDashboardData() {
   const cache = CacheService.getScriptCache();
-  const n = Number(cache.get('DASHB2_N') || 0);
+  const n = Number(cache.get('DASHB3_N') || 0);
   if (n) {
-    const keys = []; for (let i = 0; i < n; i++) keys.push('DASHB2_' + i);
+    const keys = []; for (let i = 0; i < n; i++) keys.push('DASHB3_' + i);
     const got = cache.getAll(keys);
     if (keys.every(k => got[k] !== undefined && got[k] !== null)) return keys.map(k => got[k]).join('');
   }
@@ -147,13 +147,13 @@ function bangunData() {
       const tg = tanggalTeks(r[0]);
       if (!tg || tg.m !== o.m) return;
       const lok = teks(r[2]).toUpperCase();
-      EV.push([o.m, tg.d, regionalDari(peta, r[1], lok), lok, c.p, c.k, n]);
+      EV.push([o.m, tg.d, areaNorm(r[1]), lok, c.p, c.k, n]);
     });
     (nilaiSheet(ss, 'AMT') || []).slice(1).forEach(r => {
       const c = peta.kasus[normKasus(r[3])], n = angka(r[4]) || 0, nama = teks(r[2]).toUpperCase();
       if (!c || !n || !nama) return;
       const lok = teks(r[1]).toUpperCase();
-      AM.push([o.m, regionalDari(peta, r[0], lok), lok, nama, c.p, c.k, n]);
+      AM.push([o.m, areaNorm(r[0]), lok, nama, c.p, c.k, n]);
     });
   });
   if (Object.keys(belum).length) peringatan.push('Case belum ada di Pemetaan (tidak dihitung): ' + Object.keys(belum).slice(0, 15).join(', '));
@@ -165,8 +165,7 @@ function bangunData() {
 }
 
 function kosong(peringatan) {
-  const regional = {}; REGIONS.forEach(r => { regional[r] = { total: kosong12(), kat: {}, lokasi: null }; });
-  return { tahun: CFG.TAHUN, regions: REGIONS, bulanAda: [], params: [], nilai: {}, lain: {}, regional: regional, lokasiBulan: {}, lokasiYTD: [], topAMT: null, harian: null, catatan: [], peringatan: peringatan, updated: new Date().toISOString() };
+  return { tahun: CFG.TAHUN, areas: AREAS, bulanAda: [], params: [], lok: [], fakta: [], harian: [], amt: null, catatan: [], peringatan: peringatan, updated: new Date().toISOString() };
 }
 
 function nilaiSheet(ss, nama) {
@@ -224,7 +223,17 @@ function bacaPemetaan(v) {
   });
   return { kasus: kasus, area: area, lokasi: lokasi, urut: urut };
 }
-function regionalDari(peta, area, lok) { const a = teks(area).toUpperCase(); return peta.area[a] || peta.lokasi[lok] || namaRegional(a) || null; }
+/** Nama lokasi lama -> nama yang dipakai sekarang (di file tarikan). Tambahkan baris bila ada lokasi yang ganti nama. */
+const ALIAS_LOKASI = {
+  'FT SIMELUE': 'FT SIMEULUE', 'IT PANGKAL BALAM': 'FT PANGKALAN BALAM', 'FT WAYAME': 'IT WAYAME',
+  'FT GORONTALO': 'IT GORONTALO', 'FT KENDARI': 'IT KENDARI',
+};
+function kunciLok(l) { const u = teks(l).toUpperCase(); return (ALIAS_LOKASI[u] || u).replace(/[^A-Z0-9]/g, ''); }
+/** "Sumbagut 1" / "SUMBAGUT I" -> "SUMBAGUT I"; nama area yang tidak dikenal -> '' (area diambil dari lokasinya). */
+function areaNorm(x) {
+  const s = teks(x).toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim().replace(/^SUMBAGUT\s*(1|I)$/, 'SUMBAGUT I').replace(/^SUMBAGUT\s*(2|II)$/, 'SUMBAGUT II');
+  return AREAS.indexOf(s) >= 0 ? s : '';
+}
 function tanggalTeks(x) {
   if (x instanceof Date) return { m: x.getMonth(), d: x.getDate() };
   const t = teks(x).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
@@ -369,77 +378,98 @@ function bacaLogTarikan(folder) {
 }
 
 /* ============================== HITUNG ============================== */
+/**
+ * Hasil untuk dashboard berupa tabel fakta ringkas; dashboard menjumlahkannya sesuai filter Area / Lokasi.
+ *   lok    : [[nama lokasi, indeks area]]
+ *   fakta  : [[bulan, indeks area, indeks lokasi, indeks parameter, jumlah]]
+ *   harian : [[bulan, tanggal, indeks area, indeks lokasi, DB, DD, FM]]
+ *   amt    : { all, area, lok } -> [[bulan (-2 = YTD), indeks area, indeks lokasi, nama AMT, DB, DD, FM, total, indeks parameter terbanyak]]
+ *            10 teratas per bulan untuk semua area, per area, dan per lokasi.
+ */
 function hitung(EV, AM, peta, catatan, peringatan) {
   const ada = {}; EV.forEach(e => { ada[e[0]] = 1; });
   const bulanAda = Object.keys(ada).map(Number).sort((a, b) => a - b);
 
-  // parameter per bulan (3 kategori; parameter lain tidak ditampilkan)
-  const params = [], nilai = {};
+  const params = [], pIdx = {};
   peta.urut.filter(o => o.k !== 'LAIN').forEach(o => {
     const P = o.p.toUpperCase();
+    pIdx[o.p] = params.length;
     params.push({ key: o.p, label: o.p, kat: PINDAH_KATEGORI[P] || o.k, katAsal: o.k, tipe: TIPE[P] || '-' });
-    nilai[o.p] = BULAN.map((_, m) => ada[m] ? 0 : null);
   });
-  // regional, lokasi, harian
-  const regional = {}; REGIONS.forEach(r => { regional[r] = { total: BULAN.map((_, m) => ada[m] ? 0 : null), kat: {}, lokasi: 0 }; });
-  const lok = {}, har = {};
-  EV.forEach(e => {
-    const m = e[0], r = e[2], k = e[5], n = e[6];
-    if (k === 'LAIN') return;
-    if (nilai[e[4]]) nilai[e[4]][m] += n;
-    if (!r) return;
-    const o = regional[r]; o.total[m] += n;
-    const km = o.kat[m] || (o.kat[m] = { DB: 0, DD: 0, FM: 0 }); km[k] += n;
-    if (e[3]) {
-      const L = lok[r + '|' + e[3]] || (lok[r + '|' + e[3]] = { l: e[3], r: r, m: {} });
-      const x = L.m[m] || (L.m[m] = { DB: 0, DD: 0, FM: 0, t: 0 }); x[k] += n; x.t += n;
-    }
-    const hk = m + '|' + e[1] + '|' + r;
-    const h = har[hk] || (har[hk] = [m, e[1], r, 0, 0, 0]); h[{ DB: 3, DD: 4, FM: 5 }[k]] += n;
-  });
-  const L = Object.keys(lok).map(k => lok[k]);
-  L.forEach(o => { if (Object.keys(o.m).some(m => o.m[m].t > 0)) regional[o.r].lokasi++; });
-  const lokasiBulan = {};
-  bulanAda.forEach((m, i) => {
-    const pm = m > 0 && ada[m - 1] ? m - 1 : null;
-    lokasiBulan[m] = L.map(o => {
-      const x = o.m[m] || { DB: 0, DD: 0, FM: 0, t: 0 }, p = pm === null ? null : (o.m[pm] ? o.m[pm].t : 0);
-      return { l: o.l, r: o.r, DB: x.DB, DD: x.DD, FM: x.FM, t: x.t, p: p, pm: pm, n: null, avg: null };
-    }).filter(o => o.t || o.p).sort((a, b) => b.t - a.t);
-  });
-  const lokasiYTD = L.map(o => {
-    const s = { DB: 0, DD: 0, FM: 0, t: 0 }; let n = 0;
-    Object.keys(o.m).forEach(m => { const x = o.m[m]; s.DB += x.DB; s.DD += x.DD; s.FM += x.FM; s.t += x.t; if (x.t > 0) n++; });
-    return { l: o.l, r: o.r, DB: s.DB, DD: s.DD, FM: s.FM, t: s.t, p: null, pm: null, n: n, avg: n ? s.t / n : null };
-  }).filter(o => o.t).sort((a, b) => b.t - a.t);
 
-  // TOP 10 AMT per regional per bulan (+ YTD)
-  const amt = {};
-  AM.forEach(a => {
-    const [m, r, l, nama, p, k, n] = a;
-    if (k === 'LAIN' || !r) return;
+  // Satu lokasi = satu nama & satu area di semua bulan. Ejaan disamakan (tanda hubung/spasi diabaikan, ALIAS_LOKASI),
+  // nama dan area diambil dari bulan terbaru (data tarikan mengikuti pembagian folder di Tarikan Sistem).
+  const info = {};   // kunci -> {m, nama, area: {bulan: {area: jumlah}}}
+  const catat = (m, a, l, n) => {
+    if (!l) return;
+    const k = kunciLok(l), o = info[k] || (info[k] = { m: -1, nama: l, area: {} });
+    if (m >= o.m) { o.m = m; o.nama = ALIAS_LOKASI[l] || l; }
+    if (a) { const x = o.area[m] || (o.area[m] = {}); x[a] = (x[a] || 0) + n; }
+  };
+  EV.forEach(e => catat(e[0], e[2], e[3], e[6])); AM.forEach(r => catat(r[0], r[1], r[2], r[6]));
+  const areaLok = l => { const o = l && info[kunciLok(l)]; if (!o) return '';
+    const ms = Object.keys(o.area).map(Number); if (!ms.length) return '';
+    const x = o.area[Math.max.apply(null, ms)]; return Object.keys(x).sort((a, b) => x[b] - x[a])[0]; };
+  const namaLok = l => l ? info[kunciLok(l)].nama : '(TANPA LOKASI)';
+
+  const lok = [], lokIdx = {};
+  const li = (l, ai) => { const k = ai + '|' + l; if (lokIdx[k] === undefined) { lokIdx[k] = lok.length; lok.push([l, ai]); } return lokIdx[k]; };
+  const F = {}, H = {}, KI = { DB: 4, DD: 5, FM: 6 };
+  let tanpaArea = 0;
+  EV.forEach(e => {
+    const m = e[0], pi = pIdx[e[4]], n = e[6];
+    if (pi === undefined) return;
+    const l = namaLok(e[3]), a = areaLok(e[3]) || e[2];
+    if (!a) { tanpaArea += n; return; }
+    const ai = AREAS.indexOf(a), L = li(l, ai);
+    const fk = m + '|' + L + '|' + pi; (F[fk] || (F[fk] = [m, ai, L, pi, 0]))[4] += n;
+    const hk = m + '|' + e[1] + '|' + L; (H[hk] || (H[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;
+  });
+  if (tanpaArea) catatan.push('Data: ' + tanpaArea + ' event tanpa Area dan Lokasi yang jelas tidak dihitung.');
+
+  // AMT: jumlah per (bulan & YTD) x area x lokasi x nama, lalu 10 teratas per kelompok
+  const X = {};
+  AM.forEach(r => {
+    const [m, a0, l0, nama, p, k, n] = r, pi = pIdx[p];
+    if (pi === undefined) return;
+    const l = namaLok(l0), a = areaLok(l0) || a0;
+    if (!a) return;
+    const ai = AREAS.indexOf(a), L = li(l, ai), kat = params[pi].kat;
     [m, -2].forEach(b => {
-      const key = b + '|' + r + '|' + nama;
-      const o = amt[key] || (amt[key] = { b: b, amt: nama, r: r, DB: 0, DD: 0, FM: 0, t: 0, lok: {}, par: {} });
-      o[k] += n; o.t += n; o.lok[l] = (o.lok[l] || 0) + n; o.par[p] = (o.par[p] || 0) + n;
+      const key = b + '|' + L + '|' + nama;
+      const o = X[key] || (X[key] = { b: b, a: ai, l: L, nama: nama, DB: 0, DD: 0, FM: 0, t: 0, par: {} });
+      o[kat] += n; o.t += n; o.par[pi] = (o.par[pi] || 0) + n;
     });
   });
-  const grup = {};
-  Object.keys(amt).forEach(key => { const o = amt[key], g = o.b + '|' + o.r; (grup[g] = grup[g] || []).push(o); });
-  const terbesar = obj => Object.keys(obj).sort((a, b) => obj[b] - obj[a])[0] || '';
-  const topAMT = [];
-  Object.keys(grup).forEach(g => grup[g].sort((a, b) => b.t - a.t).slice(0, 10).forEach(o => {
-    topAMT.push({ b: o.b, amt: o.amt, r: o.r, l: terbesar(o.lok), DB: o.DB, DD: o.DD, FM: o.FM, t: o.t, top: terbesar(o.par) });
-  }));
+  const terbesar = obj => +(Object.keys(obj).sort((a, b) => obj[b] - obj[a])[0] || 0);
+  const gabung = (rows, kunci) => {   // gabung baris lokasi menjadi per area / semua area
+    const G = {};
+    rows.forEach(o => {
+      const key = kunci(o) + '|' + o.nama;
+      const g = G[key] || (G[key] = { b: o.b, nama: o.nama, DB: 0, DD: 0, FM: 0, t: 0, par: {}, lokT: {}, areaT: {} });
+      g.DB += o.DB; g.DD += o.DD; g.FM += o.FM; g.t += o.t;
+      Object.keys(o.par).forEach(p => g.par[p] = (g.par[p] || 0) + o.par[p]);
+      g.lokT[o.l] = (g.lokT[o.l] || 0) + o.t; g.areaT[o.a] = (g.areaT[o.a] || 0) + o.t;
+    });
+    return Object.keys(G).map(k => { const g = G[k]; return { b: g.b, a: terbesar(g.areaT), l: terbesar(g.lokT), nama: g.nama, DB: g.DB, DD: g.DD, FM: g.FM, t: g.t, par: g.par }; });
+  };
+  const top10 = (rows, grup) => {
+    const G = {}; rows.forEach(o => (G[grup(o)] = G[grup(o)] || []).push(o));
+    const out = [];
+    Object.keys(G).forEach(g => G[g].sort((a, b) => b.t - a.t).slice(0, 10).forEach(o => out.push([o.b, o.a, o.l, o.nama, o.DB, o.DD, o.FM, o.t, terbesar(o.par)])));
+    return out;
+  };
+  const xr = Object.keys(X).map(k => X[k]);
+  const amt = AM.length ? {
+    lok: top10(xr, o => o.b + '|' + o.l),
+    area: top10(gabung(xr, o => o.b + '|' + o.a), o => o.b + '|' + o.a),
+    all: top10(gabung(xr, o => o.b), o => o.b),
+  } : null;
 
   return {
-    tahun: CFG.TAHUN, regions: REGIONS, bulanAda: bulanAda,
-    params: params, nilai: nilai, lain: {},
-    regional: regional, lokasiBulan: lokasiBulan, lokasiYTD: lokasiYTD,
-    topAMT: AM.length ? topAMT : null,
-    harian: Object.keys(har).map(k => har[k]),
-    catatan: catatan, peringatan: peringatan,
-    updated: new Date().toISOString(),
+    tahun: CFG.TAHUN, areas: AREAS, bulanAda: bulanAda, params: params, lok: lok,
+    fakta: Object.keys(F).map(k => F[k]), harian: Object.keys(H).map(k => H[k]), amt: amt,
+    catatan: catatan, peringatan: peringatan, updated: new Date().toISOString(),
   };
 }
 

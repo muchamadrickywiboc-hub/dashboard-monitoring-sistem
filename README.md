@@ -54,3 +54,8 @@ Update bulanan (rincian lengkap ada di sheet `Panduan`): buat pivot dari file me
 ## Ekspor data untuk folder Drive
 `tools/ekspor_data_drive.py <summary_rumus.xlsx> <folder_keluaran>` mengubah hasil `bangun_summary_rumus.py` menjadi file `Data <nn> <Bulan> 2026.xlsx` per bulan dan `Pengaturan Dashboard.xlsx`.
 
+
+## Dashboard RTC Pusat: filter Area & Lokasi
+
+`hitung()` mengirim tabel fakta ringkas (`lok`, `fakta`, `harian`, `amt`) dan dashboard menjumlahkannya sesuai filter **Area** (chip) dan **Lokasi** (dropdown). Semua panel, termasuk parameter per kategori, Top 10 Area, Top 10 Lokasi dan TOP 10 AMT, mengikuti filter.
+Satu lokasi memakai satu nama dan satu area di semua bulan: ejaan disamakan (tanda hubung/spasi diabaikan, `ALIAS_LOKASI` untuk lokasi yang ganti nama) dan area diambil dari bulan terbaru.
