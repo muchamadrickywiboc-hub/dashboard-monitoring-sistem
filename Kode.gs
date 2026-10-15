@@ -11,7 +11,7 @@
  *     File .xlsx yang diunggah tanpa konversi diubah otomatis ke Google Sheet bila layanan lanjutan Drive aktif.
  *   - "Tarikan 10 Oktober 2026", ... : dibuat otomatis oleh prosesTarikan() dari file harian
  *     "Tarikan_<REGIONAL>_GPS_CCTV_<yyyy-mm-dd>.xlsx" di folder-folder yang terdaftar di spreadsheet CFG.TARIKAN_ID.
- *     Format sama dengan file Data (+ kolom Sumber). Untuk bulan yang punya file Tarikan, file Data bulan itu tidak dipakai.
+ *     Format sama dengan file Data (+ kolom Sumber). Mulai CFG.BULAN_TARIKAN hanya file Tarikan yang dipakai; bulan sebelumnya memakai file Data.
  *     prosesTarikan butuh layanan lanjutan "Drive API" (Apps Script > Layanan > Drive API) untuk membaca .xlsx.
  * Semua rekap (parameter, regional, lokasi, TOP 10 AMT, event per hari) dihitung di sini, tanpa rumus spreadsheet.
  *
@@ -24,7 +24,7 @@
 const CFG = {
   FOLDER_ID: '1nUJtRTcKwJua4Am9EdiFXoQxcTALgt9e',   // folder Drive "3. Data Dashboard"
   TARIKAN_ID: '11akfRibrQLixrBicdNXazEWX-TGmgfYu4zdYYNaOEy8',   // spreadsheet "Tarikan Sistem": kolom Area | linkgdrive (folder tarikan harian per regional)
-  PAKAI_DATA_LAMA: false,  // true = bulan tanpa data tarikan tetap memakai file "Data <nn> ..." (Jan–Sep); false = hanya data tarikan
+  BULAN_TARIKAN: 10,       // mulai bulan ini (10 = Oktober) data HANYA dari tarikan (link Tarikan Sistem); bulan sebelumnya dari file "Data <nn> ..." (summary)
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
 };
@@ -125,11 +125,11 @@ function bangunData() {
     const t = n.match(/^(DATA|TARIKAN)\s+(\d{1,2})\b/i);
     if (t && +t[2] >= 1 && +t[2] <= 12) (t[1].toUpperCase() === 'TARIKAN' ? tarikan : lama)[+t[2] - 1] = f;
   }
-  // bulan yang punya file Tarikan memakai data tarikan; bulan lain memakai file Data lama (bila PAKAI_DATA_LAMA)
+  // sebelum BULAN_TARIKAN: file Data (summary); mulai BULAN_TARIKAN: hanya file Tarikan dari link Tarikan Sistem
   const dataBulan = [];
   for (let m = 0; m < 12; m++) {
-    if (tarikan[m]) dataBulan.push({ m: m, f: tarikan[m] });
-    else if (lama[m] && CFG.PAKAI_DATA_LAMA) dataBulan.push({ m: m, f: lama[m] });
+    const f = m + 1 >= CFG.BULAN_TARIKAN ? tarikan[m] : lama[m];
+    if (f) dataBulan.push({ m: m, f: f });
   }
   if (!atur) { peringatan.push('File "Pengaturan Dashboard" tidak ditemukan di folder data.'); return kosong(peringatan); }
   const ssA = SpreadsheetApp.open(atur);
@@ -157,8 +157,8 @@ function bangunData() {
     });
   });
   if (Object.keys(belum).length) peringatan.push('Case belum ada di Pemetaan (tidak dihitung): ' + Object.keys(belum).slice(0, 15).join(', '));
-  if (!dataBulan.length) peringatan.push(CFG.PAKAI_DATA_LAMA ? 'Belum ada file "Data <nomor bulan> ..." atau "Tarikan <nomor bulan> ..." (Google Sheet) di folder data.'
-    : 'Belum ada data tarikan yang selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang (atau fungsi prosesTarikan). Proses berlanjut otomatis setiap 15 menit.');
+  if (!dataBulan.length) peringatan.push('Belum ada file "Data <nomor bulan> ..." atau "Tarikan <nomor bulan> ..." (Google Sheet) di folder data.');
+  else if (!tarikan[CFG.BULAN_TARIKAN - 1]) peringatan.push('Data ' + BULAN[CFG.BULAN_TARIKAN - 1].charAt(0) + BULAN[CFG.BULAN_TARIKAN - 1].slice(1).toLowerCase() + ' dan seterusnya menunggu file tarikan selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang.');
   const log = bacaLogTarikan(folder);
   if (log.gagal.length) peringatan.push('File tarikan gagal dibaca: ' + log.gagal.slice(0, 5).join('; '));
   return hitung(EV, AM, peta, catatan, peringatan);
@@ -282,7 +282,7 @@ function daftarTarikan() {
     const it = DriveApp.getFolderById(id).getFiles();
     while (it.hasNext()) {
       const f = it.next(), nama = f.getName(), t = nama.match(/(\d{4})-(\d{2})-(\d{2})/);
-      if (!/TARIKAN/i.test(nama) || !t || +t[1] !== CFG.TAHUN) continue;
+      if (!/TARIKAN/i.test(nama) || !t || +t[1] !== CFG.TAHUN || +t[2] < CFG.BULAN_TARIKAN) continue;
       const mime = f.getMimeType();
       if (mime !== MimeType.MICROSOFT_EXCEL && mime !== MimeType.GOOGLE_SHEETS) continue;
       out.push({ id: f.getId(), nama: nama, area: area.toUpperCase(), tgl: t[1] + '-' + t[2] + '-' + t[3], diubah: f.getLastUpdated().getTime(), mime: mime, file: f });
