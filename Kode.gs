@@ -30,7 +30,7 @@ const CFG = {
 };
 const REGIONS = ['SUMBAGUT', 'SUMBAGSEL', 'JABALINUS', 'KALIMANTAN', 'SULAWESI', 'MALUPA'];
 /** Area = satuan filter dashboard (kolom Area di data). */
-const AREAS = ['SUMBAGUT I', 'SUMBAGUT II', 'SUMBAGSEL', 'JABALINUS', 'KALIMANTAN', 'SULAWESI', 'MALUPA'];
+const AREAS = ['SUMBAGUT', 'SUMBAGSEL', 'JABALINUS', 'KALIMANTAN', 'SULAWESI', 'MALUPA'];   // Sumbagut I & II digabung
 const BULAN = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
 const KATEGORI = { 'DRIVING BEHAVIOUR': 'DB', 'DRIVER DISCIPLINE': 'DD', 'FATIGUE MANAGEMENT': 'FM' };
 /** Parameter yang dipindah kategorinya di dashboard (nama parameter huruf besar -> kode kategori). */
@@ -229,9 +229,9 @@ const ALIAS_LOKASI = {
   'FT GORONTALO': 'IT GORONTALO', 'FT KENDARI': 'IT KENDARI',
 };
 function kunciLok(l) { const u = teks(l).toUpperCase(); return (ALIAS_LOKASI[u] || u).replace(/[^A-Z0-9]/g, ''); }
-/** "Sumbagut 1" / "SUMBAGUT I" -> "SUMBAGUT I"; nama area yang tidak dikenal -> '' (area diambil dari lokasinya). */
+/** "Sumbagut 1" / "SUMBAGUT II" -> "SUMBAGUT"; nama area yang tidak dikenal -> '' (area diambil dari lokasinya). */
 function areaNorm(x) {
-  const s = teks(x).toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim().replace(/^SUMBAGUT\s*(1|I)$/, 'SUMBAGUT I').replace(/^SUMBAGUT\s*(2|II)$/, 'SUMBAGUT II');
+  const s = teks(x).toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim().replace(/^SUMBAGUT\s*(1|2|I|II)$/, 'SUMBAGUT');
   return AREAS.indexOf(s) >= 0 ? s : '';
 }
 function tanggalTeks(x) {
