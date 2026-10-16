@@ -259,16 +259,16 @@ function buatSheetAkun() {
   const pesan = baru.length ? baru.length + ' akun baru ditambahkan dengan password acak. Catat/bagikan password-nya, lalu jalankan menu "Amankan password akun".' : 'Semua akun sudah ada, tidak ada yang ditambahkan.';
   try { SpreadsheetApp.getUi().alert(pesan); } catch (e) { Logger.log(pesan); }
 }
-/** Password pendek yang mudah diingat: username tanpa titik + 4 angka acak, mis. ft.jambi -> ftjambi4827. */
+/** Password pendek yang mudah diingat: username tanpa titik + 2 angka acak, mis. ft.jambi -> ftjambi48. */
 function pwPendek_(u) {
-  return teks(u).toLowerCase().replace(/[^a-z0-9]/g, '') + String(1000 + Math.floor(Math.random() * 9000));
+  return teks(u).toLowerCase().replace(/[^a-z0-9]/g, '') + String(10 + Math.floor(Math.random() * 90));
 }
 /** Menu: mengganti password SEMUA akun dengan format pendek (teks biasa) supaya bisa dicatat & dibagikan, lalu amankan lagi. */
 function buatUlangPasswordAkun() {
   const sh = sheetAkun_(); if (!sh || sh.getLastRow() < 2) return;
   try {
     const ui = SpreadsheetApp.getUi();
-    if (ui.alert('Password semua akun akan diganti dengan format pendek (username + 4 angka). Password lama tidak berlaku lagi. Lanjutkan?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+    if (ui.alert('Password semua akun akan diganti dengan format pendek (username + 2 angka). Password lama tidak berlaku lagi. Lanjutkan?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   } catch (e) {}
   const rg = sh.getRange(2, 1, sh.getLastRow() - 1, 2), v = rg.getValues();
   let n = 0;
