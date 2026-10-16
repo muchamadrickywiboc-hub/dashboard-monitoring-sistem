@@ -247,12 +247,12 @@ function buatSheetAkun() {
   const judul = x => teks(x).toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
   const baru = [];
   const tambah = (k, u, nama, peran, area, lok) => { if (adaK[k]) return; adaK[k] = 1; const v = unik(u); baru.push([v, pwPendek_(v), nama, peran, area, lok, 'YA']); };
-  tambah('PUSAT|', 'pusat', 'RTC Pusat', 'PUSAT', '', '');
-  AREAS.forEach(a => tambah('AREA|' + a, slug(a), 'Area ' + judul(a), 'AREA', a, ''));
+  tambah('PUSAT|', 'pusat', 'RTC', 'PUSAT', '', '');
+  AREAS.forEach(a => tambah('AREA|' + a, slug(a), 'Command Center ' + judul(a), 'AREA', a, ''));
   const d = JSON.parse(dataUtama_()), lokSudah = {};
   d.lok.map(x => ({ nama: x[0], area: AREAS[x[1]] || '' })).filter(o => o.nama && !/^\(TANPA/.test(o.nama))
     .sort((a, b) => AREAS.indexOf(a.area) - AREAS.indexOf(b.area) || (a.nama < b.nama ? -1 : 1))
-    .forEach(o => { const k = kunciLok(o.nama); if (lokSudah[k]) return; lokSudah[k] = 1; tambah('LOKASI|' + k, slug(o.nama), 'Lokasi ' + o.nama, 'LOKASI', o.area, o.nama); });
+    .forEach(o => { const k = kunciLok(o.nama); if (lokSudah[k]) return; lokSudah[k] = 1; tambah('LOKASI|' + k, slug(o.nama), 'Control Room ' + o.nama, 'LOKASI', o.area, o.nama); });
   if (baru.length) sh.getRange(sh.getLastRow() + 1, 1, baru.length, AKUN_HDR.length).setValues(baru);
   CacheService.getScriptCache().remove('LGLIST');
   sh.autoResizeColumns(1, AKUN_HDR.length);
