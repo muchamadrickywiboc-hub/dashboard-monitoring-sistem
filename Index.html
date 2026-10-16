@@ -80,6 +80,29 @@ h1{margin:2px 0 4px;font-size:clamp(24px,3.2vw,36px);font-weight:700;letter-spac
 .lg-list button:hover,.lg-list button.aktif{background:var(--accent-wash)}
 .lg-list button em{font-style:normal;min-width:0}.lg-list button span{font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap}
 .lg-list mark{background:#e9f2c2;color:inherit;border-radius:3px}
+.lg-load{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(247,248,244,.82);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);animation:lgfade .2s ease}
+.lg-load[hidden]{display:none}
+@keyframes lgfade{from{opacity:0}to{opacity:1}}
+.lg-load-box{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--grid);border-radius:20px;padding:28px 26px 24px;box-shadow:0 24px 60px rgba(31,61,40,.16);display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px}
+.lg-load-ico{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:var(--accent-wash);color:var(--forest)}
+.lg-load-ico svg{width:30px;height:30px}
+.lg-ring{width:34px;height:34px;border-radius:50%;border:3.5px solid rgba(63,110,75,.18);border-top-color:var(--forest);animation:sp .8s linear infinite}
+.lg-load.gagal .lg-load-ico{background:#fbe9e7;color:var(--serious-ink)}
+.lg-load.ok .lg-load-ico{background:var(--accent-wash);color:var(--forest)}
+.lg-load-box h3{margin:2px 0 0;font-size:19px}
+.lg-load-steps{list-style:none;margin:4px 0 0;padding:0;width:100%;display:flex;flex-direction:column;gap:8px;text-align:left}
+.lg-load-steps li{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--muted);background:var(--bg);border-radius:10px;padding:9px 12px}
+.lg-load-steps li::before{content:"";width:16px;height:16px;flex:none;border-radius:50%;border:2px solid var(--grid);box-sizing:border-box}
+.lg-load-steps li.jalan{color:var(--ink);font-weight:600}
+.lg-load-steps li.jalan::before{border-color:rgba(63,110,75,.2);border-top-color:var(--forest);animation:sp .8s linear infinite}
+.lg-load-steps li.ok{color:var(--ink-2)}
+.lg-load-steps li.ok::before{border:0;background:var(--forest) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.3l2.6 2.5L12 5.5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat}
+.lg-load-steps li.gagal{color:var(--serious-ink);font-weight:600}
+.lg-load-steps li.gagal::before{border:0;background:var(--serious-ink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5.2 5.2l5.6 5.6M10.8 5.2l-5.6 5.6' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/100% no-repeat}
+.lg-load-pesan{margin:0;font-size:13px;color:var(--muted);min-height:1em}
+.lg-load.gagal .lg-load-pesan{color:var(--serious-ink)}
+.lg-load-aksi{display:flex;gap:10px;width:100%}.lg-load-aksi[hidden]{display:none}.lg-load-aksi .lg-go{flex:1}
+.lg-load-aksi .lg-sec{flex:1;appearance:none;border:1.5px solid var(--grid);background:var(--surface);border-radius:12px;padding:13px;font:600 14.5px var(--f-ui);color:var(--ink-2);cursor:pointer}
 .lg-kosong{color:var(--muted);font-size:13px;padding:10px}
 .lg-pilih{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1.5px solid var(--forest);background:var(--accent-wash);border-radius:12px;padding:11px 14px}
 .lg-pilih b{display:block}.lg-pilih small{color:var(--muted)}
@@ -328,6 +351,15 @@ td{padding:7px 10px}
         </div>
       </div>
     </form>
+    </div>
+    <div class="lg-load" id="lgLoad" hidden role="status" aria-live="polite">
+      <div class="lg-load-box">
+        <div class="lg-load-ico" id="lgLoadIco"><span class="lg-ring"></span></div>
+        <h3 id="lgLoadJudul">Memeriksa akun…</h3>
+        <ol class="lg-load-steps"><li id="lgS1">Memeriksa username &amp; password</li><li id="lgS2">Memuat data dashboard</li></ol>
+        <p class="lg-load-pesan" id="lgLoadPesan"></p>
+        <div class="lg-load-aksi" id="lgLoadAksi" hidden><button type="button" class="lg-sec" id="lgLoadTutup">Kembali</button><button type="button" class="lg-go" id="lgLoadUlang">Coba lagi</button></div>
+      </div>
     </div>
     <div class="lg-bottom"><span>Elnusa Petrofin · RTC</span><span>Driving Behaviour · Driver Discipline · Fatigue Management</span></div>
   </section>
@@ -817,6 +849,7 @@ function render() {
 const REFRESH_MS = 5*60*1000;
 function start(json) {
   const p = JSON.parse(json);
+  if (LGLANGKAH) lgTutupProses();
   const wasLatest = !D || mon === LAST;
   terapkanAkun(p);
   RAW = p; D = Object.assign({}, p); REG = p.areas; P = p.params; if (selLok >= p.lok.length) selLok = -1; ADA = D.bulanAda || []; LAST = ADA.length ? ADA[ADA.length - 1] : -1;
@@ -842,6 +875,7 @@ const lgEl = id => document.getElementById(id);
 const lgEsc = x => String(x).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 const lgNorm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 function tampilLogin(pesan) {
+  if (LGLANGKAH) lgTutupProses();
   document.body.classList.add('nologin'); lgEl('loginwrap').hidden = false; lgEl('akunBox').hidden = true;
   if (!lgEl('lgLogo').children.length) document.querySelectorAll('.brandbar .tab img').forEach(im => lgEl('lgLogo').appendChild(im.cloneNode()));
   lgEl('lgTgl').textContent = new Date().toLocaleDateString('id-ID', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'});
@@ -944,14 +978,39 @@ function kunciCakupan() {
   const i = RAW.lok.findIndex(x => x[0]);
   if (i >= 0) { selLok = i; sel = RAW.areas[RAW.lok[i][1]]; } else if (AKUN.area) sel = AKUN.area;
 }
+// layar proses login: langkah 1 periksa password, langkah 2 muat data
+const LG_IKON = {ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>', gagal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 7.5v6"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>'};
+let LGLANGKAH = 0, LGTIMER = 0;
+function lgProses(langkah) {
+  LGLANGKAH = langkah; clearTimeout(LGTIMER);
+  const L = lgEl('lgLoad'); L.hidden = false; L.className = 'lg-load' + (langkah === 3 ? ' ok' : '');
+  lgEl('lgLoadIco').innerHTML = langkah === 3 ? LG_IKON.ok : '<span class="lg-ring"></span>';
+  lgEl('lgS1').className = langkah === 1 ? 'jalan' : 'ok'; lgEl('lgS2').className = langkah === 2 ? 'jalan' : langkah === 3 ? 'ok' : '';
+  lgEl('lgLoadJudul').textContent = langkah === 1 ? 'Memeriksa akun…' : langkah === 2 ? 'Login berhasil' : 'Data siap';
+  lgEl('lgLoadPesan').textContent = langkah === 1 ? 'Mohon tunggu sebentar.' : langkah === 2 ? 'Menyiapkan data dashboard sesuai cakupan akun Anda…' : 'Membuka dashboard…';
+  lgEl('lgLoadAksi').hidden = true;
+  if (langkah === 2) LGTIMER = setTimeout(() => { if (LGLANGKAH === 2) lgEl('lgLoadPesan').textContent = 'Data sedang disiapkan. Saat pertama dibuka ini bisa memakan waktu hingga 1 menit.'; }, 8000);
+}
+function lgGagalProses(pesan) {
+  clearTimeout(LGTIMER);
+  const s2 = LGLANGKAH === 2; lgEl('lgLoad').hidden = false; lgEl('lgLoad').className = 'lg-load gagal';
+  lgEl('lgLoadIco').innerHTML = LG_IKON.gagal;
+  lgEl('lgS1').className = s2 ? 'ok' : 'gagal'; lgEl('lgS2').className = s2 ? 'gagal' : '';
+  lgEl('lgLoadJudul').textContent = s2 ? 'Data gagal dimuat' : 'Login gagal';
+  lgEl('lgLoadPesan').textContent = pesan || 'Terjadi kesalahan. Coba lagi.';
+  lgEl('lgLoadUlang').textContent = s2 ? 'Muat ulang data' : 'Coba lagi'; lgEl('lgLoadAksi').hidden = false; lgEl('lgLoadUlang').focus();
+}
+function lgTutupProses() { clearTimeout(LGTIMER); LGLANGKAH = 0; lgEl('lgLoad').hidden = true; }
+lgEl('lgLoadTutup').onclick = () => { const s2 = LGLANGKAH === 2; lgTutupProses(); if (s2) { TOKEN = ''; simpanToken(''); } lgEl('lgP').focus(); };
+lgEl('lgLoadUlang').onclick = () => { if (LGLANGKAH === 2) { lgProses(2); muat(); } else { lgTutupProses(); lgEl('lgP').select(); } };
 lgEl('loginForm').onsubmit = e => {
   e.preventDefault();
   const u = LGU, pw = lgEl('lgP').value, b = lgEl('lgBtn');
   if (!u) { lgEl('lgErr').textContent = LGPERAN === 'LOKASI' ? 'Pilih Control Room terlebih dahulu.' : LGPERAN === 'AREA' ? 'Pilih Command Center terlebih dahulu.' : 'Isi username.'; return; }
   if (!pw) { lgEl('lgErr').textContent = 'Masukkan password.'; lgEl('lgP').focus(); return; }
-  b.disabled = true; b.textContent = 'Memeriksa…'; lgEl('lgErr').textContent = '';
-  google.script.run.withSuccessHandler(j => { const a = JSON.parse(j); TOKEN = a.token; simpanToken(TOKEN); lgEl('lgP').value = ''; b.disabled = false; b.textContent = 'Masuk'; muat(); })
-    .withFailureHandler(err => { b.disabled = false; b.textContent = 'Masuk'; lgEl('lgErr').textContent = err && err.message ? err.message : String(err); lgEl('lgP').select(); }).login(u, pw);
+  b.disabled = true; lgEl('lgErr').textContent = ''; lgProses(1);
+  google.script.run.withSuccessHandler(j => { const a = JSON.parse(j); TOKEN = a.token; simpanToken(TOKEN); lgEl('lgP').value = ''; b.disabled = false; lgProses(2); muat(); })
+    .withFailureHandler(err => { b.disabled = false; const m = err && err.message ? err.message : String(err); lgEl('lgErr').textContent = m; lgGagalProses(m); }).login(u, pw);
 };
 document.getElementById('btnKeluar').onclick = () => {
   if (TOKEN) google.script.run.withSuccessHandler(() => {}).withFailureHandler(() => {}).logout(TOKEN);
@@ -961,7 +1020,7 @@ document.getElementById('btnKeluar').onclick = () => {
 function muat(diam) {
   if (!TOKEN) { tampilLogin(''); return; }
   if (!diam || !D) { const l = document.getElementById('loading'); l.hidden = false; l.innerHTML = '<span class="spin"></span> Memuat data dashboard…'; }
-  google.script.run.withSuccessHandler(start).withFailureHandler(e => { if (perluLogin(e)) return; if (!(diam && D)) gagal(e); }).getDashboardData(TOKEN);
+  google.script.run.withSuccessHandler(start).withFailureHandler(e => { if (LGLANGKAH === 2 && !/LOGIN/.test(e && e.message ? e.message : String(e))) return lgGagalProses('Data gagal dimuat: ' + (e && e.message ? e.message : e)); if (perluLogin(e)) return; if (!(diam && D)) gagal(e); }).getDashboardData(TOKEN);
 }
 muat();
 setInterval(() => { if (TOKEN && D) muat(true); }, REFRESH_MS);
