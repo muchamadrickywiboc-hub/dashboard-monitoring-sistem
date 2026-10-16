@@ -54,6 +54,7 @@ function onOpen() {
       .addSeparator()
       .addItem('Buat / lengkapi akun (Pusat, Area, Lokasi)', 'buatSheetAkun')
       .addItem('Amankan password akun', 'amankanPasswordAkun')
+      .addItem('Buat ulang semua password (format pendek)', 'buatUlangPasswordAkun')
       .addToUi();
   } catch (e) { /* dijalankan dari luar spreadsheet */ }
 }
@@ -206,7 +207,7 @@ function potongJson_(json, ses, awalan) {
 }
 
 /**
- * Menu: membuat / melengkapi sheet Akun. Akun yang belum ada ditambahkan dengan password acak:
+ * Menu: membuat / melengkapi sheet Akun. Akun yang belum ada ditambahkan dengan password pendek (username + 4 angka):
  * 1 akun Pusat, 1 akun per Area, dan 1 akun per Lokasi yang ada di data dashboard. Baris yang sudah ada tidak diubah,
  * jadi menu ini aman dijalankan lagi saat ada lokasi baru.
  */
@@ -217,12 +218,11 @@ function buatSheetAkun() {
   const lama = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, AKUN_HDR.length).getValues() : [];
   const adaU = {}, adaK = {};
   lama.forEach(r => { adaU[teks(r[0]).toLowerCase()] = 1; const c = teks(r[0]).toLowerCase() === 'contoh.lokasi' ? null : cakupanAkun_(r); if (c) adaK[c.peran + '|' + (c.peran === 'LOKASI' ? kunciLok(c.lok) : c.area || '')] = 1; });
-  const acak = () => Utilities.getUuid().replace(/-/g, '').slice(0, 10);
   const slug = x => teks(x).toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
   const unik = u => { let v = u, i = 2; while (adaU[v]) v = u + i++; adaU[v] = 1; return v; };
   const judul = x => teks(x).toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
   const baru = [];
-  const tambah = (k, u, nama, peran, area, lok) => { if (adaK[k]) return; adaK[k] = 1; baru.push([unik(u), acak(), nama, peran, area, lok, 'YA']); };
+  const tambah = (k, u, nama, peran, area, lok) => { if (adaK[k]) return; adaK[k] = 1; const v = unik(u); baru.push([v, pwPendek_(v), nama, peran, area, lok, 'YA']); };
   tambah('PUSAT|', 'pusat', 'RTC Pusat', 'PUSAT', '', '');
   AREAS.forEach(a => tambah('AREA|' + a, slug(a), 'Area ' + judul(a), 'AREA', a, ''));
   const d = JSON.parse(dataUtama_()), lokSudah = {};
@@ -232,6 +232,24 @@ function buatSheetAkun() {
   if (baru.length) sh.getRange(sh.getLastRow() + 1, 1, baru.length, AKUN_HDR.length).setValues(baru);
   sh.autoResizeColumns(1, AKUN_HDR.length);
   const pesan = baru.length ? baru.length + ' akun baru ditambahkan dengan password acak. Catat/bagikan password-nya, lalu jalankan menu "Amankan password akun".' : 'Semua akun sudah ada, tidak ada yang ditambahkan.';
+  try { SpreadsheetApp.getUi().alert(pesan); } catch (e) { Logger.log(pesan); }
+}
+/** Password pendek yang mudah diingat: username tanpa titik + 4 angka acak, mis. ft.jambi -> ftjambi4827. */
+function pwPendek_(u) {
+  return teks(u).toLowerCase().replace(/[^a-z0-9]/g, '') + String(1000 + Math.floor(Math.random() * 9000));
+}
+/** Menu: mengganti password SEMUA akun dengan format pendek (teks biasa) supaya bisa dicatat & dibagikan, lalu amankan lagi. */
+function buatUlangPasswordAkun() {
+  const sh = sheetAkun_(); if (!sh || sh.getLastRow() < 2) return;
+  try {
+    const ui = SpreadsheetApp.getUi();
+    if (ui.alert('Password semua akun akan diganti dengan format pendek (username + 4 angka). Password lama tidak berlaku lagi. Lanjutkan?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  } catch (e) {}
+  const rg = sh.getRange(2, 1, sh.getLastRow() - 1, 2), v = rg.getValues();
+  let n = 0;
+  v.forEach(r => { const u = teks(r[0]).toLowerCase(); if (u && u !== 'contoh.lokasi') { r[1] = pwPendek_(u); n++; } });
+  rg.setValues(v);
+  const pesan = n + ' password diganti. Catat/bagikan password-nya, lalu jalankan menu "Amankan password akun".';
   try { SpreadsheetApp.getUi().alert(pesan); } catch (e) { Logger.log(pesan); }
 }
 /** Menu: mengubah password yang masih teks biasa menjadi sidik SHA-256 (tidak bisa dibaca lagi). */
