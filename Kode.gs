@@ -62,6 +62,7 @@ function onOpen() {
 function hapusCache() {
   CacheService.getScriptCache().remove('DASHB4_N');
   CacheService.getScriptCache().remove('DASHB4');
+  CacheService.getScriptCache().remove('LGLIST');
   try { SpreadsheetApp.getActiveSpreadsheet().toast('Cache dihapus. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Cache dihapus.'); }
 }
 
@@ -171,6 +172,29 @@ function login(username, password) {
   cache.remove(kg);
   return JSON.stringify(Object.assign({ token: token }, ses));
 }
+/**
+ * Dipanggil halaman masuk (tanpa login): daftar akun aktif untuk pilihan Pusat / Area / Lokasi.
+ * Hanya username, nama, area, lokasi yang dikirim; password tidak pernah keluar dari server.
+ */
+function daftarLogin() {
+  const cache = CacheService.getScriptCache(), ada = cache.get('LGLIST');
+  if (ada) return ada;
+  const sh = sheetAkun_(), v = sh && sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, AKUN_HDR.length).getValues() : [];
+  const out = { pusat: [], area: [], lokasi: [] };
+  v.forEach(r => {
+    const u = teks(r[0]).toLowerCase();
+    if (!u || u === 'contoh.lokasi' || !teks(r[1]) || /^(TIDAK|NO|FALSE|0|NONAKTIF)$/i.test(teks(r[6]))) return;
+    const c = cakupanAkun_(r); if (!c) return;
+    if (c.peran === 'PUSAT') out.pusat.push({ u: u, nama: c.nama });
+    else if (c.peran === 'AREA') out.area.push({ u: u, nama: c.nama, area: c.area });
+    else out.lokasi.push({ u: u, lok: c.lok, area: c.area || '' });
+  });
+  out.area.sort((a, b) => AREAS.indexOf(a.area) - AREAS.indexOf(b.area));
+  out.lokasi.sort((a, b) => a.lok < b.lok ? -1 : a.lok > b.lok ? 1 : 0);
+  const json = JSON.stringify(out);
+  cache.put('LGLIST', json, 600);
+  return json;
+}
 function logout(token) { if (token) CacheService.getScriptCache().remove('SES_' + token); }
 function sesi_(token) {
   const s = token && /^[0-9a-f]{64}$/.test(String(token)) ? CacheService.getScriptCache().get('SES_' + token) : null;
@@ -230,6 +254,7 @@ function buatSheetAkun() {
     .sort((a, b) => AREAS.indexOf(a.area) - AREAS.indexOf(b.area) || (a.nama < b.nama ? -1 : 1))
     .forEach(o => { const k = kunciLok(o.nama); if (lokSudah[k]) return; lokSudah[k] = 1; tambah('LOKASI|' + k, slug(o.nama), 'Lokasi ' + o.nama, 'LOKASI', o.area, o.nama); });
   if (baru.length) sh.getRange(sh.getLastRow() + 1, 1, baru.length, AKUN_HDR.length).setValues(baru);
+  CacheService.getScriptCache().remove('LGLIST');
   sh.autoResizeColumns(1, AKUN_HDR.length);
   const pesan = baru.length ? baru.length + ' akun baru ditambahkan dengan password acak. Catat/bagikan password-nya, lalu jalankan menu "Amankan password akun".' : 'Semua akun sudah ada, tidak ada yang ditambahkan.';
   try { SpreadsheetApp.getUi().alert(pesan); } catch (e) { Logger.log(pesan); }
