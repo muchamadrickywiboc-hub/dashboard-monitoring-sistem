@@ -907,7 +907,7 @@ function lgLangkah2(peran) {
     lgEl('lgJudul').textContent = 'Masuk sebagai RTC';
     const L = LGD.pusat || [];
     if (!L.length) return lgManual(box);
-    if (L.length === 1) return lgPw(L[0].u, 'Password ' + L[0].nama);
+    if (L.length === 1) return lgPw(L[0].u, 'Password RTC');
     box.innerHTML = '<div class="lg-lbl">Pilih akun</div><div class="lg-areas">' + L.map(a => `<button type="button" data-u="${lgEsc(a.u)}" aria-pressed="false"><i style="background:var(--forest)"></i>${lgEsc(a.nama)}</button>`).join('') + '</div>';
   } else if (peran === 'AREA') {
     lgEl('lgJudul').textContent = 'Pilih Command Center Anda';
@@ -922,7 +922,7 @@ function lgLangkah2(peran) {
   }
   box.querySelectorAll('.lg-areas button').forEach(b => b.onclick = () => {
     box.querySelectorAll('.lg-areas button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
-    lgPw(b.dataset.u, 'Password ' + b.textContent.trim());
+    lgPw(b.dataset.u, 'Password ' + (peran === 'AREA' ? 'Command Center ' : '') + b.textContent.trim());
   });
 }
 function lgCari(box) {
