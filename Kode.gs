@@ -52,7 +52,7 @@ function onOpen() {
       .addItem('Proses file tarikan sekarang', 'prosesTarikan')
       .addItem('Proses ulang semua file tarikan', 'prosesUlangSemuaTarikan')
       .addSeparator()
-      .addItem('Buat sheet Akun', 'buatSheetAkun')
+      .addItem('Buat / lengkapi akun (Pusat, Area, Lokasi)', 'buatSheetAkun')
       .addItem('Amankan password akun', 'amankanPasswordAkun')
       .addToUi();
   } catch (e) { /* dijalankan dari luar spreadsheet */ }
@@ -205,18 +205,34 @@ function potongJson_(json, ses, awalan) {
   return out;
 }
 
-/** Menu: membuat sheet Akun berisi contoh akun Pusat, Area, dan Lokasi dengan password acak. */
+/**
+ * Menu: membuat / melengkapi sheet Akun. Akun yang belum ada ditambahkan dengan password acak:
+ * 1 akun Pusat, 1 akun per Area, dan 1 akun per Lokasi yang ada di data dashboard. Baris yang sudah ada tidak diubah,
+ * jadi menu ini aman dijalankan lagi saat ada lokasi baru.
+ */
 function buatSheetAkun() {
   const ss = SpreadsheetApp.open(fileAtur_());
-  if (ss.getSheetByName('Akun')) { try { SpreadsheetApp.getUi().alert('Sheet Akun sudah ada.'); } catch (e) { Logger.log('Sheet Akun sudah ada.'); } return; }
-  const sh = ss.insertSheet('Akun'), acak = () => Utilities.getUuid().replace(/-/g, '').slice(0, 10);
-  const rows = [['pusat', acak(), 'RTC Pusat', 'PUSAT', '', '', 'YA']]
-    .concat(AREAS.map(a => [a.toLowerCase(), acak(), 'Area ' + a.charAt(0) + a.slice(1).toLowerCase(), 'AREA', a, '', 'YA']))
-    .concat([['contoh.lokasi', acak(), 'Lokasi FT Jambi', 'LOKASI', 'SUMBAGSEL', 'FT JAMBI', 'TIDAK']]);
-  sh.getRange(1, 1, 1, AKUN_HDR.length).setValues([AKUN_HDR]).setFontWeight('bold');
-  sh.getRange(2, 1, rows.length, AKUN_HDR.length).setValues(rows);
-  sh.setFrozenRows(1); sh.autoResizeColumns(1, AKUN_HDR.length);
-  try { SpreadsheetApp.getUi().alert('Sheet Akun dibuat dengan password acak. Catat/bagikan password-nya, lalu jalankan menu "Amankan password akun".'); } catch (e) { /* editor */ }
+  let sh = ss.getSheetByName('Akun');
+  if (!sh) { sh = ss.insertSheet('Akun'); sh.getRange(1, 1, 1, AKUN_HDR.length).setValues([AKUN_HDR]).setFontWeight('bold'); sh.setFrozenRows(1); }
+  const lama = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, AKUN_HDR.length).getValues() : [];
+  const adaU = {}, adaK = {};
+  lama.forEach(r => { adaU[teks(r[0]).toLowerCase()] = 1; const c = teks(r[0]).toLowerCase() === 'contoh.lokasi' ? null : cakupanAkun_(r); if (c) adaK[c.peran + '|' + (c.peran === 'LOKASI' ? kunciLok(c.lok) : c.area || '')] = 1; });
+  const acak = () => Utilities.getUuid().replace(/-/g, '').slice(0, 10);
+  const slug = x => teks(x).toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+  const unik = u => { let v = u, i = 2; while (adaU[v]) v = u + i++; adaU[v] = 1; return v; };
+  const judul = x => teks(x).toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
+  const baru = [];
+  const tambah = (k, u, nama, peran, area, lok) => { if (adaK[k]) return; adaK[k] = 1; baru.push([unik(u), acak(), nama, peran, area, lok, 'YA']); };
+  tambah('PUSAT|', 'pusat', 'RTC Pusat', 'PUSAT', '', '');
+  AREAS.forEach(a => tambah('AREA|' + a, slug(a), 'Area ' + judul(a), 'AREA', a, ''));
+  const d = JSON.parse(dataUtama_()), lokSudah = {};
+  d.lok.map(x => ({ nama: x[0], area: AREAS[x[1]] || '' })).filter(o => o.nama && !/^\(TANPA/.test(o.nama))
+    .sort((a, b) => AREAS.indexOf(a.area) - AREAS.indexOf(b.area) || (a.nama < b.nama ? -1 : 1))
+    .forEach(o => { const k = kunciLok(o.nama); if (lokSudah[k]) return; lokSudah[k] = 1; tambah('LOKASI|' + k, slug(o.nama), 'Lokasi ' + o.nama, 'LOKASI', o.area, o.nama); });
+  if (baru.length) sh.getRange(sh.getLastRow() + 1, 1, baru.length, AKUN_HDR.length).setValues(baru);
+  sh.autoResizeColumns(1, AKUN_HDR.length);
+  const pesan = baru.length ? baru.length + ' akun baru ditambahkan dengan password acak. Catat/bagikan password-nya, lalu jalankan menu "Amankan password akun".' : 'Semua akun sudah ada, tidak ada yang ditambahkan.';
+  try { SpreadsheetApp.getUi().alert(pesan); } catch (e) { Logger.log(pesan); }
 }
 /** Menu: mengubah password yang masih teks biasa menjadi sidik SHA-256 (tidak bisa dibaca lagi). */
 function amankanPasswordAkun() {

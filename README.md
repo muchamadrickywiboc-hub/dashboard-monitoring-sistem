@@ -71,7 +71,7 @@ Satu lokasi memakai satu nama dan satu area di semua bulan: ejaan disamakan (tan
 ## Akun Pusat, Area, Lokasi
 
 - Dashboard sekarang meminta login. Akun disimpan di sheet **Akun** pada file Pengaturan Dashboard: `Username | Password | Nama | Peran (PUSAT / AREA / LOKASI) | Area | Lokasi | Aktif`.
-- Buat sheetnya lewat menu **Dashboard > Buat sheet Akun** (berisi akun pusat, 6 akun area, dan contoh akun lokasi, dengan password acak). Setelah password dicatat, jalankan **Dashboard > Amankan password akun** supaya password disimpan sebagai sidik SHA-256.
+- Buat akunnya lewat menu **Dashboard > Buat / lengkapi akun (Pusat, Area, Lokasi)**: 1 akun Pusat, 1 akun per Area, dan 1 akun per Lokasi yang ada di data, masing-masing dengan password acak. Menu ini aman dijalankan lagi untuk menambah akun lokasi baru. Setelah password dicatat, jalankan **Dashboard > Amankan password akun** supaya password disimpan sebagai sidik SHA-256.
 - Data dipotong di server (`potongCakupan_`): akun Area hanya menerima data areanya, akun Lokasi hanya lokasinya. Fungsi pembaca data berakhiran `_` supaya tidak bisa dipanggil langsung dari browser.
 - Sesi login berlaku 6 jam; 5 kali salah password mengunci username itu 15 menit.
 - Deploy web app: Jalankan sebagai **Saya**, akses **Siapa saja** (tanpa akun, pengunjung hanya melihat halaman masuk).
