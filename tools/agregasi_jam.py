@@ -67,7 +67,7 @@ for p in FILES:
     for sn in wb.sheet_names:
         try: rows = wb.get_sheet_by_name(sn).to_python(skip_empty_area=False)
         except Exception as e: fi['sheets'].append([sn, 'ERR ' + str(e)[:60]]); continue
-        hdr = None; n = 0
+        hdr = None; n = 0; jamOk = True
         for r in rows:
             if hdr is None:
                 h = [T(x) for x in r]
@@ -83,6 +83,12 @@ for p in FILES:
                     ij = g('JAM'); igps = g('GPS/CCTV')
                     idt = [i for i, k in enumerate(h) if k in ('TANGGAL CCTV', 'TANGGAL & JAM CCTV', 'TANGGAL & JAM', 'TANGGAL DAN JAM', 'WAKTU', 'TIME', 'START ALERT')]
                     ibl = [i for i, k in enumerate(h) if not k and i > itg]
+                    # kolom JAM yang berisi angka >= 24 (mis. durasi) bukan jam kejadian: abaikan untuk sheet ini
+                    if ij is not None:
+                        num = [x[ij] for x in rows if ij < len(x) and isinstance(x[ij], (int, float))]
+                        besar = sum(1 for x in num if x >= 24); nol = sum(1 for x in num if x == 0)
+                        if num and (besar / len(num) > 0.002 or nol / len(num) > 0.25):   # jam 00 normalnya < 10% event
+                            ij = None; info.setdefault('jam_diabaikan', []).append([p.split('/2026/', 1)[-1], sn, besar, len(num)])
                 continue
             L = len(r); V = lambda i: r[i] if i is not None and i < L else None
             case = T(V(ic))
