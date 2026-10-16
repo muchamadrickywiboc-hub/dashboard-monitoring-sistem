@@ -55,6 +55,7 @@ function onOpen() {
       .addItem('Buat / lengkapi akun (Pusat, Area, Lokasi)', 'buatSheetAkun')
       .addItem('Amankan password akun', 'amankanPasswordAkun')
       .addItem('Buat ulang semua password (format pendek)', 'buatUlangPasswordAkun')
+      .addItem('Keluarkan semua sesi login', 'keluarkanSemuaSesi')
       .addToUi();
   } catch (e) { /* dijalankan dari luar spreadsheet */ }
 }
@@ -134,7 +135,25 @@ function dataUtama_() {
  * Data dipotong di server sesuai cakupan akun, jadi akun Area / Lokasi tidak menerima data area / lokasi lain.
  */
 const AKUN_HDR = ['Username', 'Password', 'Nama', 'Peran', 'Area', 'Lokasi', 'Aktif'];
-const SESI_DETIK = 21600;   // sesi login 6 jam
+// Sesi login tanpa batas waktu (dashboard juga dipakai di layar monitor besar).
+// Token = data akun + tanda tangan HMAC dengan kunci rahasia di Script Properties, jadi tidak perlu disimpan di cache.
+// Sesi berhenti bila akun dinonaktifkan atau password diganti di sheet Akun (dicek ulang paling lama tiap 10 menit),
+// atau bila kunci dihapus lewat menu "Keluarkan semua sesi login".
+const CEK_AKUN_DETIK = 600;
+function kunciSesi_() {
+  const pr = PropertiesService.getScriptProperties();
+  let k = pr.getProperty('SESI_KUNCI');
+  if (!k) { k = Utilities.getUuid() + Utilities.getUuid(); pr.setProperty('SESI_KUNCI', k); }
+  return k;
+}
+const b64_ = b => Utilities.base64EncodeWebSafe(b).replace(/=+$/, '');
+const tandaSesi_ = s => b64_(Utilities.computeHmacSha256Signature(s, kunciSesi_()));
+const capPw_ = pw => sidikPw_('sesi', pw).slice(7, 23);   // berubah bila password di sheet diganti
+/** Menu: semua perangkat harus login ulang (mis. bila password bocor). */
+function keluarkanSemuaSesi() {
+  PropertiesService.getScriptProperties().deleteProperty('SESI_KUNCI');
+  try { SpreadsheetApp.getUi().alert('Semua sesi login dihentikan. Setiap perangkat perlu login ulang.'); } catch (e) { /* dijalankan dari editor */ }
+}
 
 function fileAtur_() {
   const it = DriveApp.getFolderById(CFG.FOLDER_ID).getFilesByType(MimeType.GOOGLE_SHEETS);
@@ -167,8 +186,8 @@ function login(username, password) {
   if (!cocok) { cache.put(kg, String(gagal + 1), 900); Utilities.sleep(600); throw new Error('Username atau password salah.'); }
   const ses = cakupanAkun_(r);
   if (!ses) throw new Error('Akun belum lengkap: isi Peran (PUSAT / AREA / LOKASI) beserta Area atau Lokasinya di sheet Akun.');
-  const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
-  cache.put('SES_' + token, JSON.stringify(ses), SESI_DETIK);
+  const isi = b64_(Utilities.newBlob(JSON.stringify({ u: u, c: capPw_(pw), t: Date.now() })).getBytes()), token = isi + '.' + tandaSesi_(isi);
+  cache.put('AK_' + u + '_' + capPw_(pw), JSON.stringify(ses), CEK_AKUN_DETIK);
   cache.remove(kg);
   return JSON.stringify(Object.assign({ token: token }, ses));
 }
@@ -195,11 +214,20 @@ function daftarLogin() {
   cache.put('LGLIST', json, 600);
   return json;
 }
-function logout(token) { if (token) CacheService.getScriptCache().remove('SES_' + token); }
+function logout(token) { /* token tidak disimpan di server; halaman menghapus token dari perangkat */ }
 function sesi_(token) {
-  const s = token && /^[0-9a-f]{64}$/.test(String(token)) ? CacheService.getScriptCache().get('SES_' + token) : null;
-  if (!s) throw new Error('LOGIN');
-  return JSON.parse(s);
+  const m = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(String(token || ''));
+  if (!m || tandaSesi_(m[1]) !== m[2]) throw new Error('LOGIN');
+  let o; try { o = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(m[1])).getDataAsString()); } catch (e) { throw new Error('LOGIN'); }
+  const cache = CacheService.getScriptCache(), kunci = 'AK_' + o.u + '_' + o.c, ada = cache.get(kunci);
+  if (ada) return JSON.parse(ada);
+  // cek ulang akun: masih ada, aktif, dan password belum diganti
+  const sh = sheetAkun_(), v = sh ? sh.getDataRange().getValues() : [];
+  const r = v.slice(1).filter(x => teks(x[0]).toLowerCase() === o.u)[0];
+  const ses = r && !/^(TIDAK|NO|FALSE|0|NONAKTIF)$/i.test(teks(r[6])) && teks(r[1]) && capPw_(teks(r[1])) === o.c ? cakupanAkun_(r) : null;
+  if (!ses) throw new Error('LOGIN');
+  cache.put(kunci, JSON.stringify(ses), CEK_AKUN_DETIK);
+  return ses;
 }
 
 /** Memotong data (bentuk hitung_) sesuai cakupan akun; nama lokasi & Driver di luar cakupan dihapus. */
