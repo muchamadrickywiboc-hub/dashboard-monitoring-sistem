@@ -79,7 +79,7 @@ function UJI_BACA_SUMBER() {
 /* ============================== WEB APP ============================== */
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('Monitoring Driving Behaviour, Driver Discipline & Fatigue')
+    .setTitle('Monitoring Driving Behaviour, Driver Discipline & Fatigue Management')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
