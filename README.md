@@ -63,9 +63,10 @@ Satu lokasi memakai satu nama dan satu area di semua bulan: ejaan disamakan (tan
 ## Filter waktu: Tanggal, Shift (8 jam), Jam
 
 - Mulai Oktober (file tarikan), `prosesTarikan` juga mencatat jam kejadian dari kolom **Time** ke sheet `Event Jam` dan `AMT Jam` di file "Tarikan nn ...".
-- Di dashboard, baris **Waktu** berisi Tanggal, Shift (Shift 1 07.00–15.00, Shift 2 15.00–23.00, Shift 3 23.00–07.00 yang ikut tanggal mulainya; diatur di `SHIFT` pada Kode.gs dan Index.html) dan Jam. Grafik event berubah menjadi per jam; Top 10 Area/Lokasi, TOP 10 Driver, rekap per area dan per lokasi ikut jendela waktu, dibanding tanggal sebelumnya pada shift/jam yang sama. Tren per kategori tetap bulanan.
+- Di dashboard, baris **Waktu** berisi Tanggal, Shift (Shift 1 07.00–15.00, Shift 2 15.00–23.00, Shift 3 23.00–07.00 yang ikut tanggal mulainya; diatur di `SHIFT` pada Kode.gs dan Index.html) dan Jam. Grafik event berubah menjadi per jam; Top 10 Area/Lokasi, TOP 10 Driver, rekap per area dan per lokasi ikut jendela waktu, dibanding tanggal sebelumnya pada shift/jam yang sama. Tren & parameter per kategori juga berubah menjadi per jam.
 - Data jendela waktu dihitung saat dipilih oleh `getDataWaktu(m, d, s, h)` dan disimpan di cache 15 menit.
-- File Data Januari–September hanya berisi tanggal, jadi filter waktu nonaktif untuk bulan-bulan itu.
+- Januari–September: jam diambil dari file mentah per regional dan disimpan di file `Jam <nn> <Bulan> 2026.json.gz` (satu per bulan) di folder "3. Data Dashboard". Dibuat dengan `tools/agregasi_jam.py` (per bulan × regional) lalu `tools/bangun_jam.py`. Jam diambil dari kolom tanggal+jam (`TANGGAL CCTV`, `TANGGAL & JAM CCTV`, atau kolom tanpa judul berisi tanggal+jam); kolom `JAM` hanya dipakai bila kolom tanggal+jam tidak ada, karena rumusnya bernilai 0/23 saat kosong.
+- Banyak event GPS (Harsh, Idle, Overspeed, Driving > 4 Hours, Black Zone) di file mentah Januari–September tidak punya jam. Event itu tetap dihitung saat hanya Tanggal yang dipilih, tetapi tidak ikut filter Shift/Jam; jumlahnya ditampilkan di keterangan grafik dan kartu kategori.
 - Setelah memasang versi ini, jalankan sekali **Dashboard > Proses ulang semua file tarikan** (`prosesUlangSemuaTarikan`) supaya file tarikan yang sudah diproses dibaca ulang beserta jamnya.
 
 ## Akun Pusat, Area, Lokasi

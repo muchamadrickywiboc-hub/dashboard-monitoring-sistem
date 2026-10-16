@@ -616,15 +616,16 @@ function muatWaktu(key) {
 function deriveWaktu() {
   const A = RAW.areas, w = WIN, kp = w.waktu.adaPrev, okLok = li => selLok < 0 || li === selLok;
   A.forEach(a => { const o = D.regional[a]; o.total.W = 0; o.total.P = kp ? 0 : null; o.kat.W = {DB: 0, DD: 0, FM: 0}; o.lokasi = 0; });
-  const L = {}, NW = {};
+  const L = {}, NW = {}, TJ = {t: 0, DB: 0, DD: 0, FM: 0, grafik: 0};
   w.fakta.forEach(([b, ai, wl, pi, n]) => {
     const li = w.lokMap[wl], o = D.regional[A[ai]];
-    if (!okLok(li) || !o || (b && !kp)) return;
+    if (!okLok(li) || !o || (b === 1 && !kp)) return;
+    if (b === 2) { if (cocokReg(A[ai])) { TJ.t += n; TJ[w.params[pi].kat] += n; } return; }   // event tanpa jam (tidak bisa disaring per jam)
     const k = w.params[pi].kat, x = L[wl] || (L[wl] = {i: li, l: w.lok[wl][0], r: A[ai], W: {DB: 0, DD: 0, FM: 0, t: 0}, P: 0});
     if (b) { o.total.P += n; x.P += n; } else { o.total.W += n; o.kat.W[k] += n; x.W[k] += n; x.W.t += n; }
     if (cocokReg(A[ai])) { const v = NW[w.params[pi].key] || (NW[w.params[pi].key] = {W: 0, P: kp ? 0 : null}); if (b) v.P += n; else v.W += n; }
   });
-  D.nilaiW = NW;
+  D.nilaiW = NW; D.tanpaJam = TJ;
   const LL = Object.values(L);
   LL.forEach(o => { if (o.W.t > 0) D.regional[o.r].lokasi++; });
   D.lokasiBulan.W = LL.map(o => ({i: o.i, l: o.l, r: o.r, DB: o.W.DB, DD: o.W.DD, FM: o.W.FM, t: o.W.t, p: kp ? o.P : null, pm: kp ? 'P' : null})).filter(o => o.t || o.p).sort((a, b) => b.t - a.t);
@@ -633,7 +634,9 @@ function deriveWaktu() {
   D.drv = !X ? null : (selLok >= 0 ? X.lok.filter(r => w.lokMap[r[2]] === selLok) : sel !== 'ALL' ? X.area.filter(r => A[r[1]] === sel) : X.all)
     .filter(r => r[0] === 0).map(r => ['W', r[1], w.lokMap[r[2]], w.pMap[r[3]], r[4], r[5]]);
   const J = Array.from({length: 24}, () => ({DB: 0, DD: 0, FM: 0, t: 0, p: 0, pDB: 0, pDD: 0, pFM: 0}));
-  w.harian.forEach(([b, d, ai, wl, x, y, z]) => { const o = J[d - 1]; if (!o || !okLok(w.lokMap[wl]) || !cocokReg(A[ai])) return;
+  w.harian.forEach(([b, d, ai, wl, x, y, z]) => { if (!okLok(w.lokMap[wl]) || !cocokReg(A[ai])) return;
+    if (!d && !b) { TJ.grafik += x + y + z; return; }   // hanya filter tanggal: event tanpa jam ikut dihitung tapi tidak punya posisi di grafik
+    const o = J[d - 1]; if (!o) return;
     if (b) { o.p += x + y + z; o.pDB += x; o.pDD += y; o.pFM += z; } else { o.DB += x; o.DD += y; o.FM += z; o.t += x + y + z; } });
   D.jamW = J;
 }
@@ -645,11 +648,12 @@ function renderJam() {
   const cur = HS.map(h => D.jamW[h]), tot = sum(cur.map(o => o.t));
   const tglJam = h => lintas() && h < SHIFT[shift][1] ? tgl + 1 : tgl;   // Shift 3: jam 00.00-07.00 jatuh di tanggal berikutnya
   document.getElementById('bdayLeg').hidden = !tot;
-  if (!tot) { sub.textContent = scope(); host.innerHTML = `<div class="emptyamt">Tidak ada event untuk ${labelWaktu()}${sel === 'ALL' ? '' : ' · ' + scope()}.</div>`; return; }
+  const TJ = D.tanpaJam || {}, catJam = TJ.grafik ? ` · <span class="small" style="display:inline">${nf(TJ.grafik)} event tanpa jam (data GPS) tidak tampil di grafik ini</span>` : TJ.t ? ` · <span class="small" style="display:inline">${nf(TJ.t)} event tanpa jam (data GPS) tidak ikut filter shift/jam</span>` : '';
+  if (!tot) { sub.innerHTML = scope() + catJam; host.innerHTML = `<div class="emptyamt">Tidak ada event untuk ${labelWaktu()}${sel === 'ALL' ? '' : ' · ' + scope()}.</div>`; return; }
   document.getElementById('bdayCmpLeg').hidden = !kp;
   document.getElementById('bdayCmpName').textContent = kp ? `${tgl - 1} ${BLN[mon]} (jam yang sama)` : '';
   const mx = cur.reduce((a, o) => o.t > a.t ? o : a, cur[0]), hm = HS[cur.indexOf(mx)], ptot = kp ? sum(cur.map(o => o.p)) : null;
-  sub.innerHTML = `${scope()} · total <b>${nf(tot)}</b> event${kp ? ` vs ${nf(ptot)} pada ${tgl - 1} ${B3[mon]} ${pctTxt(tot, ptot)}` : ''} · jam tersibuk <b>${jj(hm)}–${jj(hm + 1)}</b> (${nf(mx.t)})${tgl ? (lintas() && jam < 0 ? ` · ${jj(SHIFT[shift][0])} ${tgl} ${B3[mon]} s/d ${jj(SHIFT[shift][1])} ${tgl + 1} ${B3[mon]}` : '') : ' · dijumlah dari semua tanggal di ' + BLN[mon]}`;
+  sub.innerHTML = `${scope()} · total <b>${nf(tot)}</b> event${kp ? ` vs ${nf(ptot)} pada ${tgl - 1} ${B3[mon]} ${pctTxt(tot, ptot)}` : ''} · jam tersibuk <b>${jj(hm)}–${jj(hm + 1)}</b> (${nf(mx.t)})${tgl ? (lintas() && jam < 0 ? ` · ${jj(SHIFT[shift][0])} ${tgl} ${B3[mon]} s/d ${jj(SHIFT[shift][1])} ${tgl + 1} ${B3[mon]}` : '') : ' · dijumlah dari semua tanggal di ' + BLN[mon]}${catJam}`;
   const W = 1180, H = 250, m = {l: 50, r: 12, t: 26, b: 26}, iw = W - m.l - m.r, ih = H - m.t - m.b, n = cur.length, slot = iw / Math.max(n, 8), bw = Math.min(40, slot * .62);
   const ox = m.l + (iw - slot * n) / 2, cx = i => ox + slot * i + slot / 2;
   const ymax = niceMax(Math.max(1, ...cur.map(o => Math.max(o.t, kp ? o.p : 0))) * 1.05), y = v => m.t + ih - v / ymax * ih, NT = nTicks(ymax);
@@ -724,7 +728,8 @@ function renderBulan() {
   const HS = jam >= 0 ? [jam] : shift ? jamShift(shift) : Array.from({length: 24}, (_, i) => i);
 
   // kartu per kategori: donut, kotak, tren, tabel parameter
-  document.getElementById('trendSub').textContent = W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}`
+  const TJ = W && D.tanpaJam && D.tanpaJam.t ? ' · tanpa jam (data GPS, tidak ikut filter shift/jam): ' + CATS.filter(c => D.tanpaJam[c.key]).map(c => `${c.name} ${nf(D.tanpaJam[c.key])}`).join(', ') : '';
+  document.getElementById('trendSub').textContent = W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
     : `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis putus-putus = rata-rata`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
   CATS.forEach(cat => {

@@ -314,14 +314,22 @@ function dataWaktu_(m, d, s, h) {
     if (/^PENGATURAN/i.test(n)) atur = f; else if (t && +t[1] === m + 1) file = f;
   }
   const kosongW = (pesan) => JSON.stringify(Object.assign(kosong([pesan]), { waktu: { m: m, d: d, s: s, h: h, adaPrev: false } }));
-  if (!atur || !file) return kosongW('Data tarikan ' + BULAN[m] + ' belum ada.');
+  const fJam = file ? null : fileJam_(folder, m);
+  if (!atur || (!file && !fJam)) return kosongW('Data jam ' + BULAN[m] + ' belum ada.');
   const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(atur), 'Pemetaan') || []);
-  const ss = SpreadsheetApp.open(file);
   const okJam = j => (h < 0 || j === h) && (!s || diShift(j, s));
   // shift yang melewati tengah malam (Shift 3) ikut tanggal mulainya: jam 00.00-07.00 dihitung ke tanggal sebelumnya
   const jendela = (tg, j) => { if (!tg || tg.m !== m || !okJam(j)) return -1; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? tg.d - 1 : tg.d;
     if (!d) return t >= 1 ? 0 : -1; if (t === d) return 0; return t === d - 1 ? 1 : -1; };
   const EV = [], AM = [];
+  if (fJam) {
+    const hasilJ = hitungJam_(bacaJam_(fJam), m, d, s, h, jendela, peta);
+    hasilJ.waktu = { m: m, d: d, s: s, h: h, adaPrev: d > 1 };
+    const jsonJ = JSON.stringify(hasilJ);
+    simpanCache_(jsonJ, kunci, 3600);   // file jam Januari-September tidak berubah
+    return jsonJ;
+  }
+  const ss = SpreadsheetApp.open(file);
   (nilaiSheet(ss, 'Event Jam') || []).slice(1).forEach(r => {
     const j = +r[1], w = jendela(tanggalTeks(r[0]), j), c = peta.kasus[normKasus(r[4])], n = angka(r[5]) || 0;
     if (w < 0 || !c || !n) return;
@@ -337,6 +345,41 @@ function dataWaktu_(m, d, s, h) {
   const json = JSON.stringify(hasil);
   simpanCache_(json, kunci, 900);   // 15 menit, mengikuti pemicu prosesTarikan
   return json;
+}
+
+/**
+ * File jam Januari-September: "Jam <nn> <Bulan> 2026.json.gz" di folder data (dibuat dari file mentah, lihat tools/agregasi_jam.py).
+ * Isi: daftar area / lok / kasus / nama, lalu baris per tanggal (d) dan gabungan sebulan (b):
+ *   e = "jam,area,lok,kasus,jumlah;..."  a = "jam,area,lok,nama,kasus,jumlah;..."
+ *   jam 99 = event tanpa jam (data GPS tanpa waktu); di b jam 24-30 = jam 00-06 tanggal 1 (Shift 3 milik bulan sebelumnya).
+ */
+function fileJam_(folder, m) {
+  const it = folder.getFiles();
+  while (it.hasNext()) { const f = it.next(), t = teks(f.getName()).match(/^JAM\s+(\d{1,2})\b/i); if (t && +t[1] === m + 1) return f; }
+  return null;
+}
+function bacaJam_(f) {
+  const b = f.getBlob().setContentType('application/x-gzip');
+  return JSON.parse(Utilities.ungzip(b).getDataAsString('UTF-8'));
+}
+function hitungJam_(J, m, d, s, h, jendela, peta) {
+  const EV = [], AM = [], tanpa = !s && h < 0;   // hanya filter tanggal: event tanpa jam tetap dihitung
+  const kasus = J.kasus.map(k => peta.kasus[normKasus(k)] || null), area = J.area.map(areaNorm);
+  // w: 0 = jendela terpilih, 1 = pembanding, 2 = event tanpa jam di tanggal terpilih (tidak bisa disaring per jam)
+  const baris = (str, tg, fn) => { if (!str) return; str.split(';').forEach(x => { const v = x.split(','); fn(v, tg); }); };
+  const pakai = (j, tg) => {
+    if (j === 99) { if (!tg || tg.m !== m) return -1; const w = !d ? 0 : tg.d === d ? 0 : tg.d === d - 1 ? 1 : -1; return w < 0 ? -1 : tanpa ? w : (w === 0 ? 2 : -1); }
+    return jendela(tg, j);
+  };
+  const ambil = (blok, tgOf) => {
+    baris(blok.e, null, v => { const c = kasus[+v[3]], n = +v[4]; if (!c || !n) return; const jr = +v[0], tg = tgOf(jr), j = jr >= 24 && jr < 99 ? jr - 24 : jr, w = pakai(j, tg);
+      if (w >= 0) EV.push([w, j === 99 ? 0 : j + 1, area[+v[1]], J.lok[+v[2]], c.p, c.k, n]); });
+    baris(blok.a, null, v => { const c = kasus[+v[4]], n = +v[5]; if (!c || !n) return; const jr = +v[0], tg = tgOf(jr), j = jr >= 24 && jr < 99 ? jr - 24 : jr, w = pakai(j, tg);
+      if (w >= 0) AM.push([w, area[+v[1]], J.lok[+v[2]], J.nama[+v[3]], c.p, c.k, n]); });
+  };
+  if (d) [d - 1, d, d + 1].forEach(t => { const blok = J.d[t]; if (blok) ambil(blok, () => ({ m: m, d: t })); });
+  else ambil(J.b, jr => ({ m: m, d: jr >= 24 && jr < 99 ? 1 : 2 }));
+  return hitung_(EV, AM, peta, [], []);
 }
 
 /* ============================== BACA SUMBER ============================== */
@@ -391,6 +434,10 @@ function bangunData_() {
   const hasil = hitung_(EV, AM, peta, catatan, peringatan);
   // bulan yang punya jam kejadian (sheet "Event Jam" di file Tarikan) -> filter Tanggal / Shift / Jam aktif
   hasil.jamAda = dataBulan.filter(o => o.f === tarikan[o.m]).filter(o => { const sh = SpreadsheetApp.open(o.f).getSheetByName('Event Jam'); return sh && sh.getLastRow() > 1; }).map(o => o.m);
+  // Januari-September: file "Jam <nn> ..." dari file mentah
+  const itJ = folder.getFiles();
+  while (itJ.hasNext()) { const t = teks(itJ.next().getName()).match(/^JAM\s+(\d{1,2})\b/i); if (t && hasil.jamAda.indexOf(+t[1] - 1) < 0 && dataBulan.some(o => o.m === +t[1] - 1)) hasil.jamAda.push(+t[1] - 1); }
+  hasil.jamAda.sort((a, b) => a - b);
   return hasil;
 }
 
