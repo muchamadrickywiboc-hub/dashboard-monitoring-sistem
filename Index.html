@@ -967,8 +967,9 @@ function terapkanAkun(p) {
   if (a.peran === 'AREA') document.body.classList.add('peran-area'); else if (a.peran === 'LOKASI') document.body.classList.add('peran-lokasi');
   document.getElementById('loginwrap').hidden = true;
   document.getElementById('akunBox').hidden = false;
-  document.getElementById('akunNama').textContent = a.nama;
-  document.getElementById('tPeran').textContent = a.peran === 'PUSAT' ? 'RTC' : a.peran === 'AREA' ? 'Command Center ' + rn(a.area) : 'Control Room ' + a.lok;
+  const label = a.peran === 'PUSAT' ? 'RTC' : a.peran === 'AREA' ? 'Command Center ' + rn(a.area) : 'Control Room ' + a.lok;
+  document.getElementById('akunNama').textContent = label;
+  document.getElementById('tPeran').textContent = label;
   if (ganti) { sel = 'ALL'; selLok = -1; }
 }
 // akun Area / Lokasi: filter dikunci pada cakupannya
