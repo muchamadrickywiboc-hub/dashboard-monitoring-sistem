@@ -231,7 +231,7 @@ function potongJson_(json, ses, awalan) {
 }
 
 /**
- * Menu: membuat / melengkapi sheet Akun. Akun yang belum ada ditambahkan dengan password pendek (username + 4 angka):
+ * Menu: membuat / melengkapi sheet Akun. Akun yang belum ada ditambahkan dengan password pendek (username + 2 angka):
  * 1 akun Pusat, 1 akun per Area, dan 1 akun per Lokasi yang ada di data dashboard. Baris yang sudah ada tidak diubah,
  * jadi menu ini aman dijalankan lagi saat ada lokasi baru.
  */
