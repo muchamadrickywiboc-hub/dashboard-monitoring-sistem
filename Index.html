@@ -514,7 +514,7 @@ function kontrol() {
   sj.innerHTML = '<option value="-1">Semua jam</option>' + (shift ? jamShift(shift) : Array.from({length: 24}, (_, i) => i)).map(h => `<option value="${h}">${jj(h)}–${jj(h + 1)}</option>`).join('');
   st.value = String(tgl); ss.value = String(shift); sj.value = String(jam);
   [st, ss, sj].forEach(e => e.disabled = !jOk);
-  document.getElementById('waktuInfo').textContent = !jOk ? `Filter waktu tersedia untuk bulan yang punya data jam kejadian (mulai ${BLN[(RAW.jamAda || [9])[0]]}).`
+  document.getElementById('waktuInfo').textContent = !jOk ? ((RAW.jamAda || []).length ? `Filter waktu hanya tersedia untuk bulan yang punya data jam kejadian: ${RAW.jamAda.map(m => BLN[m]).join(', ')}.` : 'Filter waktu belum aktif karena data jam kejadian belum diproses.')
     : ERRW ? ERRW : modeWaktu() ? (WIN && WKEY === [mon, tgl, shift, jam].join('_') ? 'Tren per kategori tetap menampilkan per bulan.' : 'Memuat data…') : '';
   document.getElementById('tSrc').textContent = BLN[ADA[0]] + '–' + BLN[LAST] + ' ' + D.tahun;
 }
