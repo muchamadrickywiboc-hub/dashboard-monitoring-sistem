@@ -326,7 +326,7 @@ td{padding:7px 10px}
 <div class="wrap" id="view-bulan">
   <div class="warnbar" id="bwarn" hidden></div>
   <div class="anahead"><h2 style="margin:0;font-size:18px;font-weight:700">Tren &amp; parameter per kategori</h2><span class="hint" id="trendSub"></span></div>
-  <div id="btrend" class="trend3"></div>
+  <div id="btrend" class="trend3 wpanel"></div>
   <section class="panel wpanel"><div class="ph"><h2 id="bdayH">Event per hari</h2><p id="bdaySub"></p></div>
     <div class="legend" id="bdayLeg"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span><span id="bdayCmpLeg"><i style="background:none;border-top:2px dashed #1b1f1d;border-radius:0;height:0;width:16px"></i><b id="bdayCmpName"></b></span></div>
     <div class="chart" id="bday"></div></section>
@@ -413,6 +413,25 @@ function drawBulanan(host, arr, cat) {
   host.appendChild(svg);
 }
 
+// tren satu kategori per jam (filter waktu aktif); prev = jam yang sama di tanggal sebelumnya (garis putus-putus)
+function drawJamKat(host, HS, arr, prev, cat) {
+  const W = 640, H = 250, m = {l: 50, r: 16, t: 24, b: 28}, iw = W - m.l - m.r, ih = H - m.t - m.b, n = HS.length, slot = iw / Math.max(n, 8), bw = Math.min(40, slot*.62);
+  const ox = m.l + (iw - slot*n)/2, cx = i => ox + slot*i + slot/2, mxv = Math.max(...arr), imx = arr.indexOf(mxv);
+  const ymax = niceMax(Math.max(1, ...arr, ...(prev || []))*1.1), y = v => m.t + ih - v/ymax*ih, NT = nTicks(ymax);
+  const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Event per jam ' + cat.name});
+  for (let i = 0; i <= NT; i++) { const v = ymax*i/NT; svgEl('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: i ? 'gl' : 'base'}, svg); const t = svgEl('text', {x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'tick'}, svg); t.textContent = ax(v); }
+  if (!mxv && !(prev && Math.max(...prev))) { const t = svgEl('text', {x: W/2, y: m.t + ih/2, 'text-anchor': 'middle', class: 'tick'}, svg); t.textContent = 'Tidak ada event di waktu ini'; }
+  arr.forEach((v, i) => {
+    if (v) { svgEl('path', {d: topRound(cx(i) - bw/2, y(v), bw, y(0) - y(v), 4), style: `fill:${i === imx ? cat.dark : cat.color};opacity:${i === imx ? 1 : .6}`}, svg);
+      if (n <= 12 || i === imx) { const lb = svgEl('text', {x: cx(i), y: y(v) - 6, 'text-anchor': 'middle', style: `fill:#1b1f1d;font-size:12px;font-weight:${i === imx ? 700 : 500}`}, svg); lb.textContent = ax(v); } }
+    if (n <= 12 || i % 2 === 0) { const t = svgEl('text', {x: cx(i), y: H - 10, 'text-anchor': 'middle', class: 'tick', style: i === imx && v ? 'font-weight:700;fill:#1b1f1d' : ''}, svg); t.textContent = String(HS[i]).padStart(2, '0'); }
+  });
+  if (prev) { if (n > 1) svgEl('path', {d: prev.map((v, i) => (i ? 'L' : 'M') + cx(i).toFixed(1) + ',' + y(v).toFixed(1)).join(''), style: 'fill:none;stroke:#1b1f1d;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none'}, svg);
+    else svgEl('line', {x1: cx(0) - bw, x2: cx(0) + bw, y1: y(prev[0]), y2: y(prev[0]), style: 'stroke:#1b1f1d;stroke-width:1.5;stroke-dasharray:5 4'}, svg); }
+  arr.forEach((v, i) => { const hit = svgEl('rect', {x: ox + slot*i, y: m.t, width: slot, height: ih, class: 'hit'}, svg), h = HS[i];
+    bindTip(hit, () => `<b>${jj(h)}–${jj(h + 1)}</b><br>${cat.name}: ${nf(v)} event${prev ? `<br>${tgl - 1} ${BLN[mon]}: ${nf(prev[i])} ${pctTxt(v, prev[i]).replace(/<[^>]+>/g, '')}` : ''}`); });
+  host.appendChild(svg);
+}
 
 /* ---- akses data ---- */
 // Semua angka di D sudah mengikuti filter area / lokasi (lihat derive).
@@ -515,7 +534,7 @@ function kontrol() {
   st.value = String(tgl); ss.value = String(shift); sj.value = String(jam);
   [st, ss, sj].forEach(e => e.disabled = !jOk);
   document.getElementById('waktuInfo').textContent = !jOk ? ((RAW.jamAda || []).length ? `Filter waktu hanya tersedia untuk bulan yang punya data jam kejadian: ${RAW.jamAda.map(m => BLN[m]).join(', ')}.` : 'Filter waktu belum aktif karena data jam kejadian belum diproses.')
-    : ERRW ? ERRW : modeWaktu() ? (WIN && WKEY === [mon, tgl, shift, jam].join('_') ? 'Tren per kategori tetap menampilkan per bulan.' : 'Memuat data…') : '';
+    : ERRW ? ERRW : modeWaktu() && !(WIN && WKEY === [mon, tgl, shift, jam].join('_')) ? 'Memuat data…' : '';
   document.getElementById('tSrc').textContent = BLN[ADA[0]] + '–' + BLN[LAST] + ' ' + D.tahun;
 }
 const cakupan = () => selLok >= 0 ? `${lokNama(selLok)}<small>Lokasi · ${rn(sel)}</small>` : sel === 'ALL' ? `Semua area<small>${REG.filter(r => D.regional[r] && D.regional[r].lokasi).length} area · ${sum(REG.map(r => (D.regional[r] || {}).lokasi || 0))} lokasi</small>` : `${rn(sel)}<small>${(D.regional[sel] || {}).lokasi || '–'} lokasi</small>`;
@@ -597,13 +616,15 @@ function muatWaktu(key) {
 function deriveWaktu() {
   const A = RAW.areas, w = WIN, kp = w.waktu.adaPrev, okLok = li => selLok < 0 || li === selLok;
   A.forEach(a => { const o = D.regional[a]; o.total.W = 0; o.total.P = kp ? 0 : null; o.kat.W = {DB: 0, DD: 0, FM: 0}; o.lokasi = 0; });
-  const L = {};
+  const L = {}, NW = {};
   w.fakta.forEach(([b, ai, wl, pi, n]) => {
     const li = w.lokMap[wl], o = D.regional[A[ai]];
     if (!okLok(li) || !o || (b && !kp)) return;
     const k = w.params[pi].kat, x = L[wl] || (L[wl] = {i: li, l: w.lok[wl][0], r: A[ai], W: {DB: 0, DD: 0, FM: 0, t: 0}, P: 0});
     if (b) { o.total.P += n; x.P += n; } else { o.total.W += n; o.kat.W[k] += n; x.W[k] += n; x.W.t += n; }
+    if (cocokReg(A[ai])) { const v = NW[w.params[pi].key] || (NW[w.params[pi].key] = {W: 0, P: kp ? 0 : null}); if (b) v.P += n; else v.W += n; }
   });
+  D.nilaiW = NW;
   const LL = Object.values(L);
   LL.forEach(o => { if (o.W.t > 0) D.regional[o.r].lokasi++; });
   D.lokasiBulan.W = LL.map(o => ({i: o.i, l: o.l, r: o.r, DB: o.W.DB, DD: o.W.DD, FM: o.W.FM, t: o.W.t, p: kp ? o.P : null, pm: kp ? 'P' : null})).filter(o => o.t || o.p).sort((a, b) => b.t - a.t);
@@ -611,9 +632,9 @@ function deriveWaktu() {
   D.drvNama = X ? X.nama : [];
   D.drv = !X ? null : (selLok >= 0 ? X.lok.filter(r => w.lokMap[r[2]] === selLok) : sel !== 'ALL' ? X.area.filter(r => A[r[1]] === sel) : X.all)
     .filter(r => r[0] === 0).map(r => ['W', r[1], w.lokMap[r[2]], w.pMap[r[3]], r[4], r[5]]);
-  const J = Array.from({length: 24}, () => ({DB: 0, DD: 0, FM: 0, t: 0, p: 0}));
+  const J = Array.from({length: 24}, () => ({DB: 0, DD: 0, FM: 0, t: 0, p: 0, pDB: 0, pDD: 0, pFM: 0}));
   w.harian.forEach(([b, d, ai, wl, x, y, z]) => { const o = J[d - 1]; if (!o || !okLok(w.lokMap[wl]) || !cocokReg(A[ai])) return;
-    if (b) o.p += x + y + z; else { o.DB += x; o.DD += y; o.FM += z; o.t += x + y + z; } });
+    if (b) { o.p += x + y + z; o.pDB += x; o.pDD += y; o.pFM += z; } else { o.DB += x; o.DD += y; o.FM += z; o.t += x + y + z; } });
   D.jamW = J;
 }
 function renderJam() {
@@ -663,7 +684,7 @@ function renderDriver() {
   host.innerHTML = CATS.map(cat => catParams(cat.key).filter(p => !/^harsh/i.test(p.label)).map(p => {
     const rows = (by[P.indexOf(p)] || []).sort((a, b) => b[5] - a[5]), mx = rows.length ? rows[0][5] : 1;
     return `<section class="panel drv"><div class="ph"><h2><i style="background:${cat.color}"></i>${p.label}</h2><p>${cat.name}</p></div>` + (rows.length
-      ? `<table class="drvtbl"><thead><tr><th>#</th><th>Nama Driver</th><th>Lokasi</th><th>Jumlah</th></tr></thead><tbody>` +
+      ? `<table class="drvtbl"><tbody>` +
         rows.map((r, i) => `<tr><td>${i + 1}</td><td><b>${D.drvNama[r[4]]}</b></td><td><span class="rdot" style="background:${rv(A[r[1]])}"></span>${lokNama(r[2])}<span class="small">${rn(A[r[1]])}</span></td><td><b>${nf(r[5])}</b><span class="amtbar"><i style="width:${r[5]/mx*100}%;background:${cat.color}"></i></span></td></tr>`).join('') + '</tbody></table>'
       : `<div class="emptyamt">Tidak ada Driver tercatat untuk ${p.label} di ${B}${sel === 'ALL' ? '' : ' · ' + scope()}.</div>`) + '</section>';
   }).join('')).join('');
@@ -694,31 +715,38 @@ function renderTopBulan() {
 
 /* ================= BULANAN ================= */
 function renderBulan() {
-  const pm = prevM();
-  const T = totSel(mon), TP = pm === null ? null : totSel(pm);
+  const W = KC === 'W', pm = W ? KP : prevM();
   peringatan(document.getElementById('bwarn'));
+  // nilai per parameter / kategori untuk periode k (bulan, atau 'W' / 'P' saat filter waktu aktif)
+  const nv = (key, k) => !W ? nilai(key, k) : k === null ? null : ((D.nilaiW[key] || {W: 0, P: KP ? 0 : null})[k] ?? null);
+  const nk = (ck, k) => { let s0 = 0, ada = false; catParams(ck).forEach(p => { const v = nv(p.key, k); if (v !== null) { s0 += v; ada = true; } }); return ada ? s0 : null; };
+  const S3 = k => k === null ? (W ? 'Sebelumnya' : 'Bln lalu') : W ? pendekK(k) : B3[k];
+  const HS = jam >= 0 ? [jam] : shift ? jamShift(shift) : Array.from({length: 24}, (_, i) => i);
 
   // kartu per kategori: donut, kotak, tren, tabel parameter
-  document.getElementById('trendSub').textContent = `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis putus-putus = rata-rata`;
+  document.getElementById('trendSub').textContent = W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}`
+    : `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis putus-putus = rata-rata`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
   CATS.forEach(cat => {
-    const ps = catParams(cat.key), arr = BLN.map((_, m) => nilaiKat(cat.key, m));
-    const cur = arr[mon], prv = pm === null ? null : arr[pm], pct = prv ? cur/prv : NaN;
+    const ps = catParams(cat.key), arr = W ? null : BLN.map((_, m) => nilaiKat(cat.key, m)), kc = W ? 'W' : mon;
+    const cur = W ? nk(cat.key, 'W') : arr[mon], prv = pm === null ? null : W ? nk(cat.key, pm) : arr[pm], pct = prv ? cur/prv : NaN;
     let up = null, dn = null;
-    if (pm !== null) ps.forEach(p => { const a = nilai(p.key, mon), b = nilai(p.key, pm); if (a === null || b === null) return; const d = a - b;
+    if (pm !== null) ps.forEach(p => { const a = nv(p.key, kc), b = nv(p.key, pm); if (a === null || b === null) return; const d = a - b;
       if (d > 0 && (!up || d > up.d)) up = {d, l: p.label}; if (d < 0 && (!dn || d < dn.d)) dn = {d, l: p.label}; });
-    const rows = ps.map(p => { const a = nilai(p.key, mon), b = pm === null ? null : nilai(p.key, pm);
+    const rows = ps.map(p => { const a = nv(p.key, kc), b = pm === null ? null : nv(p.key, pm);
       return `<tr><td>${p.label.toUpperCase()}${p.kat !== p.katAsal ? ' <span class="small" style="display:inline">(dipindah)</span>' : ''}</td><td>${b === null ? '–' : nf(b)}</td><td>${a === null ? '–' : nf(a)}</td><td>${a === null ? '<span class="flat">–</span>' : pctTxt(a, b)}</td></tr>`; }).join('');
-    const subTxt = `Donut: ${BLN[mon]} ${isFinite(pct) ? (pct > 1 ? 'lebih banyak dari' : pct < 1 ? 'lebih sedikit dari' : 'sama dengan') : 'dibanding'} ${pm === null ? 'bulan lalu' : BLN[pm]}`;
+    const subTxt = `Donut: ${W ? pendekK('W') : BLN[mon]} ${isFinite(pct) ? (pct > 1 ? 'lebih banyak dari' : pct < 1 ? 'lebih sedikit dari' : 'sama dengan') : 'dibanding'} ${pm === null ? (W ? 'sebelumnya' : 'bulan lalu') : W ? pendekK(pm) : BLN[pm]}`;
     const card = document.createElement('section'); card.className = 'ana';
     card.innerHTML = `<h3><i style="background:${cat.color}"></i><span class="hname">${cat.name.toUpperCase()}<small>${subTxt}</small></span><span class="donut sm" title="${subTxt}">${donutSVG(pct, cat)}</span></h3>
-      <div class="boxes"><div><div class="k">Total (${B3[mon]} / ${pm === null ? '–' : B3[pm]})</div><div class="v">${cur === null ? '–' : nf(cur)} / ${prv === null ? '–' : nf(prv)}</div></div>
+      <div class="boxes"><div><div class="k">Total (${S3(kc)} / ${pm === null ? '–' : S3(pm)})</div><div class="v">${cur === null ? '–' : nf(cur)} / ${prv === null ? '–' : nf(prv)}</div></div>
       <div><div class="k">Kenaikan tertinggi</div><div class="v up">${up ? up.l + ' +' + nf(up.d) : 'Tidak ada kenaikan'}</div></div>
       <div><div class="k">Penurunan tertinggi</div><div class="v down">${dn ? dn.l + ' −' + nf(-dn.d) : 'Tidak ada penurunan'}</div></div></div>
       <div class="anachart"></div>
-      <div class="cattbl"><div class="tbl"><table><thead><tr><th>Parameter</th><th>${pm === null ? 'Bln lalu' : B3[pm]}</th><th>${B3[mon]}</th><th>Kenaikan</th></tr></thead><tbody>${rows}
+      <div class="cattbl"><div class="tbl"><table><thead><tr><th>Parameter</th><th>${S3(pm)}</th><th>${S3(kc)}</th><th>Kenaikan</th></tr></thead><tbody>${rows}
       <tr class="tot"><td>TOTAL</td><td>${prv === null ? '–' : nf(prv)}</td><td>${cur === null ? '–' : nf(cur)}</td><td>${pctTxt(cur || 0, prv)}</td></tr></tbody></table></div></div>`;
-    te.appendChild(card); drawBulanan(card.querySelector('.anachart'), arr, cat);
+    te.appendChild(card);
+    if (W) drawJamKat(card.querySelector('.anachart'), HS, HS.map(h => D.jamW[h][cat.key]), KP ? HS.map(h => D.jamW[h]['p' + cat.key]) : null, cat);
+    else drawBulanan(card.querySelector('.anachart'), arr, cat);
   });
 
 
@@ -760,14 +788,14 @@ document.getElementById('selJam').onchange = e => { jam = +e.target.value; ERRW 
 document.getElementById('selLok').onchange = e => setLok(+e.target.value);
 function render() {
   if (!D || LAST < 0) return;
-  derive(); kontrol(); chips(); pilihanLokasi(); renderBulan();
+  derive(); kontrol(); chips(); pilihanLokasi();
   const mw = modeWaktu(), key = [mon, tgl, shift, jam].join('_');
   if (mw && WKEY !== key) muatWaktu(key);
   const siap = mw && WIN && WKEY === key;
   document.getElementById('view-bulan').classList.toggle('memuat', mw && !siap);
   if (siap) { deriveWaktu(); KC = 'W'; KP = WIN.waktu.adaPrev ? 'P' : null; renderJam(); }
   else { KC = mon; KP = prevM(); renderHarian(); }
-  renderTopBulan(); renderDriver(); renderRekap();
+  renderBulan(); renderTopBulan(); renderDriver(); renderRekap();
 }
 
 const REFRESH_MS = 5*60*1000;
