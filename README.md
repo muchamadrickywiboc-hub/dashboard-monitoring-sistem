@@ -69,6 +69,10 @@ Satu lokasi memakai satu nama dan satu area di semua bulan: ejaan disamakan (tan
 - Banyak event GPS (Harsh, Idle, Overspeed, Driving > 4 Hours, Black Zone) di file mentah Januari–September tidak punya jam. Event itu tetap dihitung saat hanya Tanggal yang dipilih, tetapi tidak ikut filter Shift/Jam; jumlahnya ditampilkan di keterangan grafik dan kartu kategori.
 - Setelah memasang versi ini, jalankan sekali **Dashboard > Proses ulang semua file tarikan** (`prosesUlangSemuaTarikan`) supaya file tarikan yang sudah diproses dibaca ulang beserta jamnya.
 
+## Sheet Data Kosong
+
+`buatSheetDataKosong()` (menu **Dashboard > Perbarui sheet Data Kosong**, juga otomatis tiap pagi lewat `pasangPemicu`) menulis sheet **Data Kosong** di file Pengaturan Dashboard: ringkasan bagian yang tidak ada datanya, lalu per bulan × regional tanggal tanpa data, hari dengan event sangat sedikit (< 35% median), persentase event tanpa jam per kategori (dari file Jam), dan penjelasan. Catatan sumber yang menyebut "batas Excel"/"terpotong" di sheet Catatan ikut dimasukkan ke baris bulan & regionalnya.
+
 ## Akun Pusat, Area, Lokasi
 
 - Dashboard sekarang meminta login. Akun disimpan di sheet **Akun** pada file Pengaturan Dashboard: `Username | Password | Nama | Peran (PUSAT / AREA / LOKASI) | Area | Lokasi | Aktif`.

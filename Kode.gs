@@ -56,6 +56,8 @@ function onOpen() {
       .addItem('Amankan password akun', 'amankanPasswordAkun')
       .addItem('Buat ulang semua password (format pendek)', 'buatUlangPasswordAkun')
       .addItem('Keluarkan semua sesi login', 'keluarkanSemuaSesi')
+      .addSeparator()
+      .addItem('Perbarui sheet Data Kosong', 'buatSheetDataKosong')
       .addToUi();
   } catch (e) { /* dijalankan dari luar spreadsheet */ }
 }
@@ -90,7 +92,8 @@ function panaskanCache() { simpanCache_(JSON.stringify(bangunData_())); }
 
 /** Jalankan sekali dari editor: memasang pemicu panaskanCache tiap jam. */
 function pasangPemicu() {
-  ScriptApp.getProjectTriggers().filter(t => ['panaskanCache', 'prosesTarikan'].indexOf(t.getHandlerFunction()) >= 0).forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.getProjectTriggers().filter(t => ['panaskanCache', 'prosesTarikan', 'buatSheetDataKosong'].indexOf(t.getHandlerFunction()) >= 0).forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('buatSheetDataKosong').timeBased().everyDays(1).atHour(6).create();   // sheet Data Kosong diperbarui tiap pagi
   ScriptApp.newTrigger('panaskanCache').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('prosesTarikan').timeBased().everyMinutes(15).create();   // file harian baru terbaca maksimal 15 menit setelah diunggah
   panaskanCache();
@@ -408,6 +411,80 @@ function hitungJam_(J, m, d, s, h, jendela, peta) {
   if (d) [d - 1, d, d + 1].forEach(t => { const blok = J.d[t]; if (blok) ambil(blok, () => ({ m: m, d: t })); });
   else ambil(J.b, jr => ({ m: m, d: jr >= 24 && jr < 99 ? 1 : 2 }));
   return hitung_(EV, AM, peta, [], []);
+}
+
+/* ============================== SHEET DATA KOSONG ============================== */
+/**
+ * Menulis sheet "Data Kosong" di file Pengaturan Dashboard: per bulan x regional, tanggal yang tidak ada datanya,
+ * hari dengan event sangat sedikit, dan berapa persen event yang tidak punya jam kejadian (tidak ikut filter shift/jam).
+ * Dihitung dari data yang dibaca dashboard, jadi selalu sama dengan yang tampil. Diperbarui tiap pagi oleh pemicu
+ * (pasangPemicu) atau lewat menu Dashboard > Perbarui sheet Data Kosong.
+ */
+function buatSheetDataKosong() {
+  const folder = DriveApp.getFolderById(CFG.FOLDER_ID), ss = SpreadsheetApp.open(fileAtur_());
+  const d = JSON.parse(dataUtama_()), peta = bacaPemetaan(nilaiSheet(ss, 'Pemetaan') || []);
+  const NB = s0 => s0.charAt(0) + s0.slice(1).toLowerCase(), A = d.areas, tahun = d.tahun;
+  const catatanSumber = (nilaiSheet(ss, 'Catatan') || []).map(r => teks(r[0])).filter(x => /terpotong|batas excel/i.test(x));
+  // event per bulan x area x tanggal
+  const H = {}, akhirBulan = {};
+  d.harian.forEach(h => { const k = h[0] + '|' + h[2], t = (h[4] || 0) + (h[5] || 0) + (h[6] || 0); if (!t) return;
+    (H[k] = H[k] || {})[h[1]] = (H[k][h[1]] || 0) + t; akhirBulan[h[0]] = Math.max(akhirBulan[h[0]] || 0, h[1]); });
+  // jam kejadian dari file Jam (Januari-September); bulan tarikan memakai kolom Time
+  const JAM = {};
+  d.bulanAda.forEach(m => {
+    if (m + 1 >= CFG.BULAN_TARIKAN) return;
+    const f = fileJam_(folder, m); if (!f) return;
+    const J = bacaJam_(f), kat = J.kasus.map(k => (peta.kasus[normKasus(k)] || {}).k), area = J.area.map(areaNorm);
+    Object.keys(J.d).forEach(t => (J.d[t].e || '').split(';').forEach(x => { if (!x) return; const v = x.split(','), k = kat[+v[3]], n = +v[4];
+      if (['DB', 'DD', 'FM'].indexOf(k) < 0 || !n) return;
+      const o = JAM[m + '|' + A.indexOf(area[+v[1]])] = JAM[m + '|' + A.indexOf(area[+v[1]])] || { DB: [0, 0], DD: [0, 0], FM: [0, 0] };
+      o[k][0] += n; if (+v[0] === 99) o[k][1] += n; }));
+  });
+  const rentang = arr => { const out = []; let i = 0; while (i < arr.length) { let j = i; while (j + 1 < arr.length && arr[j + 1] === arr[j] + 1) j++; out.push(j - i >= 2 ? arr[i] + '–' + arr[j] : arr.slice(i, j + 1).join(', ')); i = j + 1; } return out.join(', '); };
+  const pct = o => !o || !o[0] ? '' : Math.round(o[1] / o[0] * 100) + '%';
+  const rows = [], ringkas = [];
+  d.bulanAda.forEach(m => {
+    const nHari = new Date(tahun, m + 1, 0).getDate(), selesai = m < d.bulanAda[d.bulanAda.length - 1], batas = selesai ? nHari : (akhirBulan[m] || nHari);
+    A.forEach((a, ai) => {
+      const x = H[m + '|' + ai] || {}, hari = Object.keys(x).map(Number);
+      const kosong = []; for (let t = 1; t <= batas; t++) if (!x[t]) kosong.push(t);
+      const v = hari.map(t => x[t]).sort((p, q) => p - q), med = v.length ? v[Math.floor(v.length / 2)] : 0;
+      const rendah = hari.filter(t => med && x[t] < 0.35 * med).sort((p, q) => p - q);
+      const j = JAM[m + '|' + ai], tarikan = m + 1 >= CFG.BULAN_TARIKAN;
+      const ket = [];
+      if (!hari.length) ket.push('Tidak ada data sama sekali untuk regional ini di bulan ' + NB(BULAN[m]) + '.');
+      else {
+        if (kosong.length) ket.push('Tidak ada data tanggal ' + rentang(kosong) + '.');
+        if (!selesai && batas < nHari) ket.push('Bulan berjalan: data baru sampai tanggal ' + batas + '.');
+        catatanSumber.filter(c => c.toUpperCase().indexOf(BULAN[m]) >= 0 && c.toUpperCase().indexOf(a) >= 0).forEach(c => ket.push(c.replace(/^\d+\.\s*/, '').replace(/^[^:]+:\s*/, 'File sumber: ')));
+        if (j) { const g = ['DB', 'DD', 'FM'].filter(k => j[k][0] && j[k][1] / j[k][0] > 0.5).map(k => ({ DB: 'Driving Behaviour', DD: 'Driver Discipline', FM: 'Fatigue Management' })[k]);
+          if (g.length) ket.push('Sebagian besar event ' + g.join(', ').replace(/, ([^,]*)$/, ' dan $1') + ' tidak punya jam kejadian di file mentah, jadi tidak ikut filter shift/jam.'); }
+      }
+      rows.push([NB(BULAN[m]), NB(a), hari.length ? batas + ' ' + NB(BULAN[m]).slice(0, 3) : '–', rentang(kosong), rentang(rendah),
+        tarikan ? 'lengkap' : pct(j && j.DB), tarikan ? 'lengkap' : pct(j && j.DD), tarikan ? 'lengkap' : pct(j && j.FM), ket.join(' ')]);
+      if (!hari.length || kosong.length || catatanSumber.some(c => c.toUpperCase().indexOf(BULAN[m]) >= 0 && c.toUpperCase().indexOf(a) >= 0))
+        ringkas.push(NB(BULAN[m]) + ' · ' + NB(a) + ': ' + ket.filter(k => !/jam kejadian/.test(k)).join(' '));
+    });
+  });
+  let sh = ss.getSheetByName('Data Kosong');
+  if (!sh) sh = ss.insertSheet('Data Kosong'); else sh.clear();
+  const HDR = ['Bulan', 'Regional', 'Data s/d', 'Tanggal tanpa data', 'Hari dengan event sangat sedikit', 'Tanpa jam: Driving Behaviour', 'Tanpa jam: Driver Discipline', 'Tanpa jam: Fatigue Management', 'Penjelasan'];
+  const atas = [
+    ['Data Kosong dan Keterbatasan Data'],
+    ['Diperbarui otomatis ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'd MMM yyyy HH.mm') + ' dari data yang dibaca dashboard. Jangan diisi manual; tambahkan catatan lain di sheet Catatan.'],
+    ['Tanggal tanpa data = tidak ada event sama sekali dari regional itu. Event sangat sedikit = di bawah 35% dari hari biasa regional itu (hari Minggu/libur bisa wajar). Tanpa jam = persentase event yang tidak punya jam kejadian di file mentah: tetap dihitung saat memilih tanggal, tetapi tidak ikut filter shift/jam.'],
+    [''],
+    ['RINGKASAN: bagian yang tidak ada datanya']
+  ].concat(ringkas.length ? ringkas.map(r => [r]) : [['Tidak ada tanggal kosong.']]).concat([[''], ['RINCIAN PER BULAN DAN REGIONAL']]);
+  sh.getRange(1, 1, atas.length, 1).setValues(atas);
+  const r0 = atas.length + 1;
+  sh.getRange(r0, 1, 1, HDR.length).setValues([HDR]).setFontWeight('bold').setBackground('#4a7a53').setFontColor('#ffffff').setWrap(true);
+  if (rows.length) sh.getRange(r0 + 1, 1, rows.length, HDR.length).setValues(rows).setWrap(true).setVerticalAlignment('top');
+  sh.getRange(1, 1).setFontSize(14).setFontWeight('bold');
+  sh.getRange(5, 1).setFontWeight('bold'); sh.getRange(r0 - 1, 1).setFontWeight('bold');
+  [90, 100, 80, 160, 160, 110, 110, 110, 420].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  sh.setFrozenRows(0);
+  try { SpreadsheetApp.getActiveSpreadsheet().toast('Sheet Data Kosong diperbarui.', 'Dashboard', 5); } catch (e) { /* dari pemicu */ }
 }
 
 /* ============================== BACA SUMBER ============================== */
