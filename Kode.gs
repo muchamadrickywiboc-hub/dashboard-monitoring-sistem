@@ -51,6 +51,9 @@ function onOpen() {
       .addItem('Pasang pemicu otomatis', 'pasangPemicu')
       .addItem('Proses file tarikan sekarang', 'prosesTarikan')
       .addItem('Proses ulang semua file tarikan', 'prosesUlangSemuaTarikan')
+      .addSeparator()
+      .addItem('Buat sheet Akun', 'buatSheetAkun')
+      .addItem('Amankan password akun', 'amankanPasswordAkun')
       .addToUi();
   } catch (e) { /* dijalankan dari luar spreadsheet */ }
 }
@@ -63,7 +66,7 @@ function hapusCache() {
 
 /** DIAGNOSA: jalankan dari editor, lihat hasilnya di View > Logs. */
 function UJI_BACA_SUMBER() {
-  const d = bangunData();
+  const d = bangunData_();
   Logger.log('Bulan berisi data: ' + d.bulanAda.map(m => BULAN[m]).join(', '));
   Logger.log('Parameter: ' + d.params.map(p => p.label + ' (' + p.kat + ')').join('; '));
   Logger.log('Lokasi: ' + d.lok.length + ' | baris fakta: ' + d.fakta.length + ' | baris harian: ' + d.harian.length);
@@ -80,7 +83,7 @@ function doGet() {
 }
 
 /** Dijalankan pemicu waktu: membangun ulang cache supaya pengunjung tidak menunggu spreadsheet dihitung. */
-function panaskanCache() { simpanCache(JSON.stringify(bangunData())); }
+function panaskanCache() { simpanCache_(JSON.stringify(bangunData_())); }
 
 /** Jalankan sekali dari editor: memasang pemicu panaskanCache tiap jam. */
 function pasangPemicu() {
@@ -91,7 +94,7 @@ function pasangPemicu() {
   Logger.log('Pemicu panaskanCache (tiap jam) dan prosesTarikan (tiap 15 menit) terpasang dan cache sudah diisi. Jalankan prosesTarikan sekali untuk mulai membaca file tarikan.');
 }
 
-function simpanCache(json, kunci, detik) {
+function simpanCache_(json, kunci, detik) {
   kunci = kunci || 'DASHB4';
   try {
     const parts = {}, size = 90000;
@@ -100,7 +103,7 @@ function simpanCache(json, kunci, detik) {
     CacheService.getScriptCache().putAll(parts, detik || CFG.CACHE_DETIK);
   } catch (e) { /* tanpa cache */ }
 }
-function ambilCache(kunci) {
+function ambilCache_(kunci) {
   const cache = CacheService.getScriptCache(), n = Number(cache.get(kunci + '_N') || 0);
   if (!n) return null;
   const keys = []; for (let i = 0; i < n; i++) keys.push(kunci + '_' + i);
@@ -108,12 +111,121 @@ function ambilCache(kunci) {
   return keys.every(k => got[k] !== undefined && got[k] !== null) ? keys.map(k => got[k]).join('') : null;
 }
 
-function getDashboardData() {
-  const ada = ambilCache('DASHB4');
+/** Dipanggil dashboard setelah login: data sesuai cakupan akun (Pusat = semua, Area = satu area, Lokasi = satu lokasi). */
+function getDashboardData(token) {
+  const ses = sesi_(token);
+  return potongJson_(dataUtama_(), ses, 'SC_');
+}
+function dataUtama_() {
+  const ada = ambilCache_('DASHB4');
   if (ada) return ada;
-  const json = JSON.stringify(bangunData());
-  simpanCache(json);
+  const json = JSON.stringify(bangunData_());
+  simpanCache_(json);
   return json;
+}
+
+/* ============================== AKUN & LOGIN ============================== */
+/**
+ * Sheet "Akun" di file Pengaturan Dashboard (dibuat lewat menu Dashboard > Buat sheet Akun):
+ *   Username | Password | Nama | Peran (PUSAT / AREA / LOKASI) | Area | Lokasi | Aktif (YA / TIDAK)
+ * Password boleh diketik biasa, lalu jalankan menu "Amankan password akun" supaya disimpan sebagai sidik SHA-256.
+ * Data dipotong di server sesuai cakupan akun, jadi akun Area / Lokasi tidak menerima data area / lokasi lain.
+ */
+const AKUN_HDR = ['Username', 'Password', 'Nama', 'Peran', 'Area', 'Lokasi', 'Aktif'];
+const SESI_DETIK = 21600;   // sesi login 6 jam
+
+function fileAtur_() {
+  const it = DriveApp.getFolderById(CFG.FOLDER_ID).getFilesByType(MimeType.GOOGLE_SHEETS);
+  while (it.hasNext()) { const f = it.next(); if (/^PENGATURAN/i.test(teks(f.getName()))) return f; }
+  throw new Error('File "Pengaturan Dashboard" tidak ditemukan di folder data.');
+}
+function sheetAkun_() { return SpreadsheetApp.open(fileAtur_()).getSheetByName('Akun'); }
+function sidikPw_(u, p) {
+  const b = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, 'dashboard|' + u + '|' + p, Utilities.Charset.UTF_8);
+  return 'sha256:' + b.map(x => ('0' + (x & 255).toString(16)).slice(-2)).join('');
+}
+function cakupanAkun_(r) {
+  const u = teks(r[0]).toLowerCase(), nama = teks(r[2]) || u, peran = teks(r[3]).toUpperCase(), area = areaNorm(r[4]), lok = teks(r[5]).toUpperCase();
+  if (peran === 'PUSAT') return { u: u, nama: nama, peran: peran };
+  if (peran === 'AREA' && area) return { u: u, nama: nama, peran: peran, area: area };
+  if (peran === 'LOKASI' && lok) return { u: u, nama: nama, peran: peran, area: area, lok: ALIAS_LOKASI[lok] || lok };
+  return null;
+}
+
+/** Dipanggil halaman masuk. Mengembalikan token sesi + cakupan akun. */
+function login(username, password) {
+  const u = teks(username).toLowerCase(), p = String(password || ''), cache = CacheService.getScriptCache(), kg = 'GAGAL_' + u;
+  if (!u || !p) throw new Error('Isi username dan password.');
+  const gagal = +(cache.get(kg) || 0);
+  if (gagal >= 5) throw new Error('Terlalu banyak percobaan salah. Coba lagi 15 menit lagi.');
+  const sh = sheetAkun_(), v = sh ? sh.getDataRange().getValues() : [];
+  const r = v.slice(1).filter(x => teks(x[0]).toLowerCase() === u)[0];
+  const pw = r ? teks(r[1]) : '';
+  const cocok = r && !/^(TIDAK|NO|FALSE|0|NONAKTIF)$/i.test(teks(r[6])) && pw && (pw.indexOf('sha256:') === 0 ? pw === sidikPw_(u, p) : pw === p);
+  if (!cocok) { cache.put(kg, String(gagal + 1), 900); Utilities.sleep(600); throw new Error('Username atau password salah.'); }
+  const ses = cakupanAkun_(r);
+  if (!ses) throw new Error('Akun belum lengkap: isi Peran (PUSAT / AREA / LOKASI) beserta Area atau Lokasinya di sheet Akun.');
+  const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  cache.put('SES_' + token, JSON.stringify(ses), SESI_DETIK);
+  cache.remove(kg);
+  return JSON.stringify(Object.assign({ token: token }, ses));
+}
+function logout(token) { if (token) CacheService.getScriptCache().remove('SES_' + token); }
+function sesi_(token) {
+  const s = token && /^[0-9a-f]{64}$/.test(String(token)) ? CacheService.getScriptCache().get('SES_' + token) : null;
+  if (!s) throw new Error('LOGIN');
+  return JSON.parse(s);
+}
+
+/** Memotong data (bentuk hitung_) sesuai cakupan akun; nama lokasi & Driver di luar cakupan dihapus. */
+function potongCakupan_(d, ses) {
+  d.akun = { nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' };
+  if (ses.peran === 'PUSAT') return d;
+  const ai = AREAS.indexOf(ses.area || ''), kl = ses.lok ? kunciLok(ses.lok) : '';
+  const L = d.lok.map(x => ses.peran === 'AREA' ? x[1] === ai : kunciLok(x[0]) === kl && (ai < 0 || x[1] === ai));
+  d.lok = d.lok.map((x, i) => L[i] ? x : ['', x[1]]);
+  d.fakta = d.fakta.filter(f => L[f[2]]);
+  d.harian = d.harian.filter(h => L[h[3]]);
+  if (d.driver) {
+    const nama = [], idx = {}, X = d.driver;
+    const ulang = rows => rows.map(r => { const n = X.nama[r[4]]; if (idx[n] === undefined) { idx[n] = nama.length; nama.push(n); } return [r[0], r[1], r[2], r[3], idx[n], r[5]]; });
+    const lok = X.lok.filter(r => L[r[2]]), atas = ses.peran === 'AREA' ? X.area.filter(r => r[1] === ai) : lok;
+    d.driver = { all: ulang(atas), area: ulang(atas), lok: ulang(lok), nama: nama };
+  }
+  if (ses.peran === 'LOKASI' && !L.some(x => x)) d.peringatan = (d.peringatan || []).concat('Lokasi akun ini (' + ses.lok + ') tidak ditemukan di data. Periksa ejaan Lokasi di sheet Akun.');
+  return d;
+}
+function potongJson_(json, ses, awalan) {
+  if (ses.peran === 'PUSAT') return JSON.stringify(potongCakupan_(JSON.parse(json), ses));
+  const kunci = awalan + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
+  const ada = ambilCache_(kunci);
+  if (ada) return ada;
+  const out = JSON.stringify(potongCakupan_(JSON.parse(json), ses));
+  simpanCache_(out, kunci, 900);
+  return out;
+}
+
+/** Menu: membuat sheet Akun berisi contoh akun Pusat, Area, dan Lokasi dengan password acak. */
+function buatSheetAkun() {
+  const ss = SpreadsheetApp.open(fileAtur_());
+  if (ss.getSheetByName('Akun')) { try { SpreadsheetApp.getUi().alert('Sheet Akun sudah ada.'); } catch (e) { Logger.log('Sheet Akun sudah ada.'); } return; }
+  const sh = ss.insertSheet('Akun'), acak = () => Utilities.getUuid().replace(/-/g, '').slice(0, 10);
+  const rows = [['pusat', acak(), 'RTC Pusat', 'PUSAT', '', '', 'YA']]
+    .concat(AREAS.map(a => [a.toLowerCase(), acak(), 'Area ' + a.charAt(0) + a.slice(1).toLowerCase(), 'AREA', a, '', 'YA']))
+    .concat([['contoh.lokasi', acak(), 'Lokasi FT Jambi', 'LOKASI', 'SUMBAGSEL', 'FT JAMBI', 'TIDAK']]);
+  sh.getRange(1, 1, 1, AKUN_HDR.length).setValues([AKUN_HDR]).setFontWeight('bold');
+  sh.getRange(2, 1, rows.length, AKUN_HDR.length).setValues(rows);
+  sh.setFrozenRows(1); sh.autoResizeColumns(1, AKUN_HDR.length);
+  try { SpreadsheetApp.getUi().alert('Sheet Akun dibuat dengan password acak. Catat/bagikan password-nya, lalu jalankan menu "Amankan password akun".'); } catch (e) { /* editor */ }
+}
+/** Menu: mengubah password yang masih teks biasa menjadi sidik SHA-256 (tidak bisa dibaca lagi). */
+function amankanPasswordAkun() {
+  const sh = sheetAkun_(); if (!sh || sh.getLastRow() < 2) return;
+  const rg = sh.getRange(2, 1, sh.getLastRow() - 1, 2), v = rg.getValues();
+  let n = 0;
+  v.forEach(r => { const u = teks(r[0]).toLowerCase(), p = teks(r[1]); if (u && p && p.indexOf('sha256:') !== 0) { r[1] = sidikPw_(u, p); n++; } });
+  rg.setValues(v);
+  try { SpreadsheetApp.getActiveSpreadsheet().toast(n + ' password diamankan.', 'Dashboard', 5); } catch (e) { Logger.log(n + ' password diamankan.'); }
 }
 
 /* ============================== FILTER WAKTU ============================== */
@@ -122,13 +234,17 @@ const SHIFT = [null, [0, 8], [8, 16], [16, 24]];   // Shift 1 00.00-08.00, Shift
 /**
  * Data satu jendela waktu di bulan m (0-11) untuk filter Tanggal / Shift / Jam, dibaca dari sheet "Event Jam" & "AMT Jam" file Tarikan.
  *   d = tanggal (0 = semua tanggal), s = shift (0 = semua, 1-3), h = jam (-1 = semua).
- * Bentuknya sama dengan hitung(): "bulan" 0 = jendela terpilih, 1 = pembanding (tanggal sebelumnya, shift/jam yang sama);
+ * Bentuknya sama dengan hitung_(): "bulan" 0 = jendela terpilih, 1 = pembanding (tanggal sebelumnya, shift/jam yang sama);
  * kolom "tanggal" di harian berisi jam + 1, jadi harian = event per jam.
  */
-function getDataWaktu(m, d, s, h) {
+function getDataWaktu(token, m, d, s, h) {
+  const ses = sesi_(token);
+  return potongJson_(dataWaktu_(m, d, s, h), ses, 'SW_' + [m, d, s, h].join('_') + '_');
+}
+function dataWaktu_(m, d, s, h) {
   m = +m; d = +d || 0; s = +s || 0; h = (h === undefined || h === null || h === '') ? -1 : +h;
   const kunci = 'WKT1_' + [m, d, s, h].join('_');
-  const ada = ambilCache(kunci);
+  const ada = ambilCache_(kunci);
   if (ada) return ada;
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
   let atur = null, file = null;
@@ -154,15 +270,15 @@ function getDataWaktu(m, d, s, h) {
     if (w < 0 || !c || !n || !nama) return;
     AM.push([w, areaNorm(r[2]), teks(r[3]).toUpperCase(), nama, c.p, c.k, n]);
   });
-  const hasil = hitung(EV, AM, peta, [], []);
+  const hasil = hitung_(EV, AM, peta, [], []);
   hasil.waktu = { m: m, d: d, s: s, h: h, adaPrev: d > 1 };
   const json = JSON.stringify(hasil);
-  simpanCache(json, kunci, 900);   // 15 menit, mengikuti pemicu prosesTarikan
+  simpanCache_(json, kunci, 900);   // 15 menit, mengikuti pemicu prosesTarikan
   return json;
 }
 
 /* ============================== BACA SUMBER ============================== */
-function bangunData() {
+function bangunData_() {
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
   const peringatan = [];
   konversiXlsx(folder, peringatan);
@@ -210,7 +326,7 @@ function bangunData() {
   else if (!tarikan[CFG.BULAN_TARIKAN - 1]) peringatan.push('Data ' + BULAN[CFG.BULAN_TARIKAN - 1].charAt(0) + BULAN[CFG.BULAN_TARIKAN - 1].slice(1).toLowerCase() + ' dan seterusnya menunggu file tarikan selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang.');
   const log = bacaLogTarikan(folder);
   if (log.gagal.length) peringatan.push('File tarikan gagal dibaca: ' + log.gagal.slice(0, 5).join('; '));
-  const hasil = hitung(EV, AM, peta, catatan, peringatan);
+  const hasil = hitung_(EV, AM, peta, catatan, peringatan);
   // bulan yang punya jam kejadian (sheet "Event Jam" di file Tarikan) -> filter Tanggal / Shift / Jam aktif
   hasil.jamAda = dataBulan.filter(o => o.f === tarikan[o.m]).filter(o => { const sh = SpreadsheetApp.open(o.f).getSheetByName('Event Jam'); return sh && sh.getLastRow() > 1; }).map(o => o.m);
   return hasil;
@@ -314,7 +430,7 @@ function prosesTarikan() {
     const sudah = {};
     logV.slice(1).forEach((r, i) => { sudah[r[0]] = { baris: i + 2, diubah: Number(r[4]) || 0, status: teks(r[7]) }; });
 
-    const antre = daftarTarikan().filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^GAGAL/.test(sudah[o.id].status));   // baru, berubah, atau gagal sebelumnya
+    const antre = daftarTarikan_().filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^GAGAL/.test(sudah[o.id].status));   // baru, berubah, atau gagal sebelumnya
     antre.sort((a, b) => a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0);
     let n = 0;
     for (const o of antre) {
@@ -333,7 +449,7 @@ function prosesTarikan() {
 }
 
 /** Semua file "Tarikan_<REG>_..._<yyyy-mm-dd>" di folder yang terdaftar: [{id, nama, area, tgl, diubah, mime, file}]. */
-function daftarTarikan() {
+function daftarTarikan_() {
   const v = SpreadsheetApp.openById(CFG.TARIKAN_ID).getSheets()[0].getDataRange().getValues();
   const out = [];
   v.forEach(r => {
@@ -469,7 +585,7 @@ function bacaLogTarikan(folder) {
  *   driver : { all, area, lok, nama } -> [[bulan, indeks area, indeks lokasi, indeks parameter, indeks nama, jumlah]]
  *            10 Driver teratas per bulan x parameter, untuk semua area, per area, dan per lokasi (kolom AMT 1).
  */
-function hitung(EV, AM, peta, catatan, peringatan) {
+function hitung_(EV, AM, peta, catatan, peringatan) {
   const ada = {}; EV.forEach(e => { ada[e[0]] = 1; });
   const bulanAda = Object.keys(ada).map(Number).sort((a, b) => a - b);
 

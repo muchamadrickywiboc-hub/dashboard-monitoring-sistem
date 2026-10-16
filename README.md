@@ -67,3 +67,11 @@ Satu lokasi memakai satu nama dan satu area di semua bulan: ejaan disamakan (tan
 - Data jendela waktu dihitung saat dipilih oleh `getDataWaktu(m, d, s, h)` dan disimpan di cache 15 menit.
 - File Data Januari–September hanya berisi tanggal, jadi filter waktu nonaktif untuk bulan-bulan itu.
 - Setelah memasang versi ini, jalankan sekali **Dashboard > Proses ulang semua file tarikan** (`prosesUlangSemuaTarikan`) supaya file tarikan yang sudah diproses dibaca ulang beserta jamnya.
+
+## Akun Pusat, Area, Lokasi
+
+- Dashboard sekarang meminta login. Akun disimpan di sheet **Akun** pada file Pengaturan Dashboard: `Username | Password | Nama | Peran (PUSAT / AREA / LOKASI) | Area | Lokasi | Aktif`.
+- Buat sheetnya lewat menu **Dashboard > Buat sheet Akun** (berisi akun pusat, 6 akun area, dan contoh akun lokasi, dengan password acak). Setelah password dicatat, jalankan **Dashboard > Amankan password akun** supaya password disimpan sebagai sidik SHA-256.
+- Data dipotong di server (`potongCakupan_`): akun Area hanya menerima data areanya, akun Lokasi hanya lokasinya. Fungsi pembaca data berakhiran `_` supaya tidak bisa dipanggil langsung dari browser.
+- Sesi login berlaku 6 jam; 5 kali salah password mengunci username itu 15 menit.
+- Deploy web app: Jalankan sebagai **Saya**, akses **Siapa saja** (tanpa akun, pengunjung hanya melihat halaman masuk).

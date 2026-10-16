@@ -27,6 +27,15 @@ h1{margin:2px 0 4px;font-size:clamp(24px,3.2vw,36px);font-weight:700;letter-spac
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .flabel{font-size:13px;font-weight:600;margin-right:4px}
 .winfo{font-size:12.5px;opacity:.9}
+.akun{gap:10px;align-items:center}.akun button{font:600 12px var(--f-ui);border:0;background:#fff;color:var(--forest);border-radius:999px;padding:3px 10px;cursor:pointer}
+.login{max-width:420px;width:100%;margin:0 auto}.login label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}
+.login input{font:500 14px var(--f-ui);padding:10px 12px;border:1px solid var(--axis);border-radius:8px}.login input:focus{outline:2px solid var(--forest);outline-offset:1px}
+.login button{font:600 14px var(--f-ui);border:0;background:var(--forest);color:#fff;padding:11px 14px;border-radius:8px;cursor:pointer}.login button:disabled{opacity:.6;cursor:wait}
+.lgerr{color:var(--serious-ink);font-size:13px;min-height:1em}
+.nologin #view-bulan,.nologin #loadwrap,.nologin #bulanRow,.nologin #waktuRow,.nologin .filters,.nologin #tUpdate{display:none!important}
+.peran-area #panelTopA,.peran-area #panelRegA,.peran-lokasi #topGrid,.peran-lokasi #panelRegA,.peran-lokasi #panelRegL,.peran-lokasi #chips,.peran-lokasi #chipsLbl,.peran-lokasi .filters .pick{display:none!important}
+.peran-area #topGrid{grid-template-columns:minmax(0,1fr)}
+.chip.tetap{cursor:default}
 .pick select:disabled{opacity:.55;cursor:not-allowed}
 #view-bulan.memuat .wpanel{opacity:.45;transition:opacity .2s}
 .chip{appearance:none;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;font:500 13.5px var(--f-ui);padding:7px 14px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
@@ -198,13 +207,13 @@ td{padding:7px 10px}
   <div class="heroin">
     <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px 24px">
       <div>
-        <div class="eyebrow">RTC Pusat · Monitoring Armada</div>
-        <h1>Monitoring Driving Behaviour, Driver Discipline &amp; Fatigue — <span class="tBulan">September 2026</span></h1>
-        <div class="sub">Sebaran pelanggaran Driving Behaviour, Driver Discipline &amp; Fatigue per area, lokasi dan Driver · data <span id="tPeriode">…</span></div>
+        <div class="eyebrow"><span id="tPeran">RTC Pusat</span> · Monitoring Armada</div>
+        <h1>Monitoring Driving Behaviour, Driver Discipline &amp; Fatigue — <span class="tBulan">2026</span></h1>
+        <div class="sub">Sebaran pelanggaran Driving Behaviour, Driver Discipline &amp; Fatigue per area, lokasi dan Driver · data <span id="tPeriode">2026</span></div>
       </div>
-      <div class="preview" id="tUpdate">Memuat data…</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><button type="button" id="btnKeluar">Keluar</button></div></div>
     </div>
-    <div class="ctrlrow">
+    <div class="ctrlrow" id="bulanRow">
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
       <label class="pick" for="selCmp">Dibanding <select id="selCmp"></select></label>
     </div>
@@ -216,12 +225,21 @@ td{padding:7px 10px}
       <span class="winfo" id="waktuInfo"></span>
     </div>
     <nav class="filters" aria-label="Filter area dan lokasi">
-      <span class="flabel">Area:</span>
+      <span class="flabel" id="chipsLbl">Area:</span>
       <div id="chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       <label class="pick" for="selLok">Lokasi <select id="selLok"></select></label>
     </nav>
   </div>
 </header>
+<div class="wrap" id="loginwrap" hidden>
+  <form class="panel login" id="loginForm" autocomplete="on">
+    <div class="ph"><h2>Masuk ke dashboard</h2><p>Gunakan akun yang diberikan RTC Pusat. Data yang tampil mengikuti cakupan akun (Pusat, Area, atau Lokasi).</p></div>
+    <label>Username<input id="lgU" name="username" autocomplete="username" required></label>
+    <label>Password<input id="lgP" name="password" type="password" autocomplete="current-password" required></label>
+    <div class="lgerr" id="lgErr" role="alert"></div>
+    <button type="submit" id="lgBtn">Masuk</button>
+  </form>
+</div>
 <div class="wrap" id="loadwrap"><div class="loading" id="loading" role="status"></div></div>
 
 <div class="wrap" id="view-bulan">
@@ -231,14 +249,14 @@ td{padding:7px 10px}
   <section class="panel wpanel"><div class="ph"><h2 id="bdayH">Event per hari</h2><p id="bdaySub"></p></div>
     <div class="legend" id="bdayLeg"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span><span id="bdayCmpLeg"><i style="background:none;border-top:2px dashed #1b1f1d;border-radius:0;height:0;width:16px"></i><b id="bdayCmpName"></b></span></div>
     <div class="chart" id="bday"></div></section>
-  <section class="grid g-11 wpanel">
-    <div class="panel"><div class="ph"><h2 id="btopAH">Top 10 Area dengan pelanggaran terbanyak</h2><p id="btopAS"></p></div><div class="rank wide" id="btopA"></div></div>
+  <section class="grid g-11 wpanel" id="topGrid">
+    <div class="panel" id="panelTopA"><div class="ph"><h2 id="btopAH">Top 10 Area dengan pelanggaran terbanyak</h2><p id="btopAS"></p></div><div class="rank wide" id="btopA"></div></div>
     <div class="panel"><div class="ph"><h2 id="btopLH">Top 10 Lokasi dengan pelanggaran terbanyak</h2><p id="btopLS"></p></div><div class="rank wide" id="btopL"></div></div>
   </section>
   <div class="anahead"><h2 id="drvH" style="margin:0;font-size:18px;font-weight:700">TOP 10 Pelanggaran Driver per parameter</h2><span class="hint" id="drvSub"></span></div>
   <div id="bdrv" class="drvgrid wpanel"></div>
-  <section class="panel wpanel"><div class="ph"><h2>Rekap per area</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
-  <section class="panel wpanel"><div class="ph"><h2>Rekap per lokasi</h2><p id="blokSub"></p></div><div class="tbl"><table id="blok"></table></div><div id="blokMore"></div></section>
+  <section class="panel wpanel" id="panelRegA"><div class="ph"><h2>Rekap per area</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
+  <section class="panel wpanel" id="panelRegL"><div class="ph"><h2>Rekap per lokasi</h2><p id="blokSub"></p></div><div class="tbl"><table id="blok"></table></div><div id="blokMore"></div></section>
 </div>
 <footer class="footer">
   <div class="redtab">www.elnusapetrofin.co.id</div>
@@ -246,7 +264,7 @@ td{padding:7px 10px}
 </footer>
 <div id="tip" role="tooltip"></div>
 <script>
-let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, tgl = 0, shift = 0, jam = -1, WIN = null, WKEY = '', ERRW = '', KC = 0, KP = null, showAllLok = false, showAllDelta = false;
+let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, tgl = 0, shift = 0, jam = -1, WIN = null, WKEY = '', ERRW = '', TOKEN = '', AKUN = null, KC = 0, KP = null, showAllLok = false, showAllDelta = false;
 const rn = r => String(r || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\b(Ii|Iii|Iv)\b/g, x => x.toUpperCase());
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const B3 = BLN.map(b => b.slice(0, 3));
@@ -350,14 +368,15 @@ function chips() {
   const mk = (key, label, color, lag) => { const b = document.createElement('button'); b.className = 'chip'; b.setAttribute('aria-pressed', sel === key);
     b.innerHTML = (color ? `<span class="sw" style="background:${color}"></span>` : '') + label + (lag ? `<span class="lag">${lag}</span>` : '');
     b.onclick = () => setSel(key); c.appendChild(b); };
+  if (AKUN && AKUN.peran !== 'PUSAT') { mk(sel, rn(sel), rv(sel)); c.lastChild.classList.add('tetap'); c.lastChild.onclick = null; return; }
   mk('ALL', 'Semua area');
   REG.forEach(r => mk(r, rn(r), rv(r), !RAW.fakta.some(f => f[0] === mon && RAW.areas[f[1]] === r) ? 'tidak ada ' + B3[mon] : null));
 }
-function setSel(k) { sel = (sel === k && k !== 'ALL') ? 'ALL' : k; if (selLok >= 0 && (sel === 'ALL' || RAW.areas[RAW.lok[selLok][1]] !== sel)) selLok = -1; showAllLok = false; showAllDelta = false; render(); }
-function setLok(i) { selLok = (selLok === i) ? -1 : i; if (selLok >= 0) sel = RAW.areas[RAW.lok[selLok][1]]; showAllLok = false; showAllDelta = false; render(); }
+function setSel(k) { if (AKUN && AKUN.peran !== 'PUSAT') return; sel = (sel === k && k !== 'ALL') ? 'ALL' : k; if (selLok >= 0 && (sel === 'ALL' || RAW.areas[RAW.lok[selLok][1]] !== sel)) selLok = -1; showAllLok = false; showAllDelta = false; render(); }
+function setLok(i) { if (AKUN && AKUN.peran === 'LOKASI') return; selLok = (selLok === i) ? -1 : i; if (selLok >= 0) sel = RAW.areas[RAW.lok[selLok][1]]; showAllLok = false; showAllDelta = false; render(); }
 function pilihanLokasi() {
   const el = document.getElementById('selLok');
-  const daftar = RAW.lok.map((x, i) => ({i, n: x[0], a: RAW.areas[x[1]]})).filter(o => sel === 'ALL' || o.a === sel);
+  const daftar = RAW.lok.map((x, i) => ({i, n: x[0], a: RAW.areas[x[1]]})).filter(o => o.n && (sel === 'ALL' || o.a === sel));
   const grup = {}; daftar.forEach(o => (grup[o.a] = grup[o.a] || []).push(o));
   el.innerHTML = `<option value="-1">Semua lokasi${sel === 'ALL' ? '' : ' di ' + rn(sel)}</option>` + REG.filter(a => grup[a]).map(a =>
     `<optgroup label="${rn(a)}">${grup[a].sort((x, y) => x.n < y.n ? -1 : 1).map(o => `<option value="${o.i}" ${o.i === selLok ? 'selected' : ''}>${o.n}</option>`).join('')}</optgroup>`).join('');
@@ -490,8 +509,8 @@ function siapkanWin(w) {
 function muatWaktu(key) {
   WKEY = key; WIN = null; ERRW = '';
   google.script.run.withSuccessHandler(j => { if (WKEY !== key) return; WIN = siapkanWin(JSON.parse(j)); render(); })
-    .withFailureHandler(e => { if (WKEY !== key) return; ERRW = 'Data waktu gagal dimuat: ' + (e && e.message ? e.message : e); tgl = 0; shift = 0; jam = -1; WKEY = ''; render(); })
-    .getDataWaktu(mon, tgl, shift, jam);
+    .withFailureHandler(e => { if (WKEY !== key) return; if (perluLogin(e)) return; ERRW = 'Data waktu gagal dimuat: ' + (e && e.message ? e.message : e); tgl = 0; shift = 0; jam = -1; WKEY = ''; render(); })
+    .getDataWaktu(TOKEN, mon, tgl, shift, jam);
 }
 function deriveWaktu() {
   const A = RAW.areas, w = WIN, kp = w.waktu.adaPrev, okLok = li => selLok < 0 || li === selLok;
@@ -672,8 +691,10 @@ const REFRESH_MS = 5*60*1000;
 function start(json) {
   const p = JSON.parse(json);
   const wasLatest = !D || mon === LAST;
+  terapkanAkun(p);
   RAW = p; D = Object.assign({}, p); REG = p.areas; P = p.params; if (selLok >= p.lok.length) selLok = -1; ADA = D.bulanAda || []; LAST = ADA.length ? ADA[ADA.length - 1] : -1;
   if (wasLatest || ADA.indexOf(mon) < 0) mon = Math.max(0, LAST);
+  kunciCakupan();
   const l = document.getElementById('loading');
   if (LAST < 0) { document.body.classList.add('nodata'); document.getElementById('tUpdate').textContent = 'Menunggu data'; l.hidden = false;
     l.innerHTML = `<div class="status"><h3>Belum ada data yang bisa ditampilkan</h3><ul>${(D.peringatan || []).map(s => `<li class="err">${s}</li>`).join('') || '<li>Folder data belum berisi file Data per bulan.</li>'}</ul><div>Periksa CFG.FOLDER_ID di Kode.gs, file Pengaturan Dashboard, dan file Data per bulan di folder tersebut.</div></div>`; return; }
@@ -683,10 +704,56 @@ function start(json) {
   render();
 }
 function gagal(e) { const l = document.getElementById('loading'); l.hidden = false; l.innerHTML = '<b>Data gagal dimuat.</b> ' + (e && e.message ? e.message : e) + ' <button type="button" onclick="muat()">Coba lagi</button>'; }
+/* ================= AKUN & LOGIN ================= */
+const SIMPAN = 'dashb_token';
+const simpanToken = t => { try { t ? localStorage.setItem(SIMPAN, t) : localStorage.removeItem(SIMPAN); } catch (e) { /* tanpa penyimpanan */ } };
+try { TOKEN = localStorage.getItem(SIMPAN) || ''; } catch (e) { TOKEN = ''; }
+function tampilLogin(pesan) {
+  document.body.classList.add('nologin'); document.getElementById('loginwrap').hidden = false; document.getElementById('akunBox').hidden = true;
+  document.getElementById('lgErr').textContent = pesan || ''; document.getElementById('lgBtn').disabled = false;
+  setTimeout(() => document.getElementById('lgU').focus(), 50);
+}
+function perluLogin(e) {
+  if (!/LOGIN/.test(e && e.message ? e.message : String(e))) return false;
+  TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null;
+  tampilLogin('Sesi berakhir. Silakan masuk lagi.'); return true;
+}
+function terapkanAkun(p) {
+  const a = p.akun || {peran: 'PUSAT', nama: 'RTC Pusat'}, ganti = !AKUN || AKUN.peran !== a.peran || AKUN.area !== a.area || AKUN.lok !== a.lok;
+  AKUN = a;
+  document.body.classList.remove('nologin', 'peran-area', 'peran-lokasi');
+  if (a.peran === 'AREA') document.body.classList.add('peran-area'); else if (a.peran === 'LOKASI') document.body.classList.add('peran-lokasi');
+  document.getElementById('loginwrap').hidden = true;
+  document.getElementById('akunBox').hidden = false;
+  document.getElementById('akunNama').textContent = a.nama;
+  document.getElementById('tPeran').textContent = a.peran === 'PUSAT' ? 'RTC Pusat' : a.peran === 'AREA' ? 'Area ' + rn(a.area) : 'Lokasi ' + a.lok;
+  if (ganti) { sel = 'ALL'; selLok = -1; }
+}
+// akun Area / Lokasi: filter dikunci pada cakupannya
+function kunciCakupan() {
+  if (!AKUN || AKUN.peran === 'PUSAT') return;
+  if (AKUN.peran === 'AREA') { sel = AKUN.area; if (selLok >= 0 && RAW.areas[RAW.lok[selLok][1]] !== sel) selLok = -1; return; }
+  const i = RAW.lok.findIndex(x => x[0]);
+  if (i >= 0) { selLok = i; sel = RAW.areas[RAW.lok[i][1]]; } else if (AKUN.area) sel = AKUN.area;
+}
+document.getElementById('loginForm').onsubmit = e => {
+  e.preventDefault();
+  const u = document.getElementById('lgU').value.trim(), pw = document.getElementById('lgP').value, b = document.getElementById('lgBtn');
+  if (!u || !pw) return;
+  b.disabled = true; document.getElementById('lgErr').textContent = '';
+  google.script.run.withSuccessHandler(j => { const a = JSON.parse(j); TOKEN = a.token; simpanToken(TOKEN); document.getElementById('lgP').value = ''; b.disabled = false; muat(); })
+    .withFailureHandler(err => { b.disabled = false; document.getElementById('lgErr').textContent = err && err.message ? err.message : String(err); }).login(u, pw);
+};
+document.getElementById('btnKeluar').onclick = () => {
+  if (TOKEN) google.script.run.withSuccessHandler(() => {}).withFailureHandler(() => {}).logout(TOKEN);
+  TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null; sel = 'ALL'; selLok = -1; tgl = 0; shift = 0; jam = -1;
+  tampilLogin('');
+};
 function muat(diam) {
+  if (!TOKEN) { tampilLogin(''); return; }
   if (!diam || !D) { const l = document.getElementById('loading'); l.hidden = false; l.innerHTML = '<span class="spin"></span> Memuat data dashboard…'; }
-  google.script.run.withSuccessHandler(start).withFailureHandler(diam && D ? () => {} : gagal).getDashboardData();
+  google.script.run.withSuccessHandler(start).withFailureHandler(e => { if (perluLogin(e)) return; if (!(diam && D)) gagal(e); }).getDashboardData(TOKEN);
 }
 muat();
-setInterval(() => muat(true), REFRESH_MS);
+setInterval(() => { if (TOKEN && D) muat(true); }, REFRESH_MS);
 </script>
