@@ -115,6 +115,7 @@ h1{margin:2px 0 4px;font-size:clamp(24px,3.2vw,36px);font-weight:700;letter-spac
 .nologin #view-bulan,.nologin #loadwrap,.nologin #bulanRow,.nologin #waktuRow,.nologin .filters,.nologin #tUpdate{display:none!important}
 .peran-area #panelTopA,.peran-area #panelRegA,.peran-lokasi #topGrid,.peran-lokasi #panelRegA,.peran-lokasi #panelRegL,.peran-lokasi #chips,.peran-lokasi #chipsLbl,.peran-lokasi .filters .pick{display:none!important}
 .peran-area #topGrid{grid-template-columns:minmax(0,1fr)}
+.peran-area .pick[for="selShift"],.peran-lokasi .pick[for="selShift"]{display:none!important}
 .chip.tetap{cursor:default}
 .pick select:disabled{opacity:.55;cursor:not-allowed}
 #view-bulan.memuat .wpanel{opacity:.45;transition:opacity .2s}
@@ -277,6 +278,18 @@ td{padding:7px 10px}
 .pick select#selLok{max-width:260px}
 @media (max-width:1000px){.g-11{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){.rank.wide .rrow{grid-template-columns:110px minmax(0,1fr) 60px}}
+.metode summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:16px 20px}
+.metode summary::-webkit-details-marker{display:none}
+.metode summary h2{margin:0;font-size:16px}.metode summary h2::before{content:"＋";display:inline-block;width:20px;color:var(--forest)}
+.metode[open] summary h2::before{content:"－"}
+.metode summary span{color:var(--muted);font-size:13px}
+.metode-isi{padding:0 20px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
+.metode-isi div{background:var(--surface-2);border-radius:12px;padding:12px 14px}
+.metode-isi b{display:flex;align-items:center;gap:8px;font-size:13.5px;margin-bottom:4px}
+.metode-isi b i{font-style:normal;display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--forest);color:#fff;font-size:12px}
+.metode-isi p{margin:0;font-size:12.8px;color:var(--ink-2);line-height:1.55}
+#pdfPage table{table-layout:fixed}#pdfPage th{letter-spacing:0!important;font-size:8.5px!important;background:#f1f4f1!important;color:#5d665f!important;position:static!important;font-weight:600;border:0}#pdfPage td,#pdfPage th{white-space:normal;line-height:1.3}
+#pdfPage{position:fixed;left:-20000px;top:0;width:1123px;height:794px;overflow:hidden;background:#fff;color:#1b1f1d;font-family:Poppins,system-ui,sans-serif}
 </style>
 
 <header class="hero">
@@ -291,7 +304,7 @@ td{padding:7px 10px}
         <h1>Monitoring Driving Behaviour, Driver Discipline &amp; Fatigue Management — <span class="tBulan">2026</span></h1>
         <div class="sub">Sebaran pelanggaran Driving Behaviour, Driver Discipline &amp; Fatigue Management per area, lokasi dan Driver · data <span id="tPeriode">2026</span></div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><button type="button" id="btnKeluar">Keluar</button></div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnKeluar">Keluar</button></div></div>
     </div>
     <div class="ctrlrow" id="bulanRow">
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
@@ -381,6 +394,7 @@ td{padding:7px 10px}
   <div id="bdrv" class="drvgrid wpanel"></div>
   <section class="panel wpanel" id="panelRegA"><div class="ph"><h2>Rekap per area</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
   <section class="panel wpanel" id="panelRegL"><div class="ph"><h2>Rekap per lokasi</h2><p id="blokSub"></p></div><div class="tbl"><table id="blok"></table></div><div id="blokMore"></div></section>
+  <details class="panel metode" id="panelMetode"><summary><h2>Cara ringkasan ini dibuat</h2><span>Sumber data, cara menghitung, dan cara membandingkan</span></summary><div class="metode-isi" id="metodeIsi"></div></details>
 </div>
 <footer class="footer">
   <div class="redtab">www.elnusapetrofin.co.id</div>
@@ -846,6 +860,97 @@ function render() {
   renderBulan(); renderTopBulan(); renderDriver(); renderRekap();
 }
 
+/* ================= CARA RINGKASAN DIBUAT ================= */
+const METODE = [
+  ['Sumber data', 'Januari–September dari file laporan GPS & Dashcam tiap regional; mulai Oktober dari file tarikan harian sistem. Satu baris di file = satu event pelanggaran (Case, Area, Lokasi, tanggal & jam, nama AMT 1).'],
+  ['Pembersihan', 'Baris yang sama di beberapa file dihitung sekali. Ejaan nama lokasi diseragamkan. Setiap Case dipetakan ke Parameter dan Kategori lewat sheet Pemetaan; Case yang tidak dihitung dikeluarkan.'],
+  ['Penghitungan', 'Event dijumlahkan per tanggal × area × lokasi × parameter, lalu per kategori (Driving Behaviour, Driver Discipline, Fatigue Management). TOP Driver memakai kolom AMT 1; event tanpa nama tidak masuk peringkat.'],
+  ['Pembanding', 'Bulan dibanding bulan sebelumnya (atau bulan pilihan). Saat filter tanggal aktif, dibanding tanggal sebelumnya pada jam yang sama. Kenaikan % = (periode ini − pembanding) ÷ pembanding × 100.'],
+  ['Filter waktu', 'Shift dan jam memakai jam kejadian. Sebagian event GPS di file mentah tidak punya jam: tetap dihitung saat memilih tanggal, tetapi tidak ikut filter shift/jam.'],
+  ['Cakupan akun', 'RTC melihat semua area. Command Center hanya areanya, Control Room hanya lokasinya. Data dipotong di server sebelum dikirim ke layar.']
+];
+document.getElementById('metodeIsi').innerHTML = METODE.map((m, i) => `<div><b><i>${i + 1}</i>${m[0]}</b><p>${m[1]}</p></div>`).join('');
+
+/* ================= EXPORT PDF (1 halaman A4 lanskap) ================= */
+const PDF_LIB = ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
+const muatSkrip = src => new Promise((ok, bad) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = () => bad(new Error('Pustaka PDF gagal dimuat. Periksa koneksi internet.')); document.head.appendChild(t); });
+const pTxt = (t, y) => pctTxt(t, y).replace(/class="up"/, 'style="color:#b3261e;font-weight:600"').replace(/class="down"/, 'style="color:#2e7d32;font-weight:600"').replace(/class="flat"/, 'style="color:#737b76"');
+function halamanPdf() {
+  const W = KC === 'W', pm = W ? KP : prevM(), kc = W ? 'W' : mon;
+  const nv = (key, k) => !W ? nilai(key, k) : k === null ? null : ((D.nilaiW[key] || {W: 0, P: KP ? 0 : null})[k] ?? null);
+  const nk = (ck, k) => { let s0 = 0, ada = false; catParams(ck).forEach(p => { const v = nv(p.key, k); if (v !== null) { s0 += v; ada = true; } }); return ada ? s0 : null; };
+  const lbl = k => k === null ? '–' : W ? pendekK(k) : B3[k];
+  const tot = k => { if (k === null) return null; let s0 = 0, ada = false; CATS.forEach(c => { const v = nk(c.key, k); if (v !== null) { s0 += v; ada = true; } }); return ada ? s0 : null; };
+  const akun = document.getElementById('akunNama').textContent || 'RTC';
+  const now = new Date(), cetak = now.toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'}) + ', ' + now.toLocaleTimeString('id-ID', {hour: '2-digit', minute: '2-digit'});
+  const periode = W ? labelWaktu() : `${BLN[mon]} ${D.tahun}`, banding = pm === null ? '–' : W ? labelWaktu(true) : `${BLN[pm]} ${D.tahun}`;
+  const logo = [...document.querySelectorAll('.brandbar .tab img')].map(im => `<img src="${im.src}" style="height:26px;width:auto;display:block">`).join('<span style="width:1px;height:24px;background:#dfe5df"></span>');
+  const kotak = (judul, warna, cur, prv) => `<div style="flex:1;border:1px solid #e3e8e3;border-radius:12px;padding:10px 14px;border-top:4px solid ${warna}">
+    <div style="font-size:10.5px;font-weight:600;color:#5d665f;text-transform:uppercase;letter-spacing:.04em">${judul}</div>
+    <div style="font-size:24px;font-weight:700;line-height:1.25;margin-top:2px">${cur === null ? '–' : nf(cur)}</div>
+    <div style="font-size:10.5px;color:#5d665f">${pm === null ? 'Tanpa pembanding' : `${lbl(pm)}: ${prv === null ? '–' : nf(prv)} · ${pTxt(cur || 0, prv)}`}</div></div>`;
+  const tabelKat = c => { const ps = catParams(c.key);
+    return `<div style="flex:1;min-width:0;border:1px solid #e3e8e3;border-radius:12px;overflow:hidden">
+      <div style="background:${c.color};color:#fff;font-size:11.5px;font-weight:700;padding:6px 10px;text-transform:uppercase">${c.name}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:10.5px"><colgroup><col style="width:43%"><col style="width:19%"><col style="width:16%"><col style="width:22%"></colgroup><thead><tr style="font-size:9px;text-transform:uppercase"><th style="text-align:left;padding:5px 8px">Parameter</th><th style="text-align:right;padding:5px 6px">${lbl(pm)}</th><th style="text-align:right;padding:5px 6px">${lbl(kc)}</th><th style="text-align:right;padding:5px 8px">Kenaikan</th></tr></thead><tbody>` +
+      ps.map(p => { const a = nv(p.key, kc), b = pm === null ? null : nv(p.key, pm);
+        return `<tr style="border-top:1px solid #eef1ee"><td style="padding:4px 8px">${p.label.toUpperCase()}</td><td style="text-align:right;padding:4px 6px">${b === null ? '–' : nf(b)}</td><td style="text-align:right;padding:4px 6px;font-weight:600">${a === null ? '–' : nf(a)}</td><td style="text-align:right;padding:4px 8px">${a === null ? '–' : pTxt(a, b)}</td></tr>`; }).join('') +
+      (() => { const a = nk(c.key, kc), b = pm === null ? null : nk(c.key, pm); return `<tr style="border-top:1.5px solid #cfd6cf;background:#f5f7f5;font-weight:700"><td style="padding:5px 8px">TOTAL</td><td style="text-align:right;padding:5px 6px">${b === null ? '–' : nf(b)}</td><td style="text-align:right;padding:5px 6px">${a === null ? '–' : nf(a)}</td><td style="text-align:right;padding:5px 8px">${pTxt(a || 0, b)}</td></tr>`; })() +
+      '</tbody></table></div>'; };
+  // grafik: per hari (bulanan) atau per jam (filter waktu)
+  let bar = [], judulGrafik;
+  if (W) { const HS = jam >= 0 ? [jam] : shift ? jamShift(shift) : Array.from({length: 24}, (_, i) => i); bar = HS.map(h => ({x: String(h).padStart(2, '0'), o: D.jamW[h]})); judulGrafik = 'Event per jam — ' + labelWaktu(); }
+  else { const cur = hariBulan(mon); bar = cur ? cur.map((o, i) => ({x: String(i + 1), o})) : []; judulGrafik = `Event per hari — ${BLN[mon]} ${D.tahun}`; }
+  const mx = Math.max(1, ...bar.map(b => b.o.DB + b.o.DD + b.o.FM));
+  const grafik = bar.length ? `<div style="display:flex;align-items:flex-end;gap:2px;height:190px;border-bottom:1px solid #cfd6cf;padding-top:4px">` + bar.map(b => { const t = b.o.DB + b.o.DD + b.o.FM;
+      return `<div style="flex:1;display:flex;flex-direction:column-reverse;height:${t / mx * 100}%;min-width:0">${CATS.map(c => `<div style="height:${t ? b.o[c.key] / t * 100 : 0}%;background:${c.color}"></div>`).join('')}</div>`; }).join('') +
+      `</div><div style="display:flex;gap:2px;font-size:7.5px;color:#737b76">${bar.map((b, i) => `<span style="flex:1;text-align:center">${bar.length > 16 && i % 2 ? '' : b.x}</span>`).join('')}</div>
+      <div style="display:flex;gap:12px;font-size:9.5px;color:#5d665f;margin-top:4px">${CATS.map(c => `<span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c.color};margin-right:4px"></i>${c.name}</span>`).join('')}</div>`
+    : '<div style="font-size:11px;color:#737b76;padding:20px 0">Data grafik belum ada untuk periode ini.</div>';
+  // peringkat: area (RTC, semua area) / lokasi / parameter (satu lokasi)
+  const daftar = (rows, warna) => rows.length ? rows.map((o, i) => `<div style="display:grid;grid-template-columns:16px minmax(0,1fr) 62px;gap:6px;align-items:center;font-size:10.5px;padding:3px 0;border-top:${i ? '1px solid #eef1ee' : '0'}">
+      <span style="color:#737b76;font-weight:600">${i + 1}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b style="font-weight:600">${o.n}</b>${o.s ? `<span style="color:#737b76"> · ${o.s}</span>` : ''}<span style="display:block;height:4px;background:#eef1ee;border-radius:2px;margin-top:2px"><i style="display:block;height:4px;border-radius:2px;width:${o.v / Math.max(1, rows[0].v) * 100}%;background:${o.w || warna}"></i></span></span><span style="text-align:right;font-weight:600">${nf(o.v)}</span></div>`).join('')
+    : '<div style="font-size:10.5px;color:#737b76">Tidak ada data.</div>';
+  let judulRank, rank;
+  if (selLok < 0 && sel === 'ALL') { judulRank = 'Top 5 Area'; rank = REG.map(r => ({n: rn(r), v: regTot(r, KC) || 0, w: getComputedStyle(document.documentElement).getPropertyValue('--r' + REG.indexOf(r)).trim()})).filter(o => o.v > 0).sort((a, b) => b.v - a.v).slice(0, 5); }
+  else if (selLok < 0) { judulRank = 'Top 5 Lokasi'; rank = (D.lokasiBulan[KC] || []).filter(o => cocokReg(o.r) && o.t > 0).slice(0, 5).map(o => ({n: o.l, v: o.t})); }
+  else { judulRank = 'Top 5 Parameter'; rank = P.map(p => ({n: p.label, s: (CATS.find(c => c.key === p.kat) || {}).name, v: nv(p.key, kc) || 0, w: (CATS.find(c => c.key === p.kat) || {}).color})).filter(o => o.v > 0).sort((a, b) => b.v - a.v).slice(0, 5); }
+  const dg = {}; (D.drv || []).filter(r => r[0] === KC).forEach(r => { const o = dg[r[4]] || (dg[r[4]] = {v: 0, l: r[2], top: 0}); o.v += r[5]; if (r[5] > o.top) { o.top = r[5]; o.l = r[2]; } });
+  const drv = Object.keys(dg).map(k => ({n: D.drvNama[k], s: lokNama(dg[k].l), v: dg[k].v})).sort((a, b) => b.v - a.v).slice(0, 5);
+  const blok = (judul, isi, flex) => `<div style="flex:${flex || 1};min-width:0;border:1px solid #e3e8e3;border-radius:12px;padding:9px 12px"><div style="font-size:11.5px;font-weight:700;margin-bottom:6px">${judul}</div>${isi}</div>`;
+  const tj = W && D.tanpaJam && D.tanpaJam.t && (shift || jam >= 0) ? ` · ${nf(D.tanpaJam.t)} event GPS tanpa jam tidak ikut filter shift/jam` : '';
+  return `<div style="height:100%;display:flex;flex-direction:column">
+  <div style="background:linear-gradient(120deg,#3f6e4b,#4a7a53 45%,#7aa64a);color:#fff;padding:14px 24px 12px;display:flex;justify-content:space-between;align-items:center;gap:20px">
+    <div style="min-width:0"><div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.85">${akun} · Ringkasan Monitoring Armada</div>
+      <div style="font-size:19px;font-weight:700;line-height:1.25;margin-top:2px">Driving Behaviour, Driver Discipline &amp; Fatigue Management — ${periode}</div>
+      <div style="font-size:10.5px;opacity:.92;margin-top:3px">Cakupan: ${scope()} · Dibanding: ${banding} · Dicetak ${cetak}${tj}</div></div>
+    <div style="background:#fff;border-radius:10px;padding:7px 12px;display:flex;align-items:center;gap:10px;flex:none">${logo}</div></div>
+  <div style="flex:1;display:flex;flex-direction:column;gap:9px;padding:11px 24px 0;min-height:0">
+    <div style="display:flex;gap:10px">${kotak('Total semua kategori', '#1b1f1d', tot(kc), tot(pm))}${CATS.map(c => kotak(c.name, c.color, nk(c.key, kc), pm === null ? null : nk(c.key, pm))).join('')}</div>
+    <div style="display:flex;gap:10px;align-items:flex-start">${CATS.map(tabelKat).join('')}</div>
+    <div style="display:flex;gap:10px;flex:1;min-height:0">${blok(judulGrafik, grafik, 1.35)}${blok(judulRank + ' — ' + lbl(kc), daftar(rank, '#4a7a53'))}${blok('Top 5 Driver — ' + lbl(kc), daftar(drv, '#c0392b'))}</div>
+  </div>
+  <div style="margin:9px 24px 10px;padding:7px 12px;background:#f5f7f5;border-radius:10px;font-size:8.6px;line-height:1.45;color:#47504b"><b style="color:#1b1f1d">Cara ringkasan dibuat:</b> ${METODE.slice(0, 4).map(m => `<b>${m[0]}</b> — ${m[1]}`).join(' ')}</div>
+</div>`;
+}
+document.getElementById('btnPdf').onclick = async () => {
+  const b = document.getElementById('btnPdf'); if (b.disabled || !D) return;
+  b.disabled = true; b.textContent = 'Menyiapkan PDF…';
+  let pg;
+  try {
+    await Promise.all(PDF_LIB.map(muatSkrip));
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    pg = document.createElement('div'); pg.id = 'pdfPage'; pg.innerHTML = halamanPdf(); document.body.appendChild(pg);
+    const cv = await window.html2canvas(pg, {scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false});
+    const pdf = new window.jspdf.jsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
+    pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 297, 210);
+    const nama = `Ringkasan ${(document.getElementById('akunNama').textContent || 'RTC')} ${KC === 'W' ? labelWaktu().replace(/[·:]/g, '') : BLN[mon] + ' ' + D.tahun}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
+    try { pdf.save(nama); } catch (e) { window.open(pdf.output('bloburl'), '_blank'); }
+  } catch (e) { alertPdf(e && e.message ? e.message : String(e)); }
+  finally { if (pg) pg.remove(); b.disabled = false; b.textContent = 'Export PDF'; }
+};
+function alertPdf(m) { const l = document.getElementById('bwarn'); l.hidden = false; l.textContent = 'Export PDF gagal: ' + m; }
+
 const REFRESH_MS = 5*60*1000;
 function start(json) {
   const p = JSON.parse(json);
@@ -970,6 +1075,7 @@ function terapkanAkun(p) {
   const label = a.peran === 'PUSAT' ? 'RTC' : a.peran === 'AREA' ? 'Command Center ' + rn(a.area) : 'Control Room ' + a.lok;
   document.getElementById('akunNama').textContent = label;
   document.getElementById('tPeran').textContent = label;
+  if (a.peran !== 'PUSAT') shift = 0;   // Command Center & Control Room tanpa filter shift
   if (ganti) { sel = 'ALL'; selLok = -1; }
 }
 // akun Area / Lokasi: filter dikunci pada cakupannya
