@@ -343,7 +343,9 @@ const regTot = (r, m) => { const o = D.regional[r]; return o && o.total[m] !== n
 // total 3 kategori sesuai filter area / lokasi
 const totSel = m => sel === 'ALL' ? nilaiNas(m) : regTot(sel, m);
 const prevM = () => { if (cmp >= 0 && cmp !== mon && ADA.indexOf(cmp) >= 0) return cmp; const i = ADA.indexOf(mon); return i > 0 ? ADA[i - 1] : null; };
-const SHIFT = [null, [0, 8], [8, 16], [16, 24]];
+const SHIFT = [null, [7, 15], [15, 23], [23, 7]];   // Shift 3 melewati tengah malam dan ikut tanggal mulainya
+const jamShift = s => { const a = SHIFT[s][0], n = (SHIFT[s][1] - a + 24) % 24; return Array.from({length: n}, (_, i) => (a + i) % 24); };
+const lintas = () => shift && SHIFT[shift][0] > SHIFT[shift][1];
 const jj = h => String(h).padStart(2, '0') + '.00';
 const adaJam = () => (RAW.jamAda || []).indexOf(mon) >= 0;
 const modeWaktu = () => adaJam() && (tgl > 0 || shift > 0 || jam >= 0);
@@ -428,8 +430,7 @@ function kontrol() {
   const hari = {}; (RAW.harian || []).forEach(h => { if (h[0] === mon) hari[h[1]] = 1; });
   st.innerHTML = '<option value="0">Semua tanggal</option>' + Object.keys(hari).map(Number).sort((a, b) => a - b).map(d => `<option value="${d}">${d} ${BLN[mon]}</option>`).join('');
   ss.innerHTML = '<option value="0">Semua shift</option>' + [1, 2, 3].map(i => `<option value="${i}">Shift ${i} (${jj(SHIFT[i][0])}–${jj(SHIFT[i][1])})</option>`).join('');
-  const r0 = shift ? SHIFT[shift][0] : 0, r1 = shift ? SHIFT[shift][1] : 24;
-  sj.innerHTML = '<option value="-1">Semua jam</option>' + Array.from({length: r1 - r0}, (_, i) => r0 + i).map(h => `<option value="${h}">${jj(h)}–${jj(h + 1)}</option>`).join('');
+  sj.innerHTML = '<option value="-1">Semua jam</option>' + (shift ? jamShift(shift) : Array.from({length: 24}, (_, i) => i)).map(h => `<option value="${h}">${jj(h)}–${jj(h + 1)}</option>`).join('');
   st.value = String(tgl); ss.value = String(shift); sj.value = String(jam);
   [st, ss, sj].forEach(e => e.disabled = !jOk);
   document.getElementById('waktuInfo').textContent = !jOk ? `Filter waktu tersedia untuk bulan yang punya data jam kejadian (mulai ${BLN[(RAW.jamAda || [9])[0]]}).`
@@ -538,33 +539,34 @@ function renderJam() {
   const host = document.getElementById('bday'), sub = document.getElementById('bdaySub'), kp = WIN.waktu.adaPrev;
   host.innerHTML = '';
   document.getElementById('bdayH').textContent = `Event per jam — ${labelWaktu()}`;
-  const h0 = jam >= 0 ? jam : shift ? SHIFT[shift][0] : 0, h1 = jam >= 0 ? jam + 1 : shift ? SHIFT[shift][1] : 24;
-  const cur = D.jamW.slice(h0, h1), tot = sum(cur.map(o => o.t));
+  const HS = jam >= 0 ? [jam] : shift ? jamShift(shift) : Array.from({length: 24}, (_, i) => i);
+  const cur = HS.map(h => D.jamW[h]), tot = sum(cur.map(o => o.t));
+  const tglJam = h => lintas() && h < SHIFT[shift][1] ? tgl + 1 : tgl;   // Shift 3: jam 00.00-07.00 jatuh di tanggal berikutnya
   document.getElementById('bdayLeg').hidden = !tot;
   if (!tot) { sub.textContent = scope(); host.innerHTML = `<div class="emptyamt">Tidak ada event untuk ${labelWaktu()}${sel === 'ALL' ? '' : ' · ' + scope()}.</div>`; return; }
   document.getElementById('bdayCmpLeg').hidden = !kp;
   document.getElementById('bdayCmpName').textContent = kp ? `${tgl - 1} ${BLN[mon]} (jam yang sama)` : '';
-  const mx = cur.reduce((a, o) => o.t > a.t ? o : a, cur[0]), hm = h0 + cur.indexOf(mx), ptot = kp ? sum(cur.map(o => o.p)) : null;
-  sub.innerHTML = `${scope()} · total <b>${nf(tot)}</b> event${kp ? ` vs ${nf(ptot)} pada ${tgl - 1} ${B3[mon]} ${pctTxt(tot, ptot)}` : ''} · jam tersibuk <b>${jj(hm)}–${jj(hm + 1)}</b> (${nf(mx.t)})${tgl ? '' : ' · dijumlah dari semua tanggal di ' + BLN[mon]}`;
+  const mx = cur.reduce((a, o) => o.t > a.t ? o : a, cur[0]), hm = HS[cur.indexOf(mx)], ptot = kp ? sum(cur.map(o => o.p)) : null;
+  sub.innerHTML = `${scope()} · total <b>${nf(tot)}</b> event${kp ? ` vs ${nf(ptot)} pada ${tgl - 1} ${B3[mon]} ${pctTxt(tot, ptot)}` : ''} · jam tersibuk <b>${jj(hm)}–${jj(hm + 1)}</b> (${nf(mx.t)})${tgl ? (lintas() && jam < 0 ? ` · ${jj(SHIFT[shift][0])} ${tgl} ${B3[mon]} s/d ${jj(SHIFT[shift][1])} ${tgl + 1} ${B3[mon]}` : '') : ' · dijumlah dari semua tanggal di ' + BLN[mon]}`;
   const W = 1180, H = 250, m = {l: 50, r: 12, t: 26, b: 26}, iw = W - m.l - m.r, ih = H - m.t - m.b, n = cur.length, slot = iw / Math.max(n, 8), bw = Math.min(40, slot * .62);
   const ox = m.l + (iw - slot * n) / 2, cx = i => ox + slot * i + slot / 2;
   const ymax = niceMax(Math.max(1, ...cur.map(o => Math.max(o.t, kp ? o.p : 0))) * 1.05), y = v => m.t + ih - v / ymax * ih, NT = nTicks(ymax);
   const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Event per jam ' + labelWaktu()});
-  if (n === 24) [1, 2, 3].forEach(sx => { const a = SHIFT[sx][0], b = SHIFT[sx][1];
-    if (sx === 2) svgEl('rect', {x: ox + slot * a, y: m.t, width: slot * (b - a), height: ih, style: 'fill:#eef4ef'}, svg);
-    const t = svgEl('text', {x: ox + slot * (a + b) / 2, y: m.t - 9, 'text-anchor': 'middle', class: 'tick', style: 'font-weight:600'}, svg); t.textContent = `Shift ${sx} (${jj(a)}–${jj(b)})`; });
+  if (n === 24) [1, 2, 3].forEach(sx => { const a = SHIFT[sx][0], b = SHIFT[sx][1], seg = a < b ? [[a, b]] : [[0, b], [a, 24]];
+    seg.forEach(([x0, x1]) => { if (sx === 1) svgEl('rect', {x: ox + slot * x0, y: m.t, width: slot * (x1 - x0), height: ih, style: 'fill:#eef4ef'}, svg); });
+    const [x0, x1] = seg[0], t = svgEl('text', {x: ox + slot * (x0 + x1) / 2, y: m.t - 9, 'text-anchor': 'middle', class: 'tick', style: 'font-weight:600'}, svg); t.textContent = `Shift ${sx} (${jj(a)}–${jj(b)})`; });
   for (let i = 0; i <= NT; i++) { const v = ymax * i / NT; svgEl('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: i ? 'gl' : 'base'}, svg); const t = svgEl('text', {x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'tick'}, svg); t.textContent = ax(v); }
   cur.forEach((o, i) => {
     let base = 0;
     CATS.forEach((c, j) => { const v = o[c.key]; if (!v) return; const y0 = y(base), y1 = y(base + v); base += v;
       const last = CATS.slice(j + 1).every(cc => !o[cc.key]);
       svgEl('path', {d: last ? topRound(cx(i) - bw / 2, y1, bw, y0 - y1, 3) : `M${cx(i) - bw / 2},${y0}V${y1}H${cx(i) + bw / 2}V${y0}Z`, style: `fill:${c.color}`}, svg); });
-    const t = svgEl('text', {x: cx(i), y: H - 8, 'text-anchor': 'middle', class: 'tick', style: o === mx ? 'font-weight:700;fill:#1b1f1d' : ''}, svg); t.textContent = String(h0 + i).padStart(2, '0');
+    const t = svgEl('text', {x: cx(i), y: H - 8, 'text-anchor': 'middle', class: 'tick', style: o === mx ? 'font-weight:700;fill:#1b1f1d' : ''}, svg); t.textContent = String(HS[i]).padStart(2, '0');
   });
   if (kp && n > 1) svgEl('path', {d: cur.map((o, i) => (i ? 'L' : 'M') + cx(i).toFixed(1) + ',' + y(o.p).toFixed(1)).join(''), style: 'fill:none;stroke:#1b1f1d;stroke-width:1.6;stroke-dasharray:5 4;pointer-events:none'}, svg);
   cur.forEach((o, i) => {
-    const hit = svgEl('rect', {x: ox + slot * i, y: m.t, width: slot, height: ih, class: 'hit'}, svg), h = h0 + i;
-    bindTip(hit, () => `<b>${jj(h)}–${jj(h + 1)}${tgl ? ' · ' + tgl + ' ' + BLN[mon] : ''}</b><br>${CATS.map(c => `${c.name}: ${nf(o[c.key])}`).join('<br>')}<br><b>Total ${nf(o.t)}</b>${kp ? `<br>${tgl - 1} ${BLN[mon]}: ${nf(o.p)}` : ''}`);
+    const hit = svgEl('rect', {x: ox + slot * i, y: m.t, width: slot, height: ih, class: 'hit'}, svg), h = HS[i];
+    bindTip(hit, () => `<b>${jj(h)}–${jj(h + 1)}${tgl ? ' · ' + tglJam(h) + ' ' + BLN[mon] : ''}</b><br>${CATS.map(c => `${c.name}: ${nf(o[c.key])}`).join('<br>')}<br><b>Total ${nf(o.t)}</b>${kp ? `<br>${tglJam(h) - 1} ${BLN[mon]}: ${nf(o.p)}` : ''}`);
   });
   host.appendChild(svg);
 }
@@ -672,7 +674,7 @@ function renderRekap() {
 document.getElementById('selMon').onchange = e => { mon = +e.target.value; tgl = 0; ERRW = ''; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
 document.getElementById('selTgl').onchange = e => { tgl = +e.target.value; ERRW = ''; showAllLok = false; render(); };
-document.getElementById('selShift').onchange = e => { shift = +e.target.value; ERRW = ''; if (jam >= 0 && shift && (jam < SHIFT[shift][0] || jam >= SHIFT[shift][1])) jam = -1; showAllLok = false; render(); };
+document.getElementById('selShift').onchange = e => { shift = +e.target.value; ERRW = ''; if (jam >= 0 && shift && jamShift(shift).indexOf(jam) < 0) jam = -1; showAllLok = false; render(); };
 document.getElementById('selJam').onchange = e => { jam = +e.target.value; ERRW = ''; showAllLok = false; render(); };
 document.getElementById('selLok').onchange = e => setLok(+e.target.value);
 function render() {

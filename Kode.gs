@@ -229,7 +229,8 @@ function amankanPasswordAkun() {
 }
 
 /* ============================== FILTER WAKTU ============================== */
-const SHIFT = [null, [0, 8], [8, 16], [16, 24]];   // Shift 1 00.00-08.00, Shift 2 08.00-16.00, Shift 3 16.00-24.00
+const SHIFT = [null, [7, 15], [15, 23], [23, 7]];   // Shift 1 07.00-15.00, Shift 2 15.00-23.00, Shift 3 23.00-07.00 (ikut tanggal mulainya)
+const diShift = (j, s) => SHIFT[s][0] < SHIFT[s][1] ? j >= SHIFT[s][0] && j < SHIFT[s][1] : j >= SHIFT[s][0] || j < SHIFT[s][1];
 
 /**
  * Data satu jendela waktu di bulan m (0-11) untuk filter Tanggal / Shift / Jam, dibaca dari sheet "Event Jam" & "AMT Jam" file Tarikan.
@@ -257,8 +258,10 @@ function dataWaktu_(m, d, s, h) {
   if (!atur || !file) return kosongW('Data tarikan ' + BULAN[m] + ' belum ada.');
   const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(atur), 'Pemetaan') || []);
   const ss = SpreadsheetApp.open(file);
-  const okJam = j => (h < 0 || j === h) && (!s || (j >= SHIFT[s][0] && j < SHIFT[s][1]));
-  const jendela = (tg, j) => { if (!tg || tg.m !== m || !okJam(j)) return -1; if (!d || tg.d === d) return 0; return tg.d === d - 1 ? 1 : -1; };
+  const okJam = j => (h < 0 || j === h) && (!s || diShift(j, s));
+  // shift yang melewati tengah malam (Shift 3) ikut tanggal mulainya: jam 00.00-07.00 dihitung ke tanggal sebelumnya
+  const jendela = (tg, j) => { if (!tg || tg.m !== m || !okJam(j)) return -1; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? tg.d - 1 : tg.d;
+    if (!d) return t >= 1 ? 0 : -1; if (t === d) return 0; return t === d - 1 ? 1 : -1; };
   const EV = [], AM = [];
   (nilaiSheet(ss, 'Event Jam') || []).slice(1).forEach(r => {
     const j = +r[1], w = jendela(tanggalTeks(r[0]), j), c = peta.kasus[normKasus(r[4])], n = angka(r[5]) || 0;
