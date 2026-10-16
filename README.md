@@ -59,3 +59,11 @@ Update bulanan (rincian lengkap ada di sheet `Panduan`): buat pivot dari file me
 
 `hitung()` mengirim tabel fakta ringkas (`lok`, `fakta`, `harian`, `amt`) dan dashboard menjumlahkannya sesuai filter **Area** (chip) dan **Lokasi** (dropdown). Semua panel, termasuk parameter per kategori, Top 10 Area, Top 10 Lokasi dan TOP 10 AMT, mengikuti filter.
 Satu lokasi memakai satu nama dan satu area di semua bulan: ejaan disamakan (tanda hubung/spasi diabaikan, `ALIAS_LOKASI` untuk lokasi yang ganti nama) dan area diambil dari bulan terbaru.
+
+## Filter waktu: Tanggal, Shift (8 jam), Jam
+
+- Mulai Oktober (file tarikan), `prosesTarikan` juga mencatat jam kejadian dari kolom **Time** ke sheet `Event Jam` dan `AMT Jam` di file "Tarikan nn ...".
+- Di dashboard, baris **Waktu** berisi Tanggal, Shift (Shift 1 00.00–08.00, Shift 2 08.00–16.00, Shift 3 16.00–24.00; diatur di `SHIFT` pada Kode.gs dan Index.html) dan Jam. Grafik event berubah menjadi per jam; Top 10 Area/Lokasi, TOP 10 Driver, rekap per area dan per lokasi ikut jendela waktu, dibanding tanggal sebelumnya pada shift/jam yang sama. Tren per kategori tetap bulanan.
+- Data jendela waktu dihitung saat dipilih oleh `getDataWaktu(m, d, s, h)` dan disimpan di cache 15 menit.
+- File Data Januari–September hanya berisi tanggal, jadi filter waktu nonaktif untuk bulan-bulan itu.
+- Setelah memasang versi ini, jalankan sekali **Dashboard > Proses ulang semua file tarikan** (`prosesUlangSemuaTarikan`) supaya file tarikan yang sudah diproses dibaca ulang beserta jamnya.

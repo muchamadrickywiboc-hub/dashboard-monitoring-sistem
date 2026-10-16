@@ -50,6 +50,7 @@ function onOpen() {
       .addItem('Uji baca sumber', 'UJI_BACA_SUMBER')
       .addItem('Pasang pemicu otomatis', 'pasangPemicu')
       .addItem('Proses file tarikan sekarang', 'prosesTarikan')
+      .addItem('Proses ulang semua file tarikan', 'prosesUlangSemuaTarikan')
       .addToUi();
   } catch (e) { /* dijalankan dari luar spreadsheet */ }
 }
@@ -90,25 +91,73 @@ function pasangPemicu() {
   Logger.log('Pemicu panaskanCache (tiap jam) dan prosesTarikan (tiap 15 menit) terpasang dan cache sudah diisi. Jalankan prosesTarikan sekali untuk mulai membaca file tarikan.');
 }
 
-function simpanCache(json) {
+function simpanCache(json, kunci, detik) {
+  kunci = kunci || 'DASHB4';
   try {
     const parts = {}, size = 90000;
-    for (let i = 0; i * size < json.length; i++) parts['DASHB4_' + i] = json.substr(i * size, size);
-    parts.DASHB4_N = String(Object.keys(parts).length);
-    CacheService.getScriptCache().putAll(parts, CFG.CACHE_DETIK);
+    for (let i = 0; i * size < json.length; i++) parts[kunci + '_' + i] = json.substr(i * size, size);
+    parts[kunci + '_N'] = String(Object.keys(parts).length);
+    CacheService.getScriptCache().putAll(parts, detik || CFG.CACHE_DETIK);
   } catch (e) { /* tanpa cache */ }
+}
+function ambilCache(kunci) {
+  const cache = CacheService.getScriptCache(), n = Number(cache.get(kunci + '_N') || 0);
+  if (!n) return null;
+  const keys = []; for (let i = 0; i < n; i++) keys.push(kunci + '_' + i);
+  const got = cache.getAll(keys);
+  return keys.every(k => got[k] !== undefined && got[k] !== null) ? keys.map(k => got[k]).join('') : null;
 }
 
 function getDashboardData() {
-  const cache = CacheService.getScriptCache();
-  const n = Number(cache.get('DASHB4_N') || 0);
-  if (n) {
-    const keys = []; for (let i = 0; i < n; i++) keys.push('DASHB4_' + i);
-    const got = cache.getAll(keys);
-    if (keys.every(k => got[k] !== undefined && got[k] !== null)) return keys.map(k => got[k]).join('');
-  }
+  const ada = ambilCache('DASHB4');
+  if (ada) return ada;
   const json = JSON.stringify(bangunData());
   simpanCache(json);
+  return json;
+}
+
+/* ============================== FILTER WAKTU ============================== */
+const SHIFT = [null, [0, 8], [8, 16], [16, 24]];   // Shift 1 00.00-08.00, Shift 2 08.00-16.00, Shift 3 16.00-24.00
+
+/**
+ * Data satu jendela waktu di bulan m (0-11) untuk filter Tanggal / Shift / Jam, dibaca dari sheet "Event Jam" & "AMT Jam" file Tarikan.
+ *   d = tanggal (0 = semua tanggal), s = shift (0 = semua, 1-3), h = jam (-1 = semua).
+ * Bentuknya sama dengan hitung(): "bulan" 0 = jendela terpilih, 1 = pembanding (tanggal sebelumnya, shift/jam yang sama);
+ * kolom "tanggal" di harian berisi jam + 1, jadi harian = event per jam.
+ */
+function getDataWaktu(m, d, s, h) {
+  m = +m; d = +d || 0; s = +s || 0; h = (h === undefined || h === null || h === '') ? -1 : +h;
+  const kunci = 'WKT1_' + [m, d, s, h].join('_');
+  const ada = ambilCache(kunci);
+  if (ada) return ada;
+  const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
+  let atur = null, file = null;
+  const it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+  while (it.hasNext()) {
+    const f = it.next(), n = teks(f.getName()), t = n.match(/^TARIKAN\s+(\d{1,2})\b/i);
+    if (/^PENGATURAN/i.test(n)) atur = f; else if (t && +t[1] === m + 1) file = f;
+  }
+  const kosongW = (pesan) => JSON.stringify(Object.assign(kosong([pesan]), { waktu: { m: m, d: d, s: s, h: h, adaPrev: false } }));
+  if (!atur || !file) return kosongW('Data tarikan ' + BULAN[m] + ' belum ada.');
+  const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(atur), 'Pemetaan') || []);
+  const ss = SpreadsheetApp.open(file);
+  const okJam = j => (h < 0 || j === h) && (!s || (j >= SHIFT[s][0] && j < SHIFT[s][1]));
+  const jendela = (tg, j) => { if (!tg || tg.m !== m || !okJam(j)) return -1; if (!d || tg.d === d) return 0; return tg.d === d - 1 ? 1 : -1; };
+  const EV = [], AM = [];
+  (nilaiSheet(ss, 'Event Jam') || []).slice(1).forEach(r => {
+    const j = +r[1], w = jendela(tanggalTeks(r[0]), j), c = peta.kasus[normKasus(r[4])], n = angka(r[5]) || 0;
+    if (w < 0 || !c || !n) return;
+    EV.push([w, j + 1, areaNorm(r[2]), teks(r[3]).toUpperCase(), c.p, c.k, n]);
+  });
+  (nilaiSheet(ss, 'AMT Jam') || []).slice(1).forEach(r => {
+    const j = +r[1], w = jendela(tanggalTeks(r[0]), j), c = peta.kasus[normKasus(r[5])], n = angka(r[6]) || 0, nama = teks(r[4]).toUpperCase();
+    if (w < 0 || !c || !n || !nama) return;
+    AM.push([w, areaNorm(r[2]), teks(r[3]).toUpperCase(), nama, c.p, c.k, n]);
+  });
+  const hasil = hitung(EV, AM, peta, [], []);
+  hasil.waktu = { m: m, d: d, s: s, h: h, adaPrev: d > 1 };
+  const json = JSON.stringify(hasil);
+  simpanCache(json, kunci, 900);   // 15 menit, mengikuti pemicu prosesTarikan
   return json;
 }
 
@@ -161,7 +210,10 @@ function bangunData() {
   else if (!tarikan[CFG.BULAN_TARIKAN - 1]) peringatan.push('Data ' + BULAN[CFG.BULAN_TARIKAN - 1].charAt(0) + BULAN[CFG.BULAN_TARIKAN - 1].slice(1).toLowerCase() + ' dan seterusnya menunggu file tarikan selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang.');
   const log = bacaLogTarikan(folder);
   if (log.gagal.length) peringatan.push('File tarikan gagal dibaca: ' + log.gagal.slice(0, 5).join('; '));
-  return hitung(EV, AM, peta, catatan, peringatan);
+  const hasil = hitung(EV, AM, peta, catatan, peringatan);
+  // bulan yang punya jam kejadian (sheet "Event Jam" di file Tarikan) -> filter Tanggal / Shift / Jam aktif
+  hasil.jamAda = dataBulan.filter(o => o.f === tarikan[o.m]).filter(o => { const sh = SpreadsheetApp.open(o.f).getSheetByName('Event Jam'); return sh && sh.getLastRow() > 1; }).map(o => o.m);
+  return hasil;
 }
 
 function kosong(peringatan) {
@@ -316,9 +368,9 @@ function prosesSatuTarikan(folder, o) {
     if (nr < 1) return 0;
     const k = petaKolom(sh.getRange(1, 1, 1, nc).getValues()[0]);
     const kol = h => { if (k[h] === undefined) return null; return sh.getRange(2, k[h] + 1, nr, 1).getValues(); };
-    const tb = kol('TBBM'), al = kol('ALARM STATUS'), am = kol('AMT 1'), gid = kol('ALERT GROUP ID');
+    const tb = kol('TBBM'), al = kol('ALARM STATUS'), am = kol('AMT 1'), gid = kol('ALERT GROUP ID'), wk = kol('TIME') || kol('START ALERT');
     if (!tb || !al) throw new Error('kolom TBBM / Alarm Status tidak ditemukan');
-    const ev = {}, amt = {}, lihat = {};
+    const ev = {}, evj = {}, amt = {}, amj = {}, lihat = {};
     let n = 0;
     for (let i = 0; i < nr; i++) {
       const c = normKasus(al[i][0]); if (!c) continue;
@@ -326,19 +378,50 @@ function prosesSatuTarikan(folder, o) {
       if (g) { if (lihat[g]) continue; lihat[g] = 1; }   // baris dobel (Alert Group ID sama) dihitung sekali
       const lok = teks(tb[i][0]).toUpperCase();
       const ke = lok + '\u0001' + c; ev[ke] = (ev[ke] || 0) + 1; n++;
+      const jam = wk ? jamDari(wk[i][0]) : null;
+      if (jam !== null) { const kj = jam + '\u0001' + ke; evj[kj] = (evj[kj] || 0) + 1; }
       const nama = am ? namaAmt(am[i][0]) : '';
-      if (nama) { const ka = lok + '\u0001' + nama + '\u0001' + c; amt[ka] = (amt[ka] || 0) + 1; }
+      if (nama) { const ka = lok + '\u0001' + nama + '\u0001' + c; amt[ka] = (amt[ka] || 0) + 1; if (jam !== null) { const kj = jam + '\u0001' + ka; amj[kj] = (amj[kj] || 0) + 1; } }
     }
     const m = +o.tgl.slice(5, 7);
     const ss = bukaAtauBuat(folder, 'Tarikan ' + ('0' + m).slice(-2) + ' ' + BULAN[m - 1].charAt(0) + BULAN[m - 1].slice(1).toLowerCase() + ' ' + CFG.TAHUN,
       [['Event', ['Tanggal', 'Area', 'Lokasi', 'Case', 'Jumlah', 'Sumber']], ['AMT', ['Area', 'Lokasi', 'Nama AMT', 'Case', 'Jumlah', 'Sumber']]]);
     ss.getSheetByName('Event').getRange('A:A').setNumberFormat('@');   // tanggal disimpan sebagai teks yyyy-mm-dd
     gantiBaris(ss.getSheetByName('Event'), o.id, Object.keys(ev).map(x => { const p = x.split('\u0001'); return [o.tgl, o.area, p[0], p[1], ev[x], o.id]; }));
+    gantiBaris(sheetAtauBuat(ss, 'Event Jam', ['Tanggal', 'Jam', 'Area', 'Lokasi', 'Case', 'Jumlah', 'Sumber']), o.id,
+      Object.keys(evj).map(x => { const p = x.split('\u0001'); return [o.tgl, +p[0], o.area, p[1], p[2], evj[x], o.id]; }));
+    gantiBaris(sheetAtauBuat(ss, 'AMT Jam', ['Tanggal', 'Jam', 'Area', 'Lokasi', 'Nama AMT', 'Case', 'Jumlah', 'Sumber']), o.id,
+      Object.keys(amj).map(x => { const p = x.split('\u0001'); return [o.tgl, +p[0], o.area, p[1], p[2], p[3], amj[x], o.id]; }));
     gantiBaris(ss.getSheetByName('AMT'), o.id, Object.keys(amt).map(x => { const p = x.split('\u0001'); return [o.area, p[0], p[1], p[2], amt[x], o.id]; }));
     return n;
   } finally {
     if (sementara) try { DriveApp.getFileById(sementara).setTrashed(true); } catch (e) { /* abaikan */ }
   }
+}
+
+/** Jam kejadian (0-23) dari kolom Time: nilai tanggal-jam Sheets atau teks "yyyy-mm-ddThh:mm:ss". */
+function jamDari(x) {
+  if (x instanceof Date) return x.getHours();
+  const v = teks(x), t = v.match(/[T ](\d{1,2}):\d{2}/);
+  if (t) return +t[1] < 24 ? +t[1] : null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? 0 : null;   // tanggal tanpa jam = 00.00
+}
+function sheetAtauBuat(ss, nama, hdr) {
+  let sh = ss.getSheetByName(nama);
+  if (!sh) { sh = ss.insertSheet(nama); sh.getRange(1, 1, 1, hdr.length).setValues([hdr]).setFontWeight('bold'); sh.setFrozenRows(1); sh.getRange('A:A').setNumberFormat('@'); }
+  return sh;
+}
+
+/**
+ * Memproses ulang semua file tarikan (mis. setelah ada kolom baru seperti jam kejadian).
+ * Hanya menandai log; pekerjaannya dikerjakan prosesTarikan (pemicu 15 menit) sedikit demi sedikit.
+ */
+function prosesUlangSemuaTarikan() {
+  const it = DriveApp.getFolderById(CFG.FOLDER_ID).getFilesByName(LOG_NAMA);
+  if (!it.hasNext()) return;
+  const sh = SpreadsheetApp.open(it.next()).getSheetByName(LOG_NAMA), n = sh.getLastRow() - 1;
+  if (n > 0) sh.getRange(2, 5, n, 1).setValue(0);   // kolom "Diubah" = 0 -> dianggap berubah
+  prosesTarikan();
 }
 
 function namaAmt(x) {
