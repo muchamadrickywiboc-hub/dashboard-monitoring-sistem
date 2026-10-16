@@ -258,6 +258,7 @@ td{padding:7px 10px}
 .trend3 .ana h3 .hname small{display:block;margin-top:2px}
 .trend3 .donut.sm svg{width:62px;height:62px}
 .cattbl{padding:4px 12px 14px}
+.tblket{font-size:11.5px;color:var(--muted);line-height:1.45;padding:2px 2px 6px}.tblket b{color:var(--ink-2);font-weight:600}
 .cattbl th{padding:7px 6px;font-size:11px}.cattbl td{padding:6px 6px;font-size:12.5px}
 #breg th,#breg td,#bdelta th,#bdelta td{padding-left:7px;padding-right:7px}
 .amttbl th:nth-child(-n+3),.amttbl th:last-child{text-align:left}
@@ -778,6 +779,10 @@ function renderBulan() {
   document.getElementById('trendSub').textContent = W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
     : `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis putus-putus = rata-rata`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
+  // keterangan tabel parameter: periode ini dibanding apa
+  const pjg = k => W ? namaK(k) : `${BLN[k]} ${D.tahun}`;
+  const ketTabel = pm === null ? `Tabel: <b>${pjg(W ? 'W' : mon)}</b> · belum ada periode pembanding${W ? ' (pilih tanggal untuk membandingkan dengan hari sebelumnya)' : ''}.`
+    : `Tabel: <b>${pjg(W ? 'W' : mon)}</b> dibanding <b>${pjg(pm)}</b>. Kenaikan = (${S3(W ? 'W' : mon)} − ${S3(pm)}) ÷ ${S3(pm)}.`;
   CATS.forEach(cat => {
     const ps = catParams(cat.key), arr = W ? null : BLN.map((_, m) => nilaiKat(cat.key, m)), kc = W ? 'W' : mon;
     const cur = W ? nk(cat.key, 'W') : arr[mon], prv = pm === null ? null : W ? nk(cat.key, pm) : arr[pm], pct = prv ? cur/prv : NaN;
@@ -793,7 +798,7 @@ function renderBulan() {
       <div><div class="k">Kenaikan tertinggi</div><div class="v up">${up ? up.l + ' +' + nf(up.d) : 'Tidak ada kenaikan'}</div></div>
       <div><div class="k">Penurunan tertinggi</div><div class="v down">${dn ? dn.l + ' −' + nf(-dn.d) : 'Tidak ada penurunan'}</div></div></div>
       <div class="anachart"></div>
-      <div class="cattbl"><div class="tbl"><table><thead><tr><th>Parameter</th><th>${S3(pm)}</th><th>${S3(kc)}</th><th>Kenaikan</th></tr></thead><tbody>${rows}
+      <div class="cattbl"><div class="tblket">${ketTabel}</div><div class="tbl"><table><thead><tr><th>Parameter</th><th>${S3(pm)}</th><th>${S3(kc)}</th><th>Kenaikan</th></tr></thead><tbody>${rows}
       <tr class="tot"><td>TOTAL</td><td>${prv === null ? '–' : nf(prv)}</td><td>${cur === null ? '–' : nf(cur)}</td><td>${pctTxt(cur || 0, prv)}</td></tr></tbody></table></div></div>`;
     te.appendChild(card);
     if (W) drawJamKat(card.querySelector('.anachart'), HS, HS.map(h => D.jamW[h][cat.key]), KP ? HS.map(h => D.jamW[h]['p' + cat.key]) : null, cat);
