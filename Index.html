@@ -791,7 +791,7 @@ function renderBulan() {
       if (d > 0 && (!up || d > up.d)) up = {d, l: p.label}; if (d < 0 && (!dn || d < dn.d)) dn = {d, l: p.label}; });
     const rows = ps.map(p => { const a = nv(p.key, kc), b = pm === null ? null : nv(p.key, pm);
       return `<tr><td>${p.label.toUpperCase()}${p.kat !== p.katAsal ? ' <span class="small" style="display:inline">(dipindah)</span>' : ''}</td><td>${b === null ? '–' : nf(b)}</td><td>${a === null ? '–' : nf(a)}</td><td>${a === null ? '<span class="flat">–</span>' : pctTxt(a, b)}</td></tr>`; }).join('');
-    const subTxt = `Donut: ${W ? pendekK('W') : BLN[mon]} ${isFinite(pct) ? (pct > 1 ? 'lebih banyak dari' : pct < 1 ? 'lebih sedikit dari' : 'sama dengan') : 'dibanding'} ${pm === null ? (W ? 'sebelumnya' : 'bulan lalu') : W ? pendekK(pm) : BLN[pm]}`;
+    const subTxt = `${W ? pendekK('W') : BLN[mon]} ${isFinite(pct) ? (pct > 1 ? 'lebih banyak dari' : pct < 1 ? 'lebih sedikit dari' : 'sama dengan') : 'dibanding'} ${pm === null ? (W ? 'sebelumnya' : 'bulan lalu') : W ? pendekK(pm) : BLN[pm]}`;
     const card = document.createElement('section'); card.className = 'ana';
     card.innerHTML = `<h3><i style="background:${cat.color}"></i><span class="hname">${cat.name.toUpperCase()}<small>${subTxt}</small></span><span class="donut sm" title="${subTxt}">${donutSVG(pct, cat)}</span></h3>
       <div class="boxes"><div><div class="k">Total (${S3(kc)} / ${pm === null ? '–' : S3(pm)})</div><div class="v">${cur === null ? '–' : nf(cur)} / ${prv === null ? '–' : nf(prv)}</div></div>
