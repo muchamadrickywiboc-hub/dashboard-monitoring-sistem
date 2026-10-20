@@ -112,7 +112,16 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 
 <script>
 /* Bila skrip gagal, tampilkan pesannya (jangan halaman kosong) */
-window.onerror = (m, src, baris) => { const b = document.getElementById('boot'); if (b) { b.hidden = false; b.className = 'note err'; b.textContent = 'Halaman gagal dimuat: ' + m + (baris ? ' (baris ' + baris + ')' : '') + '. Pastikan isi file HalamanHarian tersalin lengkap.'; } };
+window.onerror = (m, src, baris) => {
+  const b = document.getElementById('boot'); if (!b) return;
+  b.hidden = false; b.className = 'note err';
+  b.textContent = 'Halaman gagal dimuat: ' + m + (baris ? ' (baris ' + baris + ')' : '') + '.';
+  // tampilkan isi baris di sekitar error apa adanya, untuk melacak bagian kode yang berubah saat disajikan
+  if (baris) { const L = document.documentElement.outerHTML.split('\n'), pre = document.createElement('pre');
+    pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font-size:11px;background:#fff;border:1px solid #ddd;padding:8px;color:#333';
+    pre.textContent = L.slice(Math.max(0, baris - 4), baris + 2).map((x, i) => (Math.max(0, baris - 4) + i + 1) + ': ' + x.slice(0, 400)).join('\n');
+    b.appendChild(pre); }
+};
 </script>
 <script>
 /* Logo bawaan (dipakai bila folder data tidak berisi file gambar "Logo ...") */
