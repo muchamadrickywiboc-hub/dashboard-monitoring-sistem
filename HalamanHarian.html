@@ -470,7 +470,8 @@ function gambarSemuaPie(el, L) { el.querySelectorAll('canvas[data-pie]').forEach
 new MutationObserver(() => { const pg = $('prev').querySelector('.sk > div'); if (pg && LAP && !pg.dataset.pie) { pg.dataset.pie = 1; gambarSemuaPie(pg, LAP); } }).observe($('prev'), {childList: true, subtree: true});
 
 /* ================= EXPORT PDF ================= */
-const PDF_LIB = ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
+const CDN = ['https:', '', 'cdnjs.cloudflare.com', 'ajax', 'libs', ''].join('/');   // alamat disusun tanpa teks "//" utuh
+const PDF_LIB = [CDN + 'html2canvas/1.4.1/html2canvas.min.js', CDN + 'jspdf/2.5.1/jspdf.umd.min.js'];
 const muatSkrip = src => new Promise((ok, bad) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = () => bad(new Error('Pustaka PDF gagal dimuat. Periksa koneksi internet.')); document.head.appendChild(t); });
 $('btnPdf').onclick = async () => {
   const b = $('btnPdf'); if (b.disabled || !LAP) return;
