@@ -1,14 +1,14 @@
 /**
- * LAPORAN HARIAN OPERASIONAL GPS & DASHCAM (Lampiran 3A)
+ * LAPORAN OPERASIONAL GPS & DASHCAM (Daily & Monthly)
  *
  * Halaman kedua di web app yang sama: <url web app>?laporan=harian (lihat doGet di Kode.gs).
  * Memakai akun, sheet Pemetaan, dan folder data yang sama dengan dashboard bulanan (tidak perlu unggah dua kali):
  *   - Event per tanggal & lokasi dibaca dari sheet "Event" file "Tarikan <nn> ..." (mulai CFG.BULAN_TARIKAN)
  *     atau "Data <nn> ..." (bulan sebelumnya).
- *   - GPS & Dashcam dibaca dari spreadsheet "LAPORAN KENDALA DEVICE CONTROL ROOM" (LH.KENDALA_ID):
- *     terpasang = jumlah Nopol di sheet "Master GPS" / "Master CCTV" per lokasi,
- *     offline   = jumlah Nopol unik di sheet "Justifikasi Uptime" pada tanggal itu (kolom Perangkat GPS / CCTV),
- *     online    = terpasang - offline.
+ *   - GPS & Dashcam (ADAS) dibaca dari sheet "Justifikasi Uptime" spreadsheet "LAPORAN KENDALA DEVICE CONTROL ROOM" (LH.KENDALA_ID):
+ *     setiap Nopol yang tercatat pada satu tanggal = 100%, yang Status-nya Offline = offline.
+ *     Bulanan: jumlah Nopol tercatat dan offline dijumlahkan untuk semua tanggal di bulan itu.
+ *     Lokasi & area tiap Nopol diambil dari sheet Master GPS / Master CCTV.
  *   - RTC (jumlah & online) serta nama Operator / Fleet Supervisor diisi lewat form Input Harian di halaman ini,
  *     disimpan di spreadsheet LH.INPUT_NAMA di folder data (dibuat otomatis).
  *   - Logo: file gambar di folder data yang namanya diawali "Logo" (mis. "Logo Pertamina Patra Niaga.png").
@@ -22,7 +22,7 @@ const LH = {
   CACHE_DETIK: 900,   // 15 menit, mengikuti pemicu prosesTarikan
   KENDALA_ID: '1XL7AskYFqEQBIrISThFTaJ3dNrVrMZi10202a-vO3zE',   // spreadsheet "LAPORAN KENDALA DEVICE CONTROL ROOM"
 };
-/** 14 panel event Lampiran 3A: judul tabel, judul grafik, teks Case yang masuk, dan nama parameter Pemetaan (cadangan). */
+/** 14 jenis event laporan: judul tabel, judul grafik, teks Case yang masuk, dan nama parameter Pemetaan (cadangan). */
 const LH_PANEL = [
   { k: 'HC', tabel: 'Harsh Cornering', grafik: 'Harsh Cornering', kasus: ['HARSH TURN', 'HARSH CORNERING', 'HARSH TURN / CORNERING'], param: ['HARSH TURN / CORNERING'] },
   { k: 'OS', tabel: 'Over Speed', grafik: 'Over Speed', kasus: ['OVERSPEED', 'OVER SPEED', 'OVERSPEED INSTANT', 'OVER SPEED ALARM'], param: ['OVER SPEED'] },
@@ -42,12 +42,12 @@ const LH_PANEL = [
 
 function halamanLaporanHarian_() {
   return HtmlService.createHtmlOutputFromFile('HalamanHarian')
-    .setTitle('Laporan Harian Operasional GPS & Dashcam')
+    .setTitle('Laporan Operasional GPS & Dashcam')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-/** Alamat halaman Laporan Harian, untuk tombol di dashboard bulanan (hanya tampil untuk akun Control Room). */
+/** Alamat halaman Laporan, untuk tombol di dashboard bulanan (hanya tampil untuk akun Control Room). */
 function urlLaporanHarian() { return ScriptApp.getService().getUrl() + '?laporan=harian'; }
 
 /** Case (sudah dinormKasus) -> indeks panel. Teks Case langsung, lalu parameter di sheet Pemetaan. */
@@ -125,90 +125,126 @@ function cakupanLH_(ses, area, lokasi) {
 const cocokLH_ = (c, lok, area) => c.lok ? kunciLok(lok) === kunciLok(c.lok) : !c.area || area === c.area;
 
 /**
- * Isi Lampiran 3A untuk satu tanggal (yyyy-mm-dd) dan cakupan.
- * Baris tabel event = lokasi dalam cakupan (Pusat tanpa pilihan area: per Area).
+ * Isi laporan untuk satu hari (periode yyyy-mm-dd) atau satu bulan (periode yyyy-mm) dan cakupan.
+ * Baris tabel = lokasi dalam cakupan (Pusat tanpa pilihan area: per Area).
  */
-function lhLaporan(token, tanggal, area, lokasi) {
-  const ses = sesi_(token), tg = tanggalTeks(tanggal);
+function lhLaporan(token, periode, area, lokasi) {
+  const ses = sesi_(token), p = teks(periode), bulanan = /^\d{4}-\d{1,2}$/.test(p);
+  const tg = tanggalTeks(bulanan ? p + '-01' : p);
   if (!tg) throw new Error('Tanggal tidak valid.');
-  const c = cakupanLH_(ses, area, lokasi), E = eventBulanLH_(tg.m), perArea = ses.peran === 'PUSAT' && !c.area && !c.lok;
-  const info = { lokasi: lokasiLH_(ses) };
-  // baris tabel: semua lokasi dalam cakupan (juga yang tanpa event), ditambah lokasi yang hanya ada di data tanggal ini
+  const m = tg.m, hari = bulanan ? null : tg.d;
+  const c = cakupanLH_(ses, area, lokasi), E = eventBulanLH_(m), J = kendalaBulan_(m), perArea = ses.peran === 'PUSAT' && !c.area && !c.lok;
+  const info = lokasiLH_(ses), areaLok = {};
+  info.forEach(o => { areaLok[kunciLok(o.n)] = o.a; });
+  Object.keys(E.lokArea).forEach(l => { const k = kunciLok(l); areaLok[k] = areaLok[k] || E.lokArea[l]; });
+  const areaDari = (lok, a) => a || areaLok[kunciLok(lok)] || '';
+  const masuk = (lok, a) => cocokLH_(c, lok, areaDari(lok, a));
+  const diHari = d => hari === null || +d === hari;
+  // baris tabel: semua lokasi dalam cakupan, ditambah lokasi yang hanya muncul di data periode ini
   const baris = [], idx = {};
-  const tambah = (nama, ar) => { const k = perArea ? ar : kunciLok(nama); if (!k || idx[k] !== undefined) return; idx[k] = baris.length; baris.push(perArea ? ar : nama); };
+  const tambah = (nama, a) => { const k = perArea ? areaDari(nama, a) : kunciLok(nama); if (!k || idx[k] !== undefined) return -1; idx[k] = baris.length; baris.push(perArea ? k : nama); return idx[k]; };
+  const iBaris = (nama, a) => { const k = perArea ? areaDari(nama, a) : kunciLok(nama); return idx[k] !== undefined ? idx[k] : tambah(nama, a); };
   if (perArea) AREAS.forEach(a => tambah(a, a));
-  else info.lokasi.filter(o => cocokLH_(c, o.n, o.a)).forEach(o => tambah(o.n, o.a));
-  const rows = (E.tanggal[tg.d] || []).filter(r => cocokLH_(c, r[0], r[1] || info.lokasi.filter(o => kunciLok(o.n) === kunciLok(r[0])).map(o => o.a)[0] || ''));
-  rows.forEach(r => tambah(r[0], r[1]));
-  const V = LH_PANEL.map(() => baris.map(() => 0));
-  rows.forEach(r => { const i = idx[perArea ? r[1] : kunciLok(r[0])]; if (i !== undefined) V[r[2]][i] += r[3]; });
-  const K = perangkatKendala_(teksTanggal_(tg), c);
-  const inp = bacaInputLH_().filter(r => r.tanggal === teksTanggal_(tg) && cocokLH_(c, r.lokasi, r.area || (info.lokasi.filter(o => kunciLok(o.n) === kunciLok(r.lokasi))[0] || {}).a || ''));
-  const jml = (a, b) => inp.reduce((s, r) => s + (r[a] || 0), 0) - (b ? inp.reduce((s, r) => s + (r[b] || 0), 0) : 0);
-  const satu = c.lok && inp.length === 1 ? inp[0] : null;   // nama operator/supervisor hanya untuk laporan satu lokasi
-  const labelLok = c.lok || (c.area ? 'Command Center ' + c.area : 'Semua Area');
+  else info.filter(o => cocokLH_(c, o.n, o.a)).forEach(o => tambah(o.n, o.a));
+
+  // event
+  const V = LH_PANEL.map(() => []), evHari = {};
+  let adaEvent = false;
+  Object.keys(E.tanggal).filter(diHari).forEach(d => E.tanggal[d].forEach(r => {
+    if (!masuk(r[0], r[1])) return;
+    const i = iBaris(r[0], r[1]); if (i < 0) return;
+    V[r[2]][i] = (V[r[2]][i] || 0) + r[3]; adaEvent = true;
+    (evHari[d] || (evHari[d] = LH_PANEL.map(() => 0)))[r[2]] += r[3];
+  }));
+
+  // GPS & Dashcam dari Justifikasi Uptime: setiap Nopol yang tercatat di tanggal itu = 100%
+  const kosong = () => ({ gps: [0, 0], cctv: [0, 0] });
+  const upBaris = [], upHari = {}, up = kosong();
+  let adaJust = false;
+  Object.keys(J.hari).filter(diHari).forEach(d => J.hari[d].forEach(([lok, ar, jenis, total, off]) => {
+    if (!masuk(lok, ar)) return;
+    const i = iBaris(lok, ar); if (i < 0) return;
+    adaJust = true;
+    [up, upBaris[i] || (upBaris[i] = kosong()), upHari[d] || (upHari[d] = kosong())].forEach(o => { o[jenis][0] += total; o[jenis][1] += off; });
+  }));
+  const bagi = x => ({ terpasang: x[0], online: x[0] - x[1] });
+  const offSemua = J.off.filter(r => diHari(r[0]) && masuk(r[1], r[2]));
+  const offline = offSemua.slice(0, 500)
+    .map(r => ({ tanggal: teksTanggal_({ m: m, d: r[0] }), lokasi: r[3], perangkat: r[4], nopol: r[5], durasi: r[6], justifikasi: r[7], keterangan: r[8] }));
+
+  // RTC & penanda tangan dari form input
+  const awal = teksTanggal_({ m: m, d: hari || 1 }), akhir = teksTanggal_({ m: m, d: hari || 31 });
+  const inp = bacaInputLH_().filter(r => r.tanggal >= awal && r.tanggal <= akhir && masuk(r.lokasi, r.area));
+  const jml = a => inp.reduce((s, r) => s + (r[a] || 0), 0);
+  const satu = !bulanan && c.lok && inp.length === 1 ? inp[0] : null;   // nama operator/supervisor hanya untuk laporan harian satu lokasi
+  const nHari = bulanan ? new Date(CFG.TAHUN, m + 1, 0).getDate() : 1;
+
   return JSON.stringify({
-    tanggal: teksTanggal_(tg), lokasi: labelLok, baris: perArea ? 'Area' : 'Lokasi', sumber: E.sumber,
-    panel: LH_PANEL.map((p, i) => ({ tabel: p.tabel, grafik: p.grafik, rows: baris.map((n, j) => ({ n: n, v: V[i][j] })), total: V[i].reduce((s, v) => s + v, 0) })),
+    mode: bulanan ? 'bulanan' : 'harian', periode: bulanan ? awal.slice(0, 7) : awal,
+    lokasi: c.lok || (c.area ? 'Command Center ' + c.area : 'Semua Area'), baris: perArea ? 'Area' : 'Lokasi', sumber: E.sumber,
+    panel: LH_PANEL.map((pn, i) => ({ tabel: pn.tabel, grafik: pn.grafik, rows: baris.map((n, j) => ({ n: n, v: V[i][j] || 0 })), total: V[i].reduce((s, v) => s + (v || 0), 0) })),
     perangkat: {
-      gps: K.gps, dashcam: K.cctv, rtc: { terpasang: jml('rtcT'), online: jml('rtcO') },
-      adaJustifikasi: K.adaJustifikasi, lokasiInput: inp.length, lokasiCakupan: perArea ? info.lokasi.length : baris.length,
+      gps: bagi(up.gps), dashcam: bagi(up.cctv), rtc: { terpasang: jml('rtcT'), online: jml('rtcO') },
+      adaJustifikasi: adaJust, lokasiInput: inp.length, lokasiCakupan: perArea ? info.length : baris.length,
     },
+    perBaris: baris.map((n, i) => ({ n: n, gps: bagi((upBaris[i] || kosong()).gps), dashcam: bagi((upBaris[i] || kosong()).cctv), event: V.reduce((s, x) => s + (x[i] || 0), 0) })),
+    perHari: bulanan ? Array.from({ length: nHari }, (_, k) => { const d = k + 1, u = upHari[d] || kosong();
+      return { d: d, event: (evHari[d] || []).reduce((s, v) => s + v, 0), gps: bagi(u.gps), dashcam: bagi(u.cctv) }; }) : [],
+    offline: offline, offlineTotal: offSemua.length,
     operator: satu ? satu.operator : '', supervisor: satu ? satu.supervisor : '',
-    adaEvent: rows.length > 0,
+    adaEvent: adaEvent,
   });
 }
-/* ---- GPS & Dashcam dari spreadsheet LAPORAN KENDALA DEVICE CONTROL ROOM ---- */
-const jenisPerangkat_ = x => /GPS/i.test(x) ? 'gps' : /CCTV|DASH|KAMERA|CAMERA/i.test(x) ? 'cctv' : '';
-/** Jumlah unit terpasang per lokasi dari sheet Master GPS & Master CCTV: { gps: {kunci: [lokasi, area, n]}, cctv: {...} }. Cache 1 jam. */
-function masterKendala_() {
-  const c = CacheService.getScriptCache(), ada = c.get('LHMS');
+/* ---- GPS & Dashcam dari spreadsheet LAPORAN KENDALA DEVICE CONTROL ROOM, sheet Justifikasi Uptime ---- */
+const jenisPerangkat_ = x => /GPS/i.test(x) ? 'gps' : /ADAS|DASH|CCTV|KAMERA|CAMERA|DSM|MDVR/i.test(x) ? 'cctv' : '';
+/** Tanggal di sheet kendala: objek Date, yyyy-mm-dd, atau dd/mm/yyyy. */
+function tglKendala_(x) {
+  const t = tanggalTeks(x); if (t) return t;
+  const s = teks(x).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);
+  return s ? { m: +s[2] - 1, d: +s[1] } : null;
+}
+/**
+ * Justifikasi Uptime satu bulan. Setiap baris = satu Nopol per tanggal & perangkat; Status "Offline" = offline.
+ * Lokasi & area diambil dari Master GPS / Master CCTV berdasarkan Nopol (cadangan: kolom Lokasi + Master Lokasi).
+ * { hari: { d: [[lokasi, area, jenis, jumlahNopol, nopolOffline], ...] }, off: [[d, lokasi, area, lokasiDiSheet, perangkat, nopol, durasi, justifikasi, keterangan], ...] }
+ * Cache 10 menit.
+ */
+function kendalaBulan_(m) {
+  const kunci = 'LHJU2_' + m, ada = ambilCache_(kunci);
   if (ada) return JSON.parse(ada);
-  const ss = SpreadsheetApp.openById(LH.KENDALA_ID), out = { gps: {}, cctv: {} };
-  [['gps', 'Master GPS'], ['cctv', 'Master CCTV']].forEach(([j, nama]) => {
-    const v = nilaiSheet(ss, nama) || [], k = petaKolom(v[0] || []), unik = {};
-    const iN = k['NOPOL'], iL = k['LOKASI'], iA = k['AREA'];
-    if (iN === undefined || iL === undefined) throw new Error('Sheet ' + nama + ' harus punya kolom Nopol dan Lokasi.');
-    v.slice(1).forEach(r => {
-      const nopol = teks(r[iN]).toUpperCase().replace(/\s+/g, ''), lok = teks(r[iL]).toUpperCase(), kl = kunciLok(lok);
-      if (!nopol || !kl || unik[kl + '|' + nopol]) return;
-      unik[kl + '|' + nopol] = 1;
-      const o = out[j][kl] || (out[j][kl] = [ALIAS_LOKASI[lok] || lok, iA === undefined ? '' : areaNorm(r[iA]), 0]);
-      o[2]++;
-    });
+  const ss = SpreadsheetApp.openById(LH.KENDALA_ID), v = nilaiSheet(ss, 'Justifikasi Uptime') || [], k = petaKolom(v[0] || []);
+  const kol = awalan => { const h = Object.keys(k).filter(x => x.indexOf(awalan) === 0)[0]; return h === undefined ? undefined : k[h]; };
+  const iT = k['TANGGAL'], iL = k['LOKASI'], iP = k['PERANGKAT'], iN = k['NOPOL'], iS = k['STATUS'], iD = kol('DURASI'), iJ = kol('JUSTIFIKASI'), iK = kol('KETERANGAN');
+  if (iT === undefined || iL === undefined || iP === undefined || iN === undefined) throw new Error('Sheet Justifikasi Uptime harus punya kolom Tanggal, Lokasi, Perangkat, dan Nopol.');
+  // lokasi & area resmi tiap Nopol dari Master GPS / Master CCTV (Justifikasi bisa memakai nama unit yang lebih rinci)
+  const kunciNopol = x => teks(x).toUpperCase().replace(/[^A-Z0-9]/g, ''), M = { gps: {}, cctv: {} }, areaL = {};
+  const muat = (nama, f) => { const w = nilaiSheet(ss, nama) || [], h = petaKolom(w[0] || []); w.slice(1).forEach(r => f(r, h)); };
+  muat('Master Lokasi', (r, h) => { const l = teks(r[h['LOKASI']]).toUpperCase(); if (l) areaL[kunciLok(l)] = areaNorm(r[h['AREA']]); });
+  [['gps', 'Master GPS'], ['cctv', 'Master CCTV']].forEach(([j, nama]) => muat(nama, (r, h) => {
+    const n = kunciNopol(r[h['NOPOL']]), l = teks(r[h['LOKASI']]).toUpperCase();
+    if (n && l) M[j][n] = [ALIAS_LOKASI[l] || l, areaNorm(r[h['AREA']]) || areaL[kunciLok(l)] || ''];
+  }));
+  const N = {};   // d|lokasi|jenis|nopol -> [d, lokasi, area, jenis, offline, baris]
+  v.slice(1).forEach(r => {
+    const tg = tglKendala_(r[iT]), jenis = jenisPerangkat_(teks(r[iP])), lokAsli = teks(r[iL]).toUpperCase(), nopol = kunciNopol(r[iN]);
+    if (!tg || tg.m !== m || !jenis || !lokAsli || !nopol) return;
+    const [lok, area] = M[jenis][nopol] || M[jenis === 'gps' ? 'cctv' : 'gps'][nopol] || [ALIAS_LOKASI[lokAsli] || lokAsli, areaL[kunciLok(lokAsli)] || ''];
+    const off = iS !== undefined && teks(r[iS]) ? /OFF/i.test(teks(r[iS])) : (angka(iD === undefined ? 0 : r[iD]) || 0) > 0;
+    const u = tg.d + '|' + kunciLok(lok) + '|' + jenis + '|' + nopol, o = N[u] || (N[u] = [tg.d, lok, area, jenis, false, null]);
+    if (off && !o[4]) { o[4] = true; o[5] = r; }   // satu kendaraan dihitung sekali per hari
   });
-  try { c.put('LHMS', JSON.stringify(out), 3600); } catch (e) { /* tanpa cache */ }
+  const H = {}, out = { hari: {}, off: [] };
+  Object.keys(N).forEach(u => {
+    const [d, lok, area, jenis, off, r] = N[u], kk = d + '|' + kunciLok(lok) + '|' + jenis;
+    (H[kk] || (H[kk] = [d, lok, area, jenis, 0, 0]))[4]++;
+    if (!off) return;
+    H[kk][5]++;
+    out.off.push([d, lok, area, teks(r[iL]), teks(r[iP]), teks(r[iN]), iD === undefined ? '' : angka(r[iD]) || 0, iJ === undefined ? '' : teks(r[iJ]), iK === undefined ? '' : teks(r[iK])]);
+  });
+  Object.keys(H).forEach(kk => { const x = H[kk]; (out.hari[x[0]] = out.hari[x[0]] || []).push(x.slice(1)); });
+  out.off.sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
+  simpanCache_(JSON.stringify(out), kunci, 600);
   return out;
-}
-/** Nopol offline per lokasi pada tanggal t (yyyy-mm-dd) dari sheet Justifikasi Uptime: { gps: {kunci: n}, cctv: {...}, ada }. Cache 10 menit. */
-function offlineKendala_(t) {
-  const c = CacheService.getScriptCache(), kunci = 'LHJU_' + t, ada = c.get(kunci);
-  if (ada) return JSON.parse(ada);
-  const v = nilaiSheet(SpreadsheetApp.openById(LH.KENDALA_ID), 'Justifikasi Uptime') || [], k = petaKolom(v[0] || []);
-  const iT = k['TANGGAL'], iL = k['LOKASI'], iP = k['PERANGKAT'], iN = k['NOPOL'];
-  if (iT === undefined || iL === undefined || iP === undefined) throw new Error('Sheet Justifikasi Uptime harus punya kolom Tanggal, Lokasi, dan Perangkat.');
-  const out = { gps: {}, cctv: {}, ada: false }, unik = {};
-  v.slice(1).forEach((r, i) => {
-    const tg = tanggalTeks(r[iT]), j = jenisPerangkat_(teks(r[iP])), kl = kunciLok(r[iL]);
-    if (!tg || teksTanggal_(tg) !== t || !j || !kl) return;
-    const nopol = iN === undefined ? '' : teks(r[iN]).toUpperCase().replace(/\s+/g, ''), u = j + '|' + kl + '|' + (nopol || '#' + i);
-    out.ada = true;
-    if (unik[u]) return;   // satu kendaraan dihitung sekali per hari
-    unik[u] = 1; out[j][kl] = (out[j][kl] || 0) + 1;
-  });
-  try { c.put(kunci, JSON.stringify(out), 600); } catch (e) { /* tanpa cache */ }
-  return out;
-}
-/** GPS & Dashcam untuk cakupan laporan: terpasang dari Master, online = terpasang - offline. */
-function perangkatKendala_(t, c) {
-  const M = masterKendala_(), O = offlineKendala_(t), hasil = { adaJustifikasi: O.ada };
-  ['gps', 'cctv'].forEach(j => {
-    let terpasang = 0, offline = 0;
-    Object.keys(M[j]).forEach(kl => { const [lok, area, n] = M[j][kl]; if (!cocokLH_(c, lok, area)) return;
-      terpasang += n; offline += Math.min(n, O[j][kl] || 0); });
-    hasil[j] = { terpasang: terpasang, online: terpasang - offline };
-  });
-  return hasil;
 }
 
 const teksTanggal_ = tg => CFG.TAHUN + '-' + ('0' + (tg.m + 1)).slice(-2) + '-' + ('0' + tg.d).slice(-2);

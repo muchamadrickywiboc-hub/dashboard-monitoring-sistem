@@ -1143,7 +1143,7 @@ function terapkanAkun(p) {
   AKUN = a;
   document.body.classList.remove('nologin', 'peran-area', 'peran-lokasi');
   if (a.peran === 'AREA') document.body.classList.add('peran-area'); else if (a.peran === 'LOKASI') document.body.classList.add('peran-lokasi');
-  // tombol Laporan Harian (Lampiran 3A) hanya untuk Control Room; alamat web app diambil dari server
+  // tombol Laporan (Daily & Monthly) hanya untuk Control Room; alamat web app diambil dari server
   const bh = document.getElementById('btnHarian');
   if (a.peran === 'LOKASI' && bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian();
   document.getElementById('loginwrap').hidden = true;

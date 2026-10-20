@@ -3,91 +3,162 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
 <style>
-:root{--forest:#4a7a53;--forest-d:#3f6e4b;--ink:#1d2421;--muted:#5f6b64;--line:#d9dfdb;--bg:#f3f5f3;--card:#fff;--navy:#1f3864;--err:#b3261e;--ok:#2e7d32}
+:root{color-scheme:light;--bg:#f6f7f6;--surface:#fff;--surface-2:#f3f5f3;--ink:#1b1f1d;--ink-2:#47504b;--muted:#737b76;--grid:#e6e9e6;--axis:#c9cec9;--line:rgba(27,31,29,.09);--forest:#4a7a53;--leaf:#6aa459;--lime:#b8ca10;--red:#e03d3e;--accent-wash:#eef4e6;--on:#0f78bf;--off:#e03d3e;--gps:#93b833;--cam:#0f78bf;--warn-ink:#7a5200;--serious-ink:#b42324;--f-ui:"Poppins",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;--gut:clamp(16px,2.2vw,56px)}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
 button,input,select{font:inherit;color:inherit}
-.bar{background:linear-gradient(120deg,var(--forest-d),var(--forest) 45%,#7aa64a);color:#fff;padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
-.bar h1{font-size:16px;margin:0;font-weight:700}
-.bar small{opacity:.9}
-.bar .akun{display:flex;gap:8px;align-items:center;font-size:13px}
-.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;min-height:36px}
-.btn:hover{border-color:var(--forest)}
-.btn.pri{background:var(--forest);border-color:var(--forest);color:#fff}
-.btn.pri:hover{background:var(--forest-d)}
+.hero{position:relative;background:linear-gradient(115deg,#3f6e4b 0%,var(--forest) 22%,var(--leaf) 58%,#93b833 100%);color:#fff;padding:0 var(--gut) 92px;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-120px;top:-160px;width:520px;height:520px;border-radius:50%;border:1px solid rgba(255,255,255,.16);box-shadow:0 0 0 60px rgba(255,255,255,.04),0 0 0 140px rgba(255,255,255,.03);pointer-events:none}
+.brandbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;position:relative;z-index:2}
+.tab{background:#fff;display:flex;align-items:center;padding:10px 26px 12px;min-height:58px;border-radius:0 0 46px 0;margin-left:calc(-1*var(--gut));padding-left:var(--gut)}
+.tab img{height:38px;width:auto;display:block}
+.akun{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-top:14px}
+.pill{display:inline-flex;align-items:center;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);padding:5px 12px;border-radius:999px;font-size:12.5px;font-weight:500}
+.akun button,.akun a{font:600 12px var(--f-ui);border:0;background:#fff;color:var(--forest);border-radius:999px;padding:5px 12px;cursor:pointer;text-decoration:none}
+.heroin{position:relative;z-index:2;padding-top:22px;display:flex;flex-direction:column;gap:16px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.82)}
+h1{margin:2px 0 4px;font-size:clamp(22px,3vw,34px);font-weight:700;letter-spacing:-.01em;line-height:1.15}
+.sub{color:rgba(255,255,255,.9);font-size:15px}
+.ctrlrow{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.seg{display:inline-flex;background:rgba(0,0,0,.18);border-radius:999px;padding:3px}
+.seg button{appearance:none;border:0;background:transparent;color:#fff;font:600 13.5px var(--f-ui);padding:7px 18px;border-radius:999px;cursor:pointer}
+.seg button[aria-selected="true"]{background:#fff;color:var(--forest)}
+.pick{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.pick select,.pick input{font:600 13.5px var(--f-ui);color:var(--ink);background:#fff;border:0;border-radius:8px;padding:7px 12px;cursor:pointer;max-width:100%}
+.hbtn{font:600 13px var(--f-ui);border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:7px 14px;cursor:pointer}
+.hbtn:hover{background:rgba(255,255,255,.26)}
+.wrap{position:relative;z-index:1;margin:-64px 0 0;padding:0 var(--gut) 40px;display:flex;flex-direction:column;gap:20px}
+.loading{background:var(--surface);border-radius:16px;box-shadow:0 8px 24px rgba(30,60,40,.10);padding:16px 20px;color:var(--ink-2);display:flex;align-items:center;gap:12px}
+.spin{display:inline-block;width:18px;height:18px;border-radius:50%;border:3px solid var(--grid);border-top-color:var(--forest);animation:sp .8s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+.warnbar{display:flex;flex-direction:column;gap:4px;background:#fdf0cf;color:var(--warn-ink);border-radius:12px;padding:10px 14px;font-size:13.5px}
+.errbar{background:#fbe9e7;color:var(--serious-ink);border-radius:12px;padding:10px 14px;font-size:13.5px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.kpi{background:var(--surface);border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;gap:6px;min-width:0;box-shadow:0 8px 24px rgba(30,60,40,.10)}
+.kpi .l{font-size:13.5px;color:var(--ink-2);font-weight:600;display:flex;align-items:center;gap:8px}
+.kpi .l i{width:10px;height:10px;border-radius:3px}
+.kpi .v{font-size:32px;font-weight:700;line-height:1.1}
+.kpi .v small{font-size:14px;font-weight:600;color:var(--muted);margin-left:4px}
+.kpi .n{font-size:13px;color:var(--muted)}
+.split{height:10px;border-radius:5px;display:flex;gap:2px;overflow:hidden;background:var(--surface-2)}
+.split i{display:block;height:100%}
+.splitlbl{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-2);font-weight:600}
+.splitlbl span{display:inline-flex;align-items:center;gap:6px}
+.splitlbl i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.infobar{background:var(--surface);border-radius:16px;border:1px solid var(--line);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden}
+.infobar>div{padding:12px 18px;border-right:1px solid var(--grid);min-width:0}
+.infobar>div:last-child{border-right:0}
+.infobar .k{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.infobar .v{font-size:15.5px;font-weight:600;margin-top:2px;overflow-wrap:anywhere}
+.grid{display:grid;gap:20px}
+.g-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 22px 22px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.ph h2{margin:0;font-size:17px;font-weight:600}
+.ph p{margin:3px 0 0;font-size:13px;color:var(--ink-2)}
+.rank{display:flex;flex-direction:column;gap:2px}
+.rrow{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr) 60px;align-items:center;gap:12px;padding:6px 8px;border-radius:10px}
+.rrow:hover{background:var(--surface-2)}
+.rname{font-weight:500;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rtrack{height:14px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.rfill{height:100%;border-radius:0 4px 4px 0;background:var(--forest)}
+.rval{font-weight:700;font-size:15px;text-align:right;font-variant-numeric:tabular-nums}
+.rrow.nol .rname,.rrow.nol .rval{color:var(--muted);font-weight:500}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:var(--f-ui)}
+.tick{fill:var(--muted);font-size:11.5px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+th{font-size:11.5px;color:#fff;background:var(--forest);font-weight:600;text-align:right;padding:8px 10px;white-space:nowrap}
+th:first-child{border-radius:8px 0 0 8px}th:last-child{border-radius:0 8px 8px 0}
+th:first-child,td:first-child{text-align:left}
+td{padding:9px 10px;border-bottom:1px solid var(--grid);text-align:right;white-space:nowrap}
+td.wrap-t{white-space:normal;text-align:left;min-width:180px}
+td.kiri{text-align:left}
+tbody tr:hover{background:var(--surface-2)}
+tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
+.pct{display:inline-block;min-width:52px;border-radius:999px;padding:1px 8px;font-weight:600;font-size:12.5px;text-align:center}
+.pct.ok{background:var(--accent-wash);color:#2f6a37}.pct.mid{background:#fdf0cf;color:var(--warn-ink)}.pct.bad{background:#fbe9e7;color:var(--serious-ink)}.pct.na{color:var(--muted)}
+.kosong{color:var(--muted);font-size:13.5px;padding:6px 2px}
+.foot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+/* login */
+.lgwrap{min-height:100vh;display:grid;place-items:center;padding:24px;background:linear-gradient(150deg,#3f6e4b 0%,var(--forest) 30%,var(--leaf) 70%,#93b833 100%)}
+.lgcard{width:100%;max-width:420px;background:var(--surface);border-radius:20px;padding:26px 24px;box-shadow:0 24px 60px rgba(31,61,40,.25);display:flex;flex-direction:column;gap:14px}
+.lgcard img{height:36px;width:auto;align-self:flex-start}
+.lgcard h2{margin:0;font-size:22px}.lgcard p{margin:-8px 0 0;color:var(--muted);font-size:13.5px}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink-2);font-weight:600}
+.fld input,.fld select{border:1.5px solid var(--grid);border-radius:10px;padding:9px 12px;min-height:42px;color:var(--ink);background:#fff;width:100%;font-weight:500}
+.msg{min-height:18px;color:var(--serious-ink);font-size:13px}
+.btn{border:1.5px solid var(--grid);background:#fff;border-radius:10px;padding:9px 16px;cursor:pointer;font-weight:600}
+.btn.pri{border:0;color:#fff;background:linear-gradient(115deg,#3f6e4b,var(--forest) 40%,var(--leaf))}
 .btn:disabled{opacity:.6;cursor:default}
-.bar .btn{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.4);color:#fff}
-.wrap{max-width:1240px;margin:0 auto;padding:16px}
-.tools{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-.tools label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:3px}
-.tools input,.tools select{border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-height:36px;background:#fff;min-width:0;max-width:100%}
-.tools .sp{flex:1}
-.note{margin:10px 0 0;font-size:13px;color:var(--muted)}
-.note.warn{color:#8a5a00}
-.note.err{color:var(--err)}
-.prev{margin-top:12px;background:#e6e9e7;border-radius:12px;padding:12px;overflow:hidden}
-.prev .sk{transform-origin:0 0;box-shadow:0 1px 6px rgba(0,0,0,.18);background:#fff}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
-#login{max-width:420px;margin:40px auto}
-#login h2{margin:0 0 4px;font-size:18px}
-#login p{margin:0 0 14px;color:var(--muted);font-size:13px}
-.fld{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;font-size:13px;color:var(--muted)}
-.fld input,.fld select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px;color:var(--ink);background:#fff;width:100%}
-.msg{min-height:20px;color:var(--err);font-size:13px;margin-bottom:8px}
-dialog{border:none;border-radius:14px;padding:0;max-width:560px;width:calc(100% - 32px)}
+dialog{border:none;border-radius:16px;padding:0;max-width:560px;width:calc(100% - 32px);font-family:var(--f-ui)}
 dialog::backdrop{background:rgba(20,30,25,.45)}
-.dlg{padding:18px}
-.dlg h3{margin:0 0 4px;font-size:17px}
-.dlg .sub{margin:0 0 14px;font-size:13px;color:var(--muted)}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.dlg{padding:20px;display:flex;flex-direction:column;gap:12px}
+.dlg h3{margin:0;font-size:18px}
+.dlg .sub2{margin:-6px 0 0;font-size:13px;color:var(--muted)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.grp{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+.grp{border:1px solid var(--grid);border-radius:12px;padding:12px}
 .grp b{display:block;font-size:13px;margin-bottom:6px}
 .grp .off{font-size:12px;color:var(--muted);margin-top:4px}
-.row-end{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
-.spin{display:inline-block;width:14px;height:14px;border:2px solid #c9d3cc;border-top-color:var(--forest);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:-2px;margin-right:6px}
-@keyframes sp{to{transform:rotate(360deg)}}
-@media (max-width:600px){.grid3{grid-template-columns:1fr 1fr}.wrap{padding:12px}.tools label{flex:1 1 140px}}
-[hidden]{display:none!important}
+.row-end{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+#boot{margin:24px var(--gut)}
+@media (max-width:1000px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.g-2{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){.kpis,.infobar{grid-template-columns:minmax(0,1fr)}.infobar>div{border-right:0;border-bottom:1px solid var(--grid)}.rrow{grid-template-columns:110px minmax(0,1fr) 48px;gap:8px}.grid2{grid-template-columns:1fr}.kpi .v{font-size:28px}}
 </style>
 </head>
 <body>
-<div class="bar">
-  <div><h1>Laporan Harian Operasional GPS &amp; Dashcam</h1></div>
-  <div class="akun" id="akunBox" hidden><span id="akunNama"></span><a class="btn" id="btnDash" target="_top" href="#" hidden style="text-decoration:none">Dashboard</a><button class="btn" id="btnKeluar" type="button">Keluar</button></div>
-</div>
+<div id="boot" class="loading"><span class="spin"></span>Memuat halaman…</div>
 
-<div class="wrap">
-  <div class="note" id="boot"><span class="spin"></span>Memuat halaman…</div>
-  <form class="card" id="login" hidden>
-    <h2>Masuk</h2>
-    <p>Gunakan akun yang sama dengan dashboard bulanan (RTC, Command Center, atau Control Room).</p>
+<div id="login" class="lgwrap" hidden>
+  <form class="lgcard" id="lgForm">
+    <img id="lgLogo" alt="Pertamina Patra Niaga">
+    <h2>Laporan GPS &amp; Dashcam</h2>
+    <p>Gunakan akun yang sama dengan dashboard (RTC, Command Center, atau Control Room).</p>
     <label class="fld">Akun<select id="lgU"><option value="">Memuat daftar akun…</option></select></label>
     <label class="fld">Password<input id="lgP" type="password" autocomplete="current-password"></label>
     <div class="msg" id="lgErr"></div>
-    <button class="btn pri" id="lgBtn" type="submit" style="width:100%">Masuk</button>
+    <button class="btn pri" id="lgBtn" type="submit">Masuk</button>
   </form>
+</div>
 
-  <div id="app" hidden>
-    <div class="tools">
-      <label>Tanggal<input type="date" id="fTgl"></label>
-      <label id="lArea">Area<select id="fArea"></select></label>
-      <label id="lLok">Lokasi<select id="fLok"></select></label>
-      <button class="btn pri" id="btnTampil" type="button">Tampilkan</button>
-      <span class="sp"></span>
-      <button class="btn" id="btnInput" type="button">Input RTC &amp; Penanda Tangan</button>
-      <button class="btn pri" id="btnPdf" type="button" disabled>Export PDF</button>
+<div id="app" hidden>
+  <header class="hero">
+    <div class="brandbar">
+      <div class="tab"><img id="hdLogo" alt="Pertamina Patra Niaga"></div>
+      <div class="akun"><span class="pill" id="akunNama"></span><a id="btnDash" target="_top" href="#" hidden>Dashboard</a><button id="btnKeluar" type="button">Keluar</button></div>
     </div>
-    <div class="note" id="note"></div>
-    <div class="prev" id="prev"><div class="note"><span class="spin"></span>Memuat…</div></div>
-  </div>
+    <div class="heroin">
+      <div>
+        <div class="eyebrow" id="tEyebrow">Laporan</div>
+        <h1>Laporan Operasional GPS &amp; Dashcam</h1>
+        <div class="sub" id="tSub">Memuat…</div>
+      </div>
+      <div class="ctrlrow">
+        <div class="seg" role="tablist" aria-label="Jenis laporan">
+          <button type="button" role="tab" id="segD" aria-selected="true">Daily</button>
+          <button type="button" role="tab" id="segM" aria-selected="false">Monthly</button>
+        </div>
+        <label class="pick" id="lTgl">Tanggal <input type="date" id="fTgl"></label>
+        <label class="pick" id="lBln" hidden>Bulan <select id="fBln"></select></label>
+        <label class="pick" id="lArea">Area <select id="fArea"></select></label>
+        <label class="pick" id="lLok">Lokasi <select id="fLok"></select></label>
+        <button class="hbtn" id="btnInput" type="button">Input RTC &amp; Penanda Tangan</button>
+      </div>
+    </div>
+  </header>
+  <main class="wrap" id="isi"><div class="loading"><span class="spin"></span>Memuat daftar lokasi…</div></main>
 </div>
 
 <dialog id="dlg">
   <form class="dlg" id="fInput" method="dialog">
     <h3>Input harian RTC &amp; penanda tangan</h3>
-    <p class="sub" id="inSub">Diisi oleh Control Room setiap hari. GPS &amp; Dashcam diambil otomatis dari Justifikasi Uptime.</p>
+    <p class="sub2" id="inSub">Diisi oleh Control Room setiap hari. GPS &amp; Dashcam diambil otomatis dari Justifikasi Uptime.</p>
     <div class="grid2">
       <label class="fld">Tanggal<input type="date" id="inTgl" required></label>
       <label class="fld">Lokasi<select id="inLok"></select></label>
@@ -108,15 +179,8 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 /* Bila skrip gagal, tampilkan pesannya (jangan halaman kosong) */
 window.onerror = (m, src, baris) => {
   const b = document.getElementById('boot'); if (!b) return;
-  b.hidden = false; b.className = 'note err';
+  b.hidden = false; b.className = 'errbar';
   b.textContent = 'Halaman gagal dimuat: ' + m + (baris ? ' (baris ' + baris + ')' : '') + '.';
-  // tampilkan isi baris di sekitar error apa adanya, untuk melacak bagian kode yang berubah saat disajikan
-  // nomor baris dihitung dari awal blok <script>; tampilkan baris itu dari tiap blok skrip apa adanya
-  if (baris) { const pre = document.createElement('pre');
-    pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font-size:11px;background:#fff;border:1px solid #ddd;padding:8px;color:#333';
-    pre.textContent = [...document.scripts].map((sc, k) => { const L = sc.textContent.split('\n'); if (L.length < baris) return '';
-      return 'Skrip ' + (k + 1) + ' (' + L.length + ' baris):\n' + L.slice(Math.max(0, baris - 3), baris + 1).map((x, i) => (Math.max(0, baris - 3) + i + 1) + ': ' + x.slice(0, 600)).join('\n'); }).filter(Boolean).join('\n\n');
-    b.appendChild(pre); }
 };
 </script>
 <script>
@@ -271,26 +335,29 @@ const LOGO_BAWAAN = 'data:image/png;base64,' + [
   'WW4v5NXOMwoABrMSqMx1l2t726viOtmwshO4JBIoA9JOrHKnliAdL4sYZcmBRvGsk5XvsI13Wb/2/57e4Fd4vkn/36H/nSn4Jv3/',
   'mt6EwpvUpv8bA9QVxwDWRfsAAAAASUVORK5CYII='
 ].join('');
-const PW = 1123, PH = 794;   // A4 lanskap dalam px (96 dpi)
-const BIRU = '#1f4e79', MERAH = '#e00000', NAVY = '#1f3864', BATANG = '#4472c4', TOTAL = '#c00000';
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-const SIMPAN = 'dashb_token';   // sama dengan dashboard bulanan, jadi login cukup sekali
-let TOKEN = '', INFO = null, LAP = null, LOGO = LOGO_BAWAAN;
+const SIMPAN = 'dashb_token';   // sama dengan dashboard, jadi login cukup sekali
+let TOKEN = '', INFO = null, LAP = null, LOGO = LOGO_BAWAAN, MODE = 'harian';
 try { TOKEN = localStorage.getItem(SIMPAN) || ''; } catch (e) { TOKEN = ''; }
+try { MODE = localStorage.getItem('lap_mode') === 'bulanan' ? 'bulanan' : 'harian'; } catch (e) { /* bawaan harian */ }
 const $ = id => document.getElementById(id);
 const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
 const nf = n => Math.round(n || 0).toLocaleString('id-ID');
-const judul = s => String(s || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\b(It|Ft|Tbbm|Tlpg|Dppu)\b/g, x => x.toUpperCase());
+const judul = s => String(s || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\b(It|Ft|Tbbm|Tlpg|Dppu|Mor|Ii|Iii|Iv|Vi|Vii|Viii)\b/g, x => x.toUpperCase());
 const simpanToken = t => { try { t ? localStorage.setItem(SIMPAN, t) : localStorage.removeItem(SIMPAN); } catch (e) { /* tanpa penyimpanan */ } };
 const run = (fn, ...a) => new Promise((ok, bad) => google.script.run.withSuccessHandler(ok).withFailureHandler(bad)[fn](...a));
 const pesan = e => e && e.message ? e.message : String(e);
-function nTicks(m) { const ok = x => { const p = Math.pow(10, Math.floor(Math.log10(x))); const r = Math.round(x / p * 100) / 100; return [1, 2, 2.5, 5, 10].includes(r); }; return [5, 4, 3, 6].find(n => ok(m / n)) || 5; }
-function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); const m = v / p; return [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => m <= x) * p; }
 function tglPanjang(t) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t || ''); return m ? `${+m[3]} ${BLN[+m[2] - 1]} ${m[1]}` : ''; }
+function blnPanjang(t) { const m = /^(\d{4})-(\d{2})/.exec(t || ''); return m ? `${BLN[+m[2] - 1]} ${m[1]}` : ''; }
+const persen = b => b.terpasang ? b.online / b.terpasang * 100 : null;
+const fp = v => v === null ? '–' : (v >= 99.95 || v === 0 ? Math.round(v) : v.toFixed(1).replace('.', ',')) + '%';
+const kelas = v => v === null ? 'na' : v >= 95 ? 'ok' : v >= 80 ? 'mid' : 'bad';
+function pasangLogo() { ['lgLogo', 'hdLogo'].forEach(id => { $(id).src = LOGO; }); }
+pasangLogo();
 
 /* ================= LOGIN ================= */
 function tampilLogin(m) {
-  $('app').hidden = true; $('akunBox').hidden = true; $('login').hidden = false; $('lgErr').textContent = m || '';
+  $('boot').hidden = true; $('app').hidden = true; $('login').hidden = false; $('lgErr').textContent = m || '';
   run('daftarLogin').then(j => {
     const L = JSON.parse(j), s = $('lgU');
     s.innerHTML = '<option value="">Pilih akun</option>' +
@@ -299,7 +366,7 @@ function tampilLogin(m) {
       (L.lokasi.length ? `<optgroup label="Control Room">${L.lokasi.map(a => `<option value="${esc(a.u)}">${esc(a.lok)}</option>`).join('')}</optgroup>` : '');
   }).catch(() => { $('lgU').outerHTML = '<input id="lgU" autocomplete="username" placeholder="Username">'; });
 }
-$('login').onsubmit = e => {
+$('lgForm').onsubmit = e => {
   e.preventDefault();
   const u = $('lgU').value.trim().toLowerCase(), p = $('lgP').value;
   if (!u || !p) { $('lgErr').textContent = 'Pilih akun dan isi password.'; return; }
@@ -310,208 +377,179 @@ $('login').onsubmit = e => {
 $('btnKeluar').onclick = () => { TOKEN = ''; simpanToken(''); INFO = LAP = null; tampilLogin(''); };
 function cekLogin(e) { if (!/LOGIN/.test(pesan(e))) return false; TOKEN = ''; simpanToken(''); tampilLogin('Sesi berakhir. Silakan masuk lagi.'); return true; }
 
-/* ================= HALAMAN ================= */
+/* ================= KONTROL ================= */
 function mulai() {
   $('boot').hidden = true;
   if (!TOKEN) return tampilLogin('');
   $('login').hidden = true; $('app').hidden = false;
-  $('prev').innerHTML = '<div class="note"><span class="spin"></span>Memuat daftar lokasi…</div>';
-  run('lhLogo').then(u => { if (u) LOGO = u; }).catch(() => {});
+  run('lhLogo').then(u => { if (u) { LOGO = u; pasangLogo(); } }).catch(() => {});
   run('urlLaporanHarian').then(u => { if (u) { $('btnDash').href = u.replace(/\?laporan=harian$/, ''); $('btnDash').hidden = false; } }).catch(() => {});
   run('lhInfo', TOKEN).then(j => {
     INFO = JSON.parse(j);
     const a = INFO.akun;
-    $('akunBox').hidden = false;
-    $('akunNama').textContent = a.peran === 'PUSAT' ? 'RTC' : a.peran === 'AREA' ? 'Command Center ' + judul(a.area) : 'Control Room ' + a.lok;
+    const nama = a.peran === 'PUSAT' ? 'RTC' : a.peran === 'AREA' ? 'Command Center ' + judul(a.area) : 'Control Room ' + judul(a.lok);
+    $('akunNama').textContent = nama; $('tEyebrow').textContent = nama + ' · Laporan';
     $('lArea').hidden = a.peran !== 'PUSAT'; $('lLok').hidden = a.peran === 'LOKASI';
     $('fArea').innerHTML = '<option value="">Semua Area</option>' + INFO.areas.map(x => `<option value="${x}">${esc(judul(x))}</option>`).join('');
     isiLokasi();
-    if (!$('fTgl').value) { const k = new Date(Date.now() - 864e5); $('fTgl').value = INFO.tanggalAkhir || k.toISOString().slice(0, 10); }
-    tampil();
-  }).catch(e => { if (!cekLogin(e)) $('prev').innerHTML = `<div class="note err">Gagal memuat: ${esc(pesan(e))}</div>`; });
+    const akhir = INFO.tanggalAkhir || new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    if (!$('fTgl').value) $('fTgl').value = akhir;
+    const mAkhir = Math.max(+akhir.slice(5, 7), 1);
+    $('fBln').innerHTML = Array.from({length: mAkhir}, (_, i) => { const v = INFO.tahun + '-' + ('0' + (i + 1)).slice(-2); return `<option value="${v}">${BLN[i]} ${INFO.tahun}</option>`; }).reverse().join('');
+    $('fBln').value = akhir.slice(0, 7);
+    aturMode(MODE);
+  }).catch(e => { if (!cekLogin(e)) $('isi').innerHTML = `<div class="errbar">Gagal memuat: ${esc(pesan(e))}</div>`; });
 }
 function lokasiCakupan() { const a = $('fArea').value; return INFO.lokasi.filter(o => !a || o.a === a); }
 function isiLokasi() {
   const L = lokasiCakupan(), dulu = $('fLok').value;
-  $('fLok').innerHTML = '<option value="">Semua lokasi</option>' + L.map(o => `<option value="${esc(o.n)}">${esc(o.n)}</option>`).join('');
+  $('fLok').innerHTML = '<option value="">Semua lokasi</option>' + L.map(o => `<option value="${esc(o.n)}">${esc(judul(o.n))}</option>`).join('');
   if (L.some(o => o.n === dulu)) $('fLok').value = dulu;
 }
+function aturMode(m) {
+  MODE = m; try { localStorage.setItem('lap_mode', m); } catch (e) { /* tanpa penyimpanan */ }
+  $('segD').setAttribute('aria-selected', m === 'harian'); $('segM').setAttribute('aria-selected', m === 'bulanan');
+  $('lTgl').hidden = m !== 'harian'; $('lBln').hidden = m !== 'bulanan';
+  tampil();
+}
+$('segD').onclick = () => aturMode('harian');
+$('segM').onclick = () => aturMode('bulanan');
 $('fArea').onchange = () => { isiLokasi(); tampil(); };
-$('fLok').onchange = tampil;
-$('fTgl').onchange = tampil;
-$('btnTampil').onclick = tampil;
+$('fLok').onchange = tampil; $('fTgl').onchange = tampil; $('fBln').onchange = tampil;
+
 let MINTA = 0;
 function tampil() {
-  if (!INFO || !$('fTgl').value) return;
+  if (!INFO) return;
+  const per = MODE === 'harian' ? $('fTgl').value : $('fBln').value;
+  if (!per) return;
   const id = ++MINTA;
-  $('btnPdf').disabled = true; $('note').className = 'note'; $('note').innerHTML = '<span class="spin"></span>Menyiapkan laporan…';
-  run('lhLaporan', TOKEN, $('fTgl').value, $('fArea').value, $('fLok').value).then(j => {
+  $('isi').innerHTML = '<div class="loading"><span class="spin"></span>Menyiapkan laporan…</div>';
+  run('lhLaporan', TOKEN, per, $('fArea').value, $('fLok').value).then(j => {
     if (id !== MINTA) return;
-    LAP = JSON.parse(j);
-    const p = LAP.perangkat, cat = [];
-    if (!LAP.adaEvent) cat.push(`Belum ada data event untuk ${tglPanjang(LAP.tanggal)}${LAP.sumber ? '' : ' (file tarikan bulan ini belum ada di folder data)'}. Pastikan file tarikan tanggal ini sudah diunggah.`);
-    if (!p.adaJustifikasi) cat.push(`Belum ada data Justifikasi Uptime tanggal ${tglPanjang(LAP.tanggal)}, jadi semua GPS & Dashcam terhitung online.`);
-    if (p.lokasiInput < p.lokasiCakupan) cat.push(`Data RTC baru diisi ${p.lokasiInput} dari ${p.lokasiCakupan} ${LAP.baris === 'Area' ? 'lokasi' : 'lokasi dalam cakupan'}. Klik "Input RTC & Penanda Tangan".`);
-    const kosong = LAP.panel.filter(x => !x.total).map(x => x.grafik);
-    if (LAP.adaEvent && kosong.length) cat.push('Tanpa event: ' + kosong.join(', ') + '.');
-    $('note').className = 'note' + (cat.length ? ' warn' : ''); $('note').textContent = cat.join(' ') || `Sumber event: ${LAP.sumber}.`;
-    gambarPreview(); $('btnPdf').disabled = false;
-  }).catch(e => { if (id !== MINTA || cekLogin(e)) return; $('note').className = 'note err'; $('note').textContent = 'Gagal: ' + pesan(e); });
-}
-function gambarPreview() {
-  const box = $('prev'); box.innerHTML = '';
-  const sk = document.createElement('div'); sk.className = 'sk';
-  const pg = halaman(LAP); sk.appendChild(pg); box.appendChild(sk);
-  const skala = () => { const w = box.clientWidth - 24, s = Math.min(1, w / PW), h = pg.offsetHeight; sk.style.transform = `scale(${s})`; sk.style.width = PW + 'px'; box.style.height = (h * s + 24) + 'px'; };
-  skala(); window.onresize = skala;
+    LAP = JSON.parse(j); gambar(LAP);
+  }).catch(e => { if (id !== MINTA || cekLogin(e)) return; $('isi').innerHTML = `<div class="errbar">Gagal: ${esc(pesan(e))}</div>`; });
 }
 
-/* ================= HALAMAN LAMPIRAN 3A ================= */
-const td = 'border:1px solid #000;padding:0 3px;height:12px;line-height:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-function tabelPerangkat(judulT, kolom, b, lbl) {
-  const ada = b.terpasang > 0, off = Math.max(0, b.terpasang - b.online), pct = ada ? Math.round(b.online / b.terpasang * 100) + '%' : '–';
-  const r = (k, v, tebal) => `<tr${tebal ? ' style="font-weight:700"' : ''}><td style="${td}">${k}</td><td style="${td};text-align:right">${v}</td></tr>`;
-  return `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5px"><colgroup><col><col style="width:48px"></colgroup>
-    <tr style="background:${NAVY};color:#fff;font-weight:700"><td style="${td};text-align:center">${judulT}</td><td style="${td};text-align:center">${kolom}</td></tr>
-    ${r(lbl[0], ada ? nf(b.terpasang) : '–')}${r('Online', ada ? nf(b.online) : '–')}${r('Offline', ada ? nf(off) : '–')}${r(lbl[1], pct, 1)}</table>`;
+/* ================= TAMPILAN ================= */
+function kartu(judulK, warna, b, satuan, catatan) {
+  const v = persen(b), off = Math.max(0, b.terpasang - b.online);
+  return `<div class="kpi"><div class="l"><i style="background:${warna}"></i>${judulK}</div>
+    <div class="v">${fp(v)}<small>online</small></div>
+    <div class="n">${b.terpasang ? `${nf(b.online)} dari ${nf(b.terpasang)} ${satuan} online` : catatan}</div>
+    <div class="split">${b.terpasang ? `<i style="width:${b.online / b.terpasang * 100}%;background:var(--on)"></i><i style="width:${off / b.terpasang * 100}%;background:var(--off)"></i>` : ''}</div>
+    <div class="splitlbl"><span><i style="background:var(--on)"></i>Online ${nf(b.online)}</span><span><i style="background:var(--off)"></i>Offline ${nf(off)}</span></div></div>`;
 }
-function panelEvent(e, n, w, chartH, putar) {
-  const data = e.rows.map(r => ({n: judul(r.n), v: r.v})).concat([{n: 'Total', v: e.total, t: 1}]);
-  const isi = e.rows.map(r => `<tr><td style="${td}">${esc(judul(r.n))}</td><td style="${td};text-align:right">${nf(r.v)}</td></tr>`).join('') +
-    Array.from({length: n - e.rows.length}, () => `<tr><td style="${td}">&nbsp;</td><td style="${td}"></td></tr>`).join('');
-  const tabel = `<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5px"><colgroup><col><col style="width:40px"></colgroup>
-    <tr style="background:${NAVY};color:#fff;font-weight:700"><td style="${td};text-align:center">${esc(e.tabel)}</td><td style="${td};text-align:center">Case</td></tr>
-    ${isi}<tr style="font-weight:700"><td style="${td}">Total</td><td style="${td};text-align:right">${nf(e.total)}</td></tr></table>`;
-  let mx = niceMax(Math.max(1, e.total) * 1.05), nt = nTicks(mx); if (mx < 5) { mx = 5; nt = 5; } else if (mx / nt < 1) nt = mx;
-  const labelH = putar ? 46 : 12, plotH = Math.max(40, chartH - 26 - labelH - 6), plotW = w - 38, bw = plotW / data.length;
+function gambar(L) {
+  const bln = L.mode === 'bulanan', P = L.perangkat, lbl = L.baris === 'Area' ? L.lokasi : judul(L.lokasi);
+  const per = bln ? blnPanjang(L.periode) : tglPanjang(L.periode);
+  $('tSub').textContent = `${bln ? 'Monthly' : 'Daily'} · ${per} · ${lbl}`;
+  const satuan = bln ? 'Nopol-hari' : 'Nopol', totalEv = L.panel.reduce((s, p) => s + p.total, 0);
+  const cat = [];
+  if (!L.adaEvent) cat.push(`Belum ada data event untuk ${per}${L.sumber ? '' : ' (file tarikan bulan ini belum ada di folder data)'}.`);
+  if (!P.adaJustifikasi) cat.push(`Belum ada data Justifikasi Uptime untuk ${per}.`);
+  if (!bln && P.lokasiInput < P.lokasiCakupan) cat.push(`Data RTC baru diisi ${P.lokasiInput} dari ${P.lokasiCakupan} lokasi. Klik "Input RTC & Penanda Tangan".`);
+  let h = cat.length ? `<div class="warnbar">${cat.map(c => `<div>${esc(c)}</div>`).join('')}</div>` : '';
+  h += `<section class="kpis">
+    ${kartu('GPS', 'var(--gps)', P.gps, satuan, 'Belum ada data Justifikasi Uptime')}
+    ${kartu('Dashcam (ADAS)', 'var(--cam)', P.dashcam, satuan, 'Belum ada data Justifikasi Uptime')}
+    ${kartu('RTC', 'var(--forest)', P.rtc, bln ? 'unit-hari' : 'unit', 'Belum diinput')}
+    <div class="kpi"><div class="l"><i style="background:var(--red)"></i>Total event</div><div class="v">${nf(totalEv)}</div>
+      <div class="n">${L.panel.filter(p => p.total).length} dari ${L.panel.length} jenis event terjadi${bln ? ' bulan ini' : ''}</div>
+      <div class="n">Nopol offline tercatat: <b style="color:var(--ink)">${nf(L.offlineTotal)}</b></div></div>
+  </section>`;
+  if (!bln) h += `<section class="infobar"><div><div class="k">Tanggal</div><div class="v">${esc(per)}</div></div>
+    <div><div class="k">Operator</div><div class="v">${esc(L.operator || '–')}</div></div>
+    <div><div class="k">Fleet Supervisor · PT Pertamina Patra Niaga</div><div class="v">${esc(L.supervisor || '–')}</div></div></section>`;
+  if (bln) h += `<section class="grid g-2">
+    <div class="panel"><div class="ph"><h2>Uptime harian</h2><p>Persentase Nopol online per tanggal</p></div>
+      <div class="legend"><span><i style="background:var(--gps)"></i>GPS</span><span><i style="background:var(--cam)"></i>Dashcam (ADAS)</span></div>${grafikGaris(L.perHari)}</div>
+    <div class="panel"><div class="ph"><h2>Event harian</h2><p>Jumlah seluruh event per tanggal</p></div>${grafikKolom(L.perHari)}</div>
+  </section>`;
+  const maxEv = Math.max(1, ...L.panel.map(p => p.total));
+  h += `<section class="grid g-2">
+    <div class="panel"><div class="ph"><h2>Event per jenis</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · ${esc(lbl)}</p></div>
+      <div class="rank">${[...L.panel].sort((a, b) => b.total - a.total).map(p => `<div class="rrow${p.total ? '' : ' nol'}"><span class="rname" title="${esc(p.tabel)}">${esc(p.grafik)}</span><span class="rtrack"><span class="rfill" style="display:block;width:${p.total / maxEv * 100}%"></span></span><span class="rval">${nf(p.total)}</span></div>`).join('')}</div></div>
+    <div class="panel"><div class="ph"><h2>Uptime per ${L.baris.toLowerCase()}</h2><p>GPS &amp; Dashcam dari Justifikasi Uptime</p></div>${tabelUptime(L, satuan)}</div>
+  </section>`;
+  h += `<section class="panel"><div class="ph"><h2>Event per ${L.baris.toLowerCase()}</h2><p>Jumlah case tiap jenis event</p></div>${tabelEvent(L)}</section>`;
+  h += `<section class="panel"><div class="ph"><h2>Nopol offline</h2><p>${L.offlineTotal ? `${nf(L.offlineTotal)} catatan offline${L.offlineTotal > L.offline.length ? `, ditampilkan ${nf(L.offline.length)} pertama` : ''}` : 'Tidak ada Nopol offline pada periode ini'}</p></div>${tabelOffline(L)}</section>`;
+  h += `<div class="foot"><span>Sumber event: ${esc(L.sumber || '–')} · GPS &amp; Dashcam: Justifikasi Uptime</span><span>PT Pertamina Patra Niaga</span></div>`;
+  $('isi').innerHTML = h;
+}
+function tabelUptime(L, satuan) {
+  const R = L.perBaris.filter(r => r.gps.terpasang || r.dashcam.terpasang);
+  if (!R.length) return '<div class="kosong">Belum ada data Justifikasi Uptime.</div>';
+  const sel = b => `<td>${nf(b.online)} / ${nf(b.terpasang)}</td><td><span class="pct ${kelas(persen(b))}">${fp(persen(b))}</span></td>`;
+  return `<div class="tbl"><table><thead><tr><th>${L.baris}</th><th>GPS online</th><th>%</th><th>Dashcam online</th><th>%</th></tr></thead><tbody>
+    ${R.map(r => `<tr><td>${esc(L.baris === 'Area' ? r.n : judul(r.n))}</td>${sel(r.gps)}${sel(r.dashcam)}</tr>`).join('')}
+    ${R.length > 1 ? `<tr class="tot"><td>Total</td>${sel(L.perangkat.gps)}${sel(L.perangkat.dashcam)}</tr>` : ''}
+  </tbody></table></div><div class="kosong" style="padding:0">Satuan: ${satuan}.</div>`;
+}
+function tabelEvent(L) {
+  const n = L.panel[0] ? L.panel[0].rows.length : 0;
+  if (!n) return '<div class="kosong">Tidak ada lokasi dalam cakupan.</div>';
+  const rows = Array.from({length: n}, (_, i) => ({n: L.panel[0].rows[i].n, v: L.panel.map(p => p.rows[i].v)}));
+  return `<div class="tbl"><table><thead><tr><th>${L.baris}</th>${L.panel.map(p => `<th title="${esc(p.tabel)}">${esc(p.grafik)}</th>`).join('')}<th>Total</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td>${esc(L.baris === 'Area' ? r.n : judul(r.n))}</td>${r.v.map(v => `<td>${v ? nf(v) : '<span style="color:var(--axis)">0</span>'}</td>`).join('')}<td><b>${nf(r.v.reduce((s, v) => s + v, 0))}</b></td></tr>`).join('')}
+    <tr class="tot"><td>Total</td>${L.panel.map(p => `<td>${nf(p.total)}</td>`).join('')}<td>${nf(L.panel.reduce((s, p) => s + p.total, 0))}</td></tr>
+  </tbody></table></div>`;
+}
+function tabelOffline(L) {
+  if (!L.offline.length) return '';
+  return `<div class="tbl"><table><thead><tr><th>Tanggal</th><th style="text-align:left">Lokasi</th><th style="text-align:left">Perangkat</th><th style="text-align:left">Nopol</th><th>Durasi (menit)</th><th style="text-align:left">Justifikasi</th><th style="text-align:left">Keterangan</th></tr></thead><tbody>
+    ${L.offline.map(r => `<tr><td>${esc(tglPanjang(r.tanggal))}</td><td class="kiri">${esc(judul(r.lokasi))}</td><td class="kiri">${esc(r.perangkat)}</td><td class="kiri">${esc(r.nopol)}</td><td>${r.durasi === '' ? '–' : nf(r.durasi)}</td><td class="wrap-t">${esc(r.justifikasi || '–')}</td><td class="wrap-t">${esc(r.keterangan || '–')}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+/* grafik SVG sederhana untuk laporan bulanan */
+const GW = 640, GH = 230, GL = 40, GR = 10, GT = 12, GB = 26;
+function sumbuX(n) { const w = (GW - GL - GR) / n; return Array.from({length: n}, (_, i) => (i + 1) % (n > 20 ? 2 : 1) === 1 || n <= 10 ? `<text class="tick" x="${GL + w * i + w / 2}" y="${GH - 8}" text-anchor="middle">${i + 1}</text>` : '').join(''); }
+function grafikGaris(H) {
+  if (!H.some(h => h.gps.terpasang || h.dashcam.terpasang)) return '<div class="kosong">Belum ada data Justifikasi Uptime bulan ini.</div>';
+  const n = H.length, w = (GW - GL - GR) / n, ph = GH - GT - GB;
+  const vals = H.flatMap(h => [persen(h.gps), persen(h.dashcam)]).filter(v => v !== null);
+  const lo = Math.max(0, Math.min(90, Math.floor(Math.min(...vals) / 10) * 10)), y = v => GT + ph - (v - lo) / (100 - lo) * ph;
+  const ticks = Array.from({length: 5}, (_, i) => lo + (100 - lo) / 4 * i);
+  const garis = (k, warna) => { let d = '', t = ''; H.forEach((h, i) => { const v = persen(h[k]); if (v === null) { d += ' '; return; } const x = GL + w * i + w / 2; d += (d && !/ $/.test(d) ? 'L' : 'M') + x.toFixed(1) + ' ' + y(v).toFixed(1); t += `<circle cx="${x.toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" fill="${warna}"><title>Tgl ${h.d}: ${fp(v)} (${h[k].online}/${h[k].terpasang})</title></circle>`; });
+    return `<path d="${d.replace(/ +/g, ' ').trim()}" fill="none" stroke="${warna}" stroke-width="2.2"/>${t}`; };
+  return `<svg viewBox="0 0 ${GW} ${GH}" role="img" aria-label="Uptime harian">
+    ${ticks.map(t => `<line x1="${GL}" x2="${GW - GR}" y1="${y(t)}" y2="${y(t)}" stroke="#e6e9e6"/><text class="tick" x="${GL - 6}" y="${y(t) + 4}" text-anchor="end">${Math.round(t)}%</text>`).join('')}
+    ${garis('gps', '#93b833')}${garis('dashcam', '#0f78bf')}${sumbuX(n)}</svg>`;
+}
+function grafikKolom(H) {
+  const mx0 = Math.max(0, ...H.map(h => h.event));
+  if (!mx0) return '<div class="kosong">Belum ada data event bulan ini.</div>';
+  const p = Math.pow(10, Math.floor(Math.log10(mx0))), mx = Math.max(5, [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => mx0 / p <= x) * p);
+  const nt = [5, 4, 3, 6].find(k => Number.isInteger(mx / k) && /^(1|2|2\.5|5)0*$/.test(String(mx / k / Math.pow(10, Math.floor(Math.log10(mx / k)))))) || 4;
+  const n = H.length, w = (GW - GL - GR) / n, ph = GH - GT - GB, y = v => GT + ph - v / mx * ph;
   const ticks = Array.from({length: nt + 1}, (_, i) => mx / nt * i);
-  const grafik = `<div style="position:relative;height:${chartH}px;margin-top:5px;border:1px solid #d9d9d9;background:#fff">
-    <div style="text-align:center;font-size:10.5px;color:#595959;padding-top:6px;white-space:nowrap">${esc(e.grafik)}</div>
-    <div style="position:absolute;left:32px;right:6px;top:26px;height:${plotH}px">
-      ${ticks.map(t => `<div style="position:absolute;left:0;right:0;bottom:${t / mx * 100}%;border-top:1px solid ${t ? '#e6e6e6' : '#bfbfbf'}"></div><div style="position:absolute;left:-30px;width:26px;text-align:right;bottom:${t / mx * 100}%;transform:translateY(50%);font-size:6.5px;color:#595959">${nf(t)}</div>`).join('')}
-      ${data.map((r, i) => `<div style="position:absolute;bottom:0;left:${i * bw + bw * 0.12}px;width:${bw * 0.76}px;height:${r.v / mx * 100}%;background:${r.t ? TOTAL : BATANG}"></div>`).join('')}
-    </div>
-    <div style="position:absolute;left:32px;right:6px;top:${26 + plotH + 3}px;height:${labelH}px">
-      ${data.map((r, i) => putar
-        ? `<div style="position:absolute;left:${i * bw + bw / 2 + 3}px;top:0;width:${labelH}px;height:7px;line-height:7px;transform-origin:0 0;transform:rotate(90deg);font-size:5.5px;color:#595959;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.n)}</div>`
-        : `<div style="position:absolute;left:${i * bw}px;width:${bw}px;text-align:center;font-size:5.5px;color:#595959;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.n)}</div>`).join('')}
-    </div></div>`;
-  return `<div style="width:${w}px;flex:none">${tabel}${grafik}</div>`;
+  return `<svg viewBox="0 0 ${GW} ${GH}" role="img" aria-label="Event harian">
+    ${ticks.map(t => `<line x1="${GL}" x2="${GW - GR}" y1="${y(t)}" y2="${y(t)}" stroke="#e6e9e6"/><text class="tick" x="${GL - 6}" y="${y(t) + 4}" text-anchor="end">${nf(t)}</text>`).join('')}
+    ${H.map((h, i) => h.event ? `<rect x="${(GL + w * i + w * 0.15).toFixed(1)}" y="${y(h.event).toFixed(1)}" width="${(w * 0.7).toFixed(1)}" height="${(GT + ph - y(h.event)).toFixed(1)}" rx="2" fill="#4a7a53"><title>Tgl ${h.d}: ${nf(h.event)} event</title></rect>` : '').join('')}
+    ${sumbuX(n)}</svg>`;
 }
-/** Membuat satu halaman (elemen DOM, lebar PW). Tinggi bertambah bila lokasinya banyak; saat export diperkecil agar muat 1 halaman A4. */
-function halaman(L) {
-  const M = 14, G = 9, cols = 7, w = Math.floor((PW - 2 * M - (cols - 1) * G) / cols);
-  const n = Math.max(3, ...L.panel.map(e => e.rows.length)), tabelH = (n + 2) * 12 + 1;
-  const putar = n > 3 || L.panel.some(e => e.rows.some(r => r.n.length > 12));
-  const atasH = 60, pieH = 110, perangkatH = 5 * 12 + 1 + 6 + pieH, jarak = 14, ttdH = 82;
-  const sisa = PH - M - 10 - atasH - perangkatH - jarak - G - 6 - ttdH - 2 * (tabelH + 5);
-  const chartH = Math.max(110, Math.floor(sisa / 2) - 2);
-  const P = L.perangkat, wD = w + 24;
-  const blokPerangkat = (judulT, kolom, b, lbl, judulPie, id) => `<div style="width:${wD}px;flex:none">${tabelPerangkat(judulT, kolom, b, lbl)}
-    <div style="margin-top:6px;border:1px solid #d9d9d9;height:${pieH}px;position:relative"><div style="text-align:center;font-size:12.5px;font-weight:700;color:#595959;padding-top:4px">${judulPie}</div>
-    <canvas data-pie="${id}" style="position:absolute;left:0;top:22px;width:${wD - 2}px;height:${pieH - 24}px"></canvas></div></div>`;
-  const baris1 = L.panel.slice(0, 7), baris2 = L.panel.slice(7);
-  const el = document.createElement('div');
-  el.style.cssText = `width:${PW}px;min-height:${PH}px;background:#fff;color:#000;font-family:Calibri,Carlito,Arial,sans-serif;padding:${M}px ${M}px 10px;box-sizing:border-box;position:relative`;
-  el.innerHTML = `
-    <div style="height:${atasH}px;position:relative;font-size:9.5px;font-weight:700;line-height:13px">
-      <div>LAPORAN HARIAN OPERASIONAL GPS &amp; DASHCAM</div>
-      <div>TANGGAL : ${esc(tglPanjang(L.tanggal))}</div><div>LOKASI : ${esc(L.baris === 'Area' ? L.lokasi : judul(L.lokasi))}</div>
-      <img src="${LOGO}" alt="" style="position:absolute;left:${M + 615}px;top:4px;height:36px;width:auto">
-    </div>
-    <div style="display:flex;gap:${G + 6}px;height:${perangkatH}px">
-      ${blokPerangkat('GPS Offline', 'Unit GPS', P.gps, ['Jumlah MT Terpasang GPS', '% MT Online GPS'], 'GPS Status', 'gps')}
-      ${blokPerangkat('Dashcam Offline', 'Jumlah Unit', P.dashcam, ['Jumlah MT Terpasang Dashcam', '% MT Online Dashcam'], 'Dashcam Status', 'dashcam')}
-      ${blokPerangkat('RTC Offline', 'Unit', P.rtc, ['Jumlah RTC', '% RTC Online'], 'RTC Status', 'rtc')}
-    </div>
-    <div style="height:${jarak}px"></div>
-    <div style="display:flex;gap:${G}px">${baris1.map(e => panelEvent(e, n, w, chartH, putar)).join('')}</div>
-    <div style="height:${G}px"></div>
-    <div style="display:flex;gap:${G}px">${baris2.map(e => panelEvent(e, n, w, chartH, putar)).join('')}</div>
-    <div style="height:${ttdH}px;position:relative;font-size:9.5px;margin-top:6px">
-      <div style="position:absolute;left:0;top:22px;font-weight:700">Operator</div>
-      <div style="position:absolute;left:${PW * 0.42}px;top:4px;line-height:13px">Disetujui Oleh,<br><b>PT Pertamina Patra Niaga</b><br><b>Fleet Supervisor</b></div>
-      <div style="position:absolute;left:0;bottom:4px">Nama${L.operator ? ' : ' + esc(L.operator) : ''}</div>
-      <div style="position:absolute;left:${PW * 0.42}px;bottom:4px">Nama${L.supervisor ? ' : ' + esc(L.supervisor) : ''}</div>
-    </div>`;
-  return el;
-}
-/** Pie chart di elemen canvas (html2canvas menyalin isi canvas apa adanya). */
-function gambarPie(cv, b) {
-  const r0 = window.devicePixelRatio > 1 ? 3 : 2, W = cv.clientWidth || parseFloat(cv.style.width), H = cv.clientHeight || parseFloat(cv.style.height);
-  cv.width = W * r0; cv.height = H * r0;
-  const c = cv.getContext('2d'); c.scale(r0, r0);
-  const cx = W / 2 - 8, cy = H / 2, R = Math.min(H / 2 - 4, 46);
-  const off = Math.max(0, b.terpasang - b.online), tot = b.terpasang;
-  c.font = 'bold 7px Arial'; c.textAlign = 'center'; c.textBaseline = 'middle';
-  if (!tot) { c.fillStyle = '#e3e6e4'; c.beginPath(); c.arc(cx, cy, R, 0, 2 * Math.PI); c.fill(); c.fillStyle = '#737b76'; c.font = '8px Arial'; c.fillText('Belum diinput', cx, cy); return; }
-  const potong = [[b.online, BIRU], [off, MERAH]];
-  let a = -Math.PI / 2;
-  potong.forEach(([v, warna]) => { if (!v) return; const s = v / tot * 2 * Math.PI; c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, R, a, a + s); c.closePath(); c.fillStyle = warna; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 0.8; c.stroke(); a += s; });
-  // label persen dalam kotak gelap seperti contoh
-  a = -Math.PI / 2;
-  const pOn = Math.round(b.online / tot * 100), label = [[b.online, pOn + '%'], [off, (100 - pOn) + '%']];
-  label.forEach(([v, t], i) => {
-    const s = v / tot * 2 * Math.PI, m = a + s / 2, rr = !v ? R * 0.55 : s > 5.5 ? R * 0.45 : R * 0.62;
-    const x = !v ? cx : cx + Math.cos(m) * rr, y = !v ? cy - R * 0.45 : cy + Math.sin(m) * rr + (i === 0 && s > 5.5 ? R * 0.2 : 0);
-    const lw = c.measureText(t).width + 6; c.fillStyle = '#404040'; c.fillRect(x - lw / 2, y - 5, lw, 10); c.fillStyle = '#fff'; c.fillText(t, x, y + 0.5); a += s;
-  });
-  // legenda
-  c.textAlign = 'left'; c.font = '6.5px Arial';
-  [['Online', BIRU], ['Offline', MERAH]].forEach(([t, w2], i) => { const x = W - 34, y = H - 20 + i * 9; c.fillStyle = w2; c.fillRect(x, y - 2.5, 5, 5); c.fillStyle = '#595959'; c.fillText(t, x + 7, y + 0.5); });
-}
-function gambarSemuaPie(el, L) { el.querySelectorAll('canvas[data-pie]').forEach(cv => gambarPie(cv, L.perangkat[cv.dataset.pie])); }
-// preview: pie digambar setelah elemen masuk ke halaman
-new MutationObserver(() => { const pg = $('prev').querySelector('.sk > div'); if (pg && LAP && !pg.dataset.pie) { pg.dataset.pie = 1; gambarSemuaPie(pg, LAP); } }).observe($('prev'), {childList: true, subtree: true});
-
-/* ================= EXPORT PDF ================= */
-const CDN = ['https:', '', 'cdnjs.cloudflare.com', 'ajax', 'libs', ''].join('/');   // alamat disusun tanpa teks "//" utuh
-const PDF_LIB = [CDN + 'html2canvas/1.4.1/html2canvas.min.js', CDN + 'jspdf/2.5.1/jspdf.umd.min.js'];
-const muatSkrip = src => new Promise((ok, bad) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = () => bad(new Error('Pustaka PDF gagal dimuat. Periksa koneksi internet.')); document.head.appendChild(t); });
-$('btnPdf').onclick = async () => {
-  const b = $('btnPdf'); if (b.disabled || !LAP) return;
-  b.disabled = true; b.textContent = 'Menyiapkan PDF…';
-  let pg = null;
-  try {
-    await Promise.all(PDF_LIB.map(muatSkrip));
-    pg = halaman(LAP); pg.style.position = 'fixed'; pg.style.left = '-20000px'; pg.style.top = '0'; document.body.appendChild(pg);
-    gambarSemuaPie(pg, LAP);
-    await Promise.all([...pg.querySelectorAll('img')].map(im => im.complete ? 0 : new Promise(ok => { im.onload = im.onerror = ok; })));
-    const cv = await window.html2canvas(pg, {scale: 2.5, backgroundColor: '#ffffff', logging: false});
-    const pdf = new window.jspdf.jsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
-    // halaman lebih tinggi dari A4 (banyak lokasi): diperkecil agar tetap 1 halaman
-    const rasio = cv.height / cv.width, w = rasio > 210 / 297 ? 210 / rasio : 297, h = w * rasio;
-    pdf.addImage(cv.toDataURL('image/jpeg', 0.93), 'JPEG', (297 - w) / 2, 0, w, h);
-    const nama = `Laporan Harian ${LAP.lokasi} ${LAP.tanggal}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
-    try { pdf.save(nama); } catch (e) { window.open(pdf.output('bloburl'), '_blank'); }
-  } catch (e) { $('note').className = 'note err'; $('note').textContent = 'Export PDF gagal: ' + pesan(e); }
-  finally { if (pg) pg.remove(); b.disabled = false; b.textContent = 'Export PDF'; }
-};
 
 /* ================= INPUT HARIAN ================= */
 const IN = ['RtcT', 'RtcO'], KEY = {RtcT: 'rtcT', RtcO: 'rtcO'};
 function hitungOff() {
-  [['Rtc', 'offRtc']].forEach(([k, id]) => {
-    const t = +$('in' + k + 'T').value, o = +$('in' + k + 'O').value, ada = $('in' + k + 'T').value !== '' && $('in' + k + 'O').value !== '';
-    $(id).textContent = !ada ? '' : o > t ? 'Online melebihi jumlah terpasang.' : `Offline ${nf(t - o)} · Online ${t ? Math.round(o / t * 100) : 0}%`;
-  });
+  const t = +$('inRtcT').value, o = +$('inRtcO').value, ada = $('inRtcT').value !== '' && $('inRtcO').value !== '';
+  $('offRtc').textContent = !ada ? '' : o > t ? 'Online melebihi jumlah terpasang.' : `Offline ${nf(t - o)} · Online ${t ? Math.round(o / t * 100) : 0}%`;
 }
 IN.forEach(k => { $('in' + k).oninput = hitungOff; });
 function isiForm(o, dariSebelumnya) {
   IN.forEach(k => { $('in' + k).value = o ? o[KEY[k]] : ''; });
   $('inOp').value = o ? o.operator || '' : ''; $('inSv').value = o ? o.supervisor || '' : '';
-  $('inSub').textContent = dariSebelumnya ? `Belum ada data tanggal ini. Diisi dengan data ${tglPanjang(o.tanggal)}; periksa lalu simpan.` : o ? 'Data tanggal ini sudah ada; menyimpan akan menimpanya.' : 'Belum ada data. Offline dihitung otomatis.';
+  $('inSub').textContent = dariSebelumnya ? `Belum ada data tanggal ini. Diisi dengan data ${tglPanjang(o.tanggal)}; periksa lalu simpan.` : o ? 'Data tanggal ini sudah ada; menyimpan akan menimpanya.' : 'Belum ada data. GPS & Dashcam diambil otomatis dari Justifikasi Uptime.';
   hitungOff();
 }
 function muatForm() {
-  $('inErr').textContent = ''; isiForm(null); $('inSub').innerHTML = '<span class="spin"></span>Memuat…';
+  $('inErr').textContent = ''; isiForm(null); $('inSub').textContent = 'Memuat…';
   run('lhAmbilInput', TOKEN, $('inTgl').value, $('inLok').value).then(j => { const r = JSON.parse(j); isiForm(r.ada || r.sebelumnya, !r.ada && !!r.sebelumnya); })
     .catch(e => { if (!cekLogin(e)) $('inErr').textContent = pesan(e); });
 }
 $('btnInput').onclick = () => {
   if (!INFO) return;
   const a = INFO.akun, L = a.peran === 'LOKASI' ? [{n: a.lok}] : lokasiCakupan();
-  $('inLok').innerHTML = L.map(o => `<option value="${esc(o.n)}">${esc(o.n)}</option>`).join('');
+  $('inLok').innerHTML = L.map(o => `<option value="${esc(o.n)}">${esc(judul(o.n))}</option>`).join('');
   $('inLok').disabled = a.peran === 'LOKASI';
   if ($('fLok').value) $('inLok').value = $('fLok').value;
   $('inTgl').value = $('fTgl').value;
@@ -522,7 +560,7 @@ $('inBatal').onclick = () => $('dlg').close();
 $('fInput').onsubmit = e => {
   e.preventDefault();
   const o = {tanggal: $('inTgl').value, lokasi: $('inLok').value, operator: $('inOp').value, supervisor: $('inSv').value};
-  for (const k of IN) { const v = $('in' + k).value; if (v === '') { $('inErr').textContent = 'Lengkapi semua jumlah (isi 0 bila tidak ada).'; return; } o[KEY[k]] = +v; }
+  for (const k of IN) { const v = $('in' + k).value; if (v === '') { $('inErr').textContent = 'Lengkapi jumlah RTC (isi 0 bila tidak ada).'; return; } o[KEY[k]] = +v; }
   if (o.rtcO > o.rtcT) { $('inErr').textContent = 'Jumlah RTC online tidak boleh lebih dari jumlah RTC.'; return; }
   $('inSimpan').disabled = true; $('inErr').textContent = '';
   run('lhSimpanInput', TOKEN, o).then(() => { $('dlg').close(); if (o.tanggal !== $('fTgl').value) $('fTgl').value = o.tanggal; tampil(); })
