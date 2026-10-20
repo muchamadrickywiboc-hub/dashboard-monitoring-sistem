@@ -8,7 +8,7 @@
  *   - GPS / Dashcam / RTC (terpasang & online) diisi lewat form Input Harian di halaman ini, disimpan di
  *     spreadsheet LH.INPUT_NAMA di folder data (dibuat otomatis). Nanti bisa diganti pembacaan otomatis.
  *   - Logo: file gambar di folder data yang namanya diawali "Logo" (mis. "Logo Pertamina Patra Niaga.png").
- *     Tanpa file itu dipakai logo bawaan di LaporanHarian.html.
+ *     Tanpa file itu dipakai logo bawaan di HalamanHarian.html.
  * Camera Covering dan Illegal Shutdown tetap dihitung di laporan ini walau di sheet Pemetaan ditandai "tidak dihitung".
  */
 const LH = {
@@ -36,7 +36,7 @@ const LH_PANEL = [
 ];
 
 function halamanLaporanHarian_() {
-  return HtmlService.createHtmlOutputFromFile('LaporanHarian')
+  return HtmlService.createHtmlOutputFromFile('HalamanHarian')
     .setTitle('Laporan Harian Operasional GPS & Dashcam')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
