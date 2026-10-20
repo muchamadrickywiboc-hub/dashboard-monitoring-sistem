@@ -5,8 +5,12 @@
  * Memakai akun, sheet Pemetaan, dan folder data yang sama dengan dashboard bulanan (tidak perlu unggah dua kali):
  *   - Event per tanggal & lokasi dibaca dari sheet "Event" file "Tarikan <nn> ..." (mulai CFG.BULAN_TARIKAN)
  *     atau "Data <nn> ..." (bulan sebelumnya).
- *   - GPS / Dashcam / RTC (terpasang & online) diisi lewat form Input Harian di halaman ini, disimpan di
- *     spreadsheet LH.INPUT_NAMA di folder data (dibuat otomatis). Nanti bisa diganti pembacaan otomatis.
+ *   - GPS & Dashcam dibaca dari spreadsheet "LAPORAN KENDALA DEVICE CONTROL ROOM" (LH.KENDALA_ID):
+ *     terpasang = jumlah Nopol di sheet "Master GPS" / "Master CCTV" per lokasi,
+ *     offline   = jumlah Nopol unik di sheet "Justifikasi Uptime" pada tanggal itu (kolom Perangkat GPS / CCTV),
+ *     online    = terpasang - offline.
+ *   - RTC (jumlah & online) serta nama Operator / Fleet Supervisor diisi lewat form Input Harian di halaman ini,
+ *     disimpan di spreadsheet LH.INPUT_NAMA di folder data (dibuat otomatis).
  *   - Logo: file gambar di folder data yang namanya diawali "Logo" (mis. "Logo Pertamina Patra Niaga.png").
  *     Tanpa file itu dipakai logo bawaan di HalamanHarian.html.
  * Camera Covering dan Illegal Shutdown tetap dihitung di laporan ini walau di sheet Pemetaan ditandai "tidak dihitung".
@@ -16,6 +20,7 @@ const LH = {
   INPUT_HDR: ['Tanggal', 'Area', 'Lokasi', 'GPS Terpasang', 'GPS Online', 'Dashcam Terpasang', 'Dashcam Online', 'RTC Jumlah', 'RTC Online',
     'Operator', 'Fleet Supervisor', 'Diinput oleh', 'Waktu input'],
   CACHE_DETIK: 900,   // 15 menit, mengikuti pemicu prosesTarikan
+  KENDALA_ID: '1XL7AskYFqEQBIrISThFTaJ3dNrVrMZi10202a-vO3zE',   // spreadsheet "LAPORAN KENDALA DEVICE CONTROL ROOM"
 };
 /** 14 panel event Lampiran 3A: judul tabel, judul grafik, teks Case yang masuk, dan nama parameter Pemetaan (cadangan). */
 const LH_PANEL = [
@@ -137,6 +142,7 @@ function lhLaporan(token, tanggal, area, lokasi) {
   rows.forEach(r => tambah(r[0], r[1]));
   const V = LH_PANEL.map(() => baris.map(() => 0));
   rows.forEach(r => { const i = idx[perArea ? r[1] : kunciLok(r[0])]; if (i !== undefined) V[r[2]][i] += r[3]; });
+  const K = perangkatKendala_(teksTanggal_(tg), c);
   const inp = bacaInputLH_().filter(r => r.tanggal === teksTanggal_(tg) && cocokLH_(c, r.lokasi, r.area || (info.lokasi.filter(o => kunciLok(o.n) === kunciLok(r.lokasi))[0] || {}).a || ''));
   const jml = (a, b) => inp.reduce((s, r) => s + (r[a] || 0), 0) - (b ? inp.reduce((s, r) => s + (r[b] || 0), 0) : 0);
   const satu = c.lok && inp.length === 1 ? inp[0] : null;   // nama operator/supervisor hanya untuk laporan satu lokasi
@@ -145,13 +151,66 @@ function lhLaporan(token, tanggal, area, lokasi) {
     tanggal: teksTanggal_(tg), lokasi: labelLok, baris: perArea ? 'Area' : 'Lokasi', sumber: E.sumber,
     panel: LH_PANEL.map((p, i) => ({ tabel: p.tabel, grafik: p.grafik, rows: baris.map((n, j) => ({ n: n, v: V[i][j] })), total: V[i].reduce((s, v) => s + v, 0) })),
     perangkat: {
-      gps: { terpasang: jml('gpsT'), online: jml('gpsO') }, dashcam: { terpasang: jml('camT'), online: jml('camO') }, rtc: { terpasang: jml('rtcT'), online: jml('rtcO') },
-      lokasiInput: inp.length, lokasiCakupan: perArea ? info.lokasi.length : baris.length,
+      gps: K.gps, dashcam: K.cctv, rtc: { terpasang: jml('rtcT'), online: jml('rtcO') },
+      adaJustifikasi: K.adaJustifikasi, lokasiInput: inp.length, lokasiCakupan: perArea ? info.lokasi.length : baris.length,
     },
     operator: satu ? satu.operator : '', supervisor: satu ? satu.supervisor : '',
     adaEvent: rows.length > 0,
   });
 }
+/* ---- GPS & Dashcam dari spreadsheet LAPORAN KENDALA DEVICE CONTROL ROOM ---- */
+const jenisPerangkat_ = x => /GPS/i.test(x) ? 'gps' : /CCTV|DASH|KAMERA|CAMERA/i.test(x) ? 'cctv' : '';
+/** Jumlah unit terpasang per lokasi dari sheet Master GPS & Master CCTV: { gps: {kunci: [lokasi, area, n]}, cctv: {...} }. Cache 1 jam. */
+function masterKendala_() {
+  const c = CacheService.getScriptCache(), ada = c.get('LHMS');
+  if (ada) return JSON.parse(ada);
+  const ss = SpreadsheetApp.openById(LH.KENDALA_ID), out = { gps: {}, cctv: {} };
+  [['gps', 'Master GPS'], ['cctv', 'Master CCTV']].forEach(([j, nama]) => {
+    const v = nilaiSheet(ss, nama) || [], k = petaKolom(v[0] || []), unik = {};
+    const iN = k['NOPOL'], iL = k['LOKASI'], iA = k['AREA'];
+    if (iN === undefined || iL === undefined) throw new Error('Sheet ' + nama + ' harus punya kolom Nopol dan Lokasi.');
+    v.slice(1).forEach(r => {
+      const nopol = teks(r[iN]).toUpperCase().replace(/\s+/g, ''), lok = teks(r[iL]).toUpperCase(), kl = kunciLok(lok);
+      if (!nopol || !kl || unik[kl + '|' + nopol]) return;
+      unik[kl + '|' + nopol] = 1;
+      const o = out[j][kl] || (out[j][kl] = [ALIAS_LOKASI[lok] || lok, iA === undefined ? '' : areaNorm(r[iA]), 0]);
+      o[2]++;
+    });
+  });
+  try { c.put('LHMS', JSON.stringify(out), 3600); } catch (e) { /* tanpa cache */ }
+  return out;
+}
+/** Nopol offline per lokasi pada tanggal t (yyyy-mm-dd) dari sheet Justifikasi Uptime: { gps: {kunci: n}, cctv: {...}, ada }. Cache 10 menit. */
+function offlineKendala_(t) {
+  const c = CacheService.getScriptCache(), kunci = 'LHJU_' + t, ada = c.get(kunci);
+  if (ada) return JSON.parse(ada);
+  const v = nilaiSheet(SpreadsheetApp.openById(LH.KENDALA_ID), 'Justifikasi Uptime') || [], k = petaKolom(v[0] || []);
+  const iT = k['TANGGAL'], iL = k['LOKASI'], iP = k['PERANGKAT'], iN = k['NOPOL'];
+  if (iT === undefined || iL === undefined || iP === undefined) throw new Error('Sheet Justifikasi Uptime harus punya kolom Tanggal, Lokasi, dan Perangkat.');
+  const out = { gps: {}, cctv: {}, ada: false }, unik = {};
+  v.slice(1).forEach((r, i) => {
+    const tg = tanggalTeks(r[iT]), j = jenisPerangkat_(teks(r[iP])), kl = kunciLok(r[iL]);
+    if (!tg || teksTanggal_(tg) !== t || !j || !kl) return;
+    const nopol = iN === undefined ? '' : teks(r[iN]).toUpperCase().replace(/\s+/g, ''), u = j + '|' + kl + '|' + (nopol || '#' + i);
+    out.ada = true;
+    if (unik[u]) return;   // satu kendaraan dihitung sekali per hari
+    unik[u] = 1; out[j][kl] = (out[j][kl] || 0) + 1;
+  });
+  try { c.put(kunci, JSON.stringify(out), 600); } catch (e) { /* tanpa cache */ }
+  return out;
+}
+/** GPS & Dashcam untuk cakupan laporan: terpasang dari Master, online = terpasang - offline. */
+function perangkatKendala_(t, c) {
+  const M = masterKendala_(), O = offlineKendala_(t), hasil = { adaJustifikasi: O.ada };
+  ['gps', 'cctv'].forEach(j => {
+    let terpasang = 0, offline = 0;
+    Object.keys(M[j]).forEach(kl => { const [lok, area, n] = M[j][kl]; if (!cocokLH_(c, lok, area)) return;
+      terpasang += n; offline += Math.min(n, O[j][kl] || 0); });
+    hasil[j] = { terpasang: terpasang, online: terpasang - offline };
+  });
+  return hasil;
+}
+
 const teksTanggal_ = tg => CFG.TAHUN + '-' + ('0' + (tg.m + 1)).slice(-2) + '-' + ('0' + tg.d).slice(-2);
 
 /* ---- Input harian GPS / Dashcam / RTC ---- */
@@ -189,9 +248,10 @@ function lhSimpanInput(token, o) {
   const L = info.lokasi.filter(x => kunciLok(x.n) === kunciLok(lok))[0];
   if (!L) throw new Error('Lokasi ' + lok + ' tidak ada dalam cakupan akun ini.');
   const n = (x, nama) => { const v = Number(x); if (!isFinite(v) || v < 0 || Math.round(v) !== v) throw new Error(nama + ' harus bilangan bulat 0 atau lebih.'); return v; };
-  const gT = n(o.gpsT, 'GPS terpasang'), gO = n(o.gpsO, 'GPS online'), cT = n(o.camT, 'Dashcam terpasang'), cO = n(o.camO, 'Dashcam online'), rT = n(o.rtcT, 'Jumlah RTC'), rO = n(o.rtcO, 'RTC online');
-  if (gO > gT || cO > cT || rO > rT) throw new Error('Jumlah online tidak boleh lebih dari jumlah terpasang.');
-  const t = teksTanggal_(tg), baru = [t, L.a, L.n, gT, gO, cT, cO, rT, rO, teks(o.operator), teks(o.supervisor), ses.u || ses.nama, new Date()];
+  // GPS & Dashcam kini dibaca dari spreadsheet kendala; kolomnya di sheet Input dibiarkan kosong
+  const rT = n(o.rtcT, 'Jumlah RTC'), rO = n(o.rtcO, 'RTC online');
+  if (rO > rT) throw new Error('Jumlah RTC online tidak boleh lebih dari jumlah RTC.');
+  const t = teksTanggal_(tg), baru = [t, L.a, L.n, '', '', '', '', rT, rO, teks(o.operator), teks(o.supervisor), ses.u || ses.nama, new Date()];
   const kunci = LockService.getScriptLock(); kunci.waitLock(10000);
   try {
     const sh = sheetInputLH_(), v = sh.getDataRange().getValues();

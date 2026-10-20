@@ -76,7 +76,7 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
       <label id="lLok">Lokasi<select id="fLok"></select></label>
       <button class="btn pri" id="btnTampil" type="button">Tampilkan</button>
       <span class="sp"></span>
-      <button class="btn" id="btnInput" type="button">Input GPS / Dashcam / RTC</button>
+      <button class="btn" id="btnInput" type="button">Input RTC &amp; Penanda Tangan</button>
       <button class="btn pri" id="btnPdf" type="button" disabled>Export PDF</button>
     </div>
     <div class="note" id="note"></div>
@@ -86,18 +86,12 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 
 <dialog id="dlg">
   <form class="dlg" id="fInput" method="dialog">
-    <h3>Input harian GPS, Dashcam &amp; RTC</h3>
-    <p class="sub" id="inSub">Diisi oleh Control Room setiap hari. Offline dihitung otomatis.</p>
+    <h3>Input harian RTC &amp; penanda tangan</h3>
+    <p class="sub" id="inSub">Diisi oleh Control Room setiap hari. GPS &amp; Dashcam diambil otomatis dari Justifikasi Uptime.</p>
     <div class="grid2">
       <label class="fld">Tanggal<input type="date" id="inTgl" required></label>
       <label class="fld">Lokasi<select id="inLok"></select></label>
     </div>
-    <div class="grp"><b>GPS</b><div class="grid2">
-      <label class="fld">Jumlah MT terpasang GPS<input type="number" min="0" step="1" id="inGpsT" required></label>
-      <label class="fld">Online<input type="number" min="0" step="1" id="inGpsO" required></label></div><div class="off" id="offGps"></div></div>
-    <div class="grp"><b>Dashcam</b><div class="grid2">
-      <label class="fld">Jumlah MT terpasang Dashcam<input type="number" min="0" step="1" id="inCamT" required></label>
-      <label class="fld">Online<input type="number" min="0" step="1" id="inCamO" required></label></div><div class="off" id="offCam"></div></div>
     <div class="grp"><b>RTC</b><div class="grid2">
       <label class="fld">Jumlah RTC<input type="number" min="0" step="1" id="inRtcT" required></label>
       <label class="fld">Online<input type="number" min="0" step="1" id="inRtcO" required></label></div><div class="off" id="offRtc"></div></div>
@@ -356,7 +350,8 @@ function tampil() {
     LAP = JSON.parse(j);
     const p = LAP.perangkat, cat = [];
     if (!LAP.adaEvent) cat.push(`Belum ada data event untuk ${tglPanjang(LAP.tanggal)}${LAP.sumber ? '' : ' (file tarikan bulan ini belum ada di folder data)'}. Pastikan file tarikan tanggal ini sudah diunggah.`);
-    if (p.lokasiInput < p.lokasiCakupan) cat.push(`Data GPS/Dashcam/RTC baru diisi ${p.lokasiInput} dari ${p.lokasiCakupan} ${LAP.baris === 'Area' ? 'lokasi' : 'lokasi dalam cakupan'}. Klik "Input GPS / Dashcam / RTC".`);
+    if (!p.adaJustifikasi) cat.push(`Belum ada data Justifikasi Uptime tanggal ${tglPanjang(LAP.tanggal)}, jadi semua GPS & Dashcam terhitung online.`);
+    if (p.lokasiInput < p.lokasiCakupan) cat.push(`Data RTC baru diisi ${p.lokasiInput} dari ${p.lokasiCakupan} ${LAP.baris === 'Area' ? 'lokasi' : 'lokasi dalam cakupan'}. Klik "Input RTC & Penanda Tangan".`);
     const kosong = LAP.panel.filter(x => !x.total).map(x => x.grafik);
     if (LAP.adaEvent && kosong.length) cat.push('Tanpa event: ' + kosong.join(', ') + '.');
     $('note').className = 'note' + (cat.length ? ' warn' : ''); $('note').textContent = cat.join(' ') || `Sumber event: ${LAP.sumber}.`;
@@ -420,7 +415,7 @@ function halaman(L) {
   el.style.cssText = `width:${PW}px;min-height:${PH}px;background:#fff;color:#000;font-family:Calibri,Carlito,Arial,sans-serif;padding:${M}px ${M}px 10px;box-sizing:border-box;position:relative`;
   el.innerHTML = `
     <div style="height:${atasH}px;position:relative;font-size:9.5px;font-weight:700;line-height:13px">
-      <div>LAMPIRAN 3A</div><div>LAPORAN HARIAN OPERASIONAL GPS &amp; DASHCAM</div>
+      <div>LAPORAN HARIAN OPERASIONAL GPS &amp; DASHCAM</div>
       <div>TANGGAL : ${esc(tglPanjang(L.tanggal))}</div><div>LOKASI : ${esc(L.baris === 'Area' ? L.lokasi : judul(L.lokasi))}</div>
       <img src="${LOGO}" alt="" style="position:absolute;left:${M + 615}px;top:4px;height:36px;width:auto">
     </div>
@@ -494,9 +489,9 @@ $('btnPdf').onclick = async () => {
 };
 
 /* ================= INPUT HARIAN ================= */
-const IN = ['GpsT', 'GpsO', 'CamT', 'CamO', 'RtcT', 'RtcO'], KEY = {GpsT: 'gpsT', GpsO: 'gpsO', CamT: 'camT', CamO: 'camO', RtcT: 'rtcT', RtcO: 'rtcO'};
+const IN = ['RtcT', 'RtcO'], KEY = {RtcT: 'rtcT', RtcO: 'rtcO'};
 function hitungOff() {
-  [['Gps', 'offGps'], ['Cam', 'offCam'], ['Rtc', 'offRtc']].forEach(([k, id]) => {
+  [['Rtc', 'offRtc']].forEach(([k, id]) => {
     const t = +$('in' + k + 'T').value, o = +$('in' + k + 'O').value, ada = $('in' + k + 'T').value !== '' && $('in' + k + 'O').value !== '';
     $(id).textContent = !ada ? '' : o > t ? 'Online melebihi jumlah terpasang.' : `Offline ${nf(t - o)} · Online ${t ? Math.round(o / t * 100) : 0}%`;
   });
@@ -528,7 +523,7 @@ $('fInput').onsubmit = e => {
   e.preventDefault();
   const o = {tanggal: $('inTgl').value, lokasi: $('inLok').value, operator: $('inOp').value, supervisor: $('inSv').value};
   for (const k of IN) { const v = $('in' + k).value; if (v === '') { $('inErr').textContent = 'Lengkapi semua jumlah (isi 0 bila tidak ada).'; return; } o[KEY[k]] = +v; }
-  if (o.gpsO > o.gpsT || o.camO > o.camT || o.rtcO > o.rtcT) { $('inErr').textContent = 'Jumlah online tidak boleh lebih dari jumlah terpasang.'; return; }
+  if (o.rtcO > o.rtcT) { $('inErr').textContent = 'Jumlah RTC online tidak boleh lebih dari jumlah RTC.'; return; }
   $('inSimpan').disabled = true; $('inErr').textContent = '';
   run('lhSimpanInput', TOKEN, o).then(() => { $('dlg').close(); if (o.tanggal !== $('fTgl').value) $('fTgl').value = o.tanggal; tampil(); })
     .catch(e => { if (!cekLogin(e)) $('inErr').textContent = pesan(e); }).finally(() => { $('inSimpan').disabled = false; });
