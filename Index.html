@@ -929,7 +929,7 @@ function dataEvent() {
     if (W) WIN.fakta.forEach(([b, ai, wl, pi, n]) => { if (!b && cocokReg(A[ai])) add(WIN.lokMap[wl], WIN.pMap[pi], n); });
     else RAW.fakta.forEach(([m, ai, li, pi, n]) => { if (m === mon && cocokReg(A[ai])) add(li, pi, n); });
     const lok = Object.keys(V).map(Number).sort((a, b) => T[b] - T[a] || lokNama(a).localeCompare(lokNama(b)));
-    return {baris: 'Lokasi', ev: ps.map(p => { const pi = P.indexOf(p), rows = lok.map(li => ({n: lokNama(li), v: (V[li] || {})[pi] || 0}));
+    return {baris: 'Lokasi', ev: ps.map(p => { const pi = P.indexOf(p), rows = lok.map(li => ({n: lokNama(li), v: (V[li] || {})[pi] || 0})).filter(r => r.v > 0).sort((a, b) => b.v - a.v);
       return {p, rows, total: rows.reduce((s0, r) => s0 + r.v, 0)}; })};
   }
   // Control Room: baris = 5 Driver teratas + driver lain / tanpa nama
@@ -941,30 +941,35 @@ function dataEvent() {
     return {p, rows, total}; })};
 }
 function halamanEvent() {
-  const X = dataEvent(), PW = 1123, PH = 794, M = 16, G = 10, HEAD = 46;
-  const n = Math.max(1, ...X.ev.map(e => e.rows.length)), RH = 13, putar = n > 6 || X.baris === 'Driver';
+  const X0 = dataEvent(), X = {baris: X0.baris, ev: X0.ev.filter(e => e.total > 0)}, kosongEv = X0.ev.filter(e => !(e.total > 0)).map(e => e.p.label);
+  if (!X.ev.length) X.ev = X0.ev.slice(0, 1);
+  const PW = 1123, PH = 794, M = 16, G = 10, HEAD = 46, RH = 13;
+  const nMax = Math.max(1, ...X.ev.map(e => e.rows.length)), putar = nMax > 6 || X.baris === 'Driver';
   const panjang = Math.max(4, ...X.ev.flatMap(e => e.rows.map(r => r.n.length)));
   const labelH = putar ? Math.min(78, 10 + Math.min(panjang, 18) * 3.6) : 14;
-  const tabelH = (n + 2) * RH + 2, ruang = PH - HEAD - 8 - M;
+  const ruang = PH - HEAD - 8 - M, tabelH = n => (n + 2) * RH + 2, bawah = 22 + labelH + 6;
   let cols = 2;
-  for (const c of [7, 6, 5, 4, 3]) { const w = (PW - 2 * M - (c - 1) * G) / c; if ((w - 40) / (n + 1) >= 4.5) { cols = c; break; } }
-  // tinggi grafik mengisi halaman: 2 baris panel bila muat, selain itu 1 baris
-  const sisaGrafik = b => (ruang - (b - 1) * G) / b - tabelH - 6 - 22 - labelH - 6;
-  const baris = sisaGrafik(2) >= 110 ? 2 : 1, plotH = Math.max(80, Math.min(baris === 1 ? 300 : 220, Math.floor(sisaGrafik(baris))));
-  const grafikH = 22 + plotH + labelH + 6, w = (PW - 2 * M - (cols - 1) * G) / cols, per = cols * baris;
+  for (const c of [7, 6, 5, 4, 3]) { const w = (PW - 2 * M - (c - 1) * G) / c; if ((w - 40) / (nMax + 1) >= 4.5) { cols = c; break; } }
+  const w = (PW - 2 * M - (cols - 1) * G) / cols;
+  // baris panel: tabel setinggi lokasi/driver terbanyak di baris itu; Control Room disamakan semua baris
+  const brs = [];
+  for (let i = 0; i < X.ev.length; i += cols) { const isi = X.ev.slice(i, i + cols); brs.push({isi, n: X.baris === 'Driver' ? nMax : Math.max(1, ...isi.map(e => e.rows.length))}); }
+  const PLOT = 150, tinggi = b => tabelH(b.n) + 6 + bawah + PLOT;
+  const hal0 = []; let cur = [], pakai = 0;
+  brs.forEach(b => { const t = tinggi(b); if (cur.length && pakai + G + t > ruang) { hal0.push(cur); cur = []; pakai = 0; } pakai += (cur.length ? G : 0) + t; cur.push(b); });
+  if (cur.length) hal0.push(cur);
   const akun = document.getElementById('akunNama').textContent || '';
   const periode = KC === 'W' ? labelWaktu() : `${BLN[mon]} ${D.tahun}`;
   const now = new Date(), cetak = now.toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'}) + ', ' + now.toLocaleTimeString('id-ID', {hour: '2-digit', minute: '2-digit'});
   const esc = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
   const sel1 = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis', td = `padding:0 4px;line-height:${RH - 1}px;height:${RH - 1}px`;
-  const panel = e => {
-    const data = e.rows.concat([{n: 'Total', v: e.total, t: 1}]);
+  const panel = (e, n, plotH) => {
+    const data = e.rows.concat([{n: 'Total', v: e.total, t: 1}]), grafikH = bawah + plotH;
     let mx = niceMax(Math.max(1, e.total)), nt = nTicks(mx); if (mx < 4) { mx = 4; nt = 4; } else if (mx / nt < 1) nt = mx;
     const tabel = `<table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;border:1px solid #9aa9c2"><colgroup><col><col style="width:46px"></colgroup>
       <tr style="background:#1f3864;color:#fff;font-weight:700;height:${RH + 2}px"><td style="${td};text-align:center;${sel1}">${esc(e.p.label)}</td><td style="${td};text-align:center">Case</td></tr>` +
       e.rows.map(r => `<tr style="height:${RH}px;border-top:1px solid #d5dbe5"><td style="${td};${sel1}">${esc(r.n)}</td><td style="${td};text-align:right">${nf(r.v)}</td></tr>`).join('') +
-      (e.rows.length ? '' : `<tr style="height:${RH}px"><td style="${td};color:#737b76">Tidak ada event</td><td style="${td};text-align:right">0</td></tr>`) +
-      Array.from({length: n - Math.max(1, e.rows.length)}, () => `<tr style="height:${RH}px;border-top:1px solid #eef1f5"><td style="${td}">&nbsp;</td><td style="${td}"></td></tr>`).join('') +
+      Array.from({length: n - e.rows.length}, () => `<tr style="height:${RH}px;border-top:1px solid #eef1f5"><td style="${td}">&nbsp;</td><td style="${td}"></td></tr>`).join('') +
       `<tr style="height:${RH}px;border-top:1.5px solid #1f3864;font-weight:700"><td style="${td}">Total</td><td style="${td};text-align:right">${nf(e.total)}</td></tr></table>`;
     const bw = (w - 40) / data.length;
     const ticks = Array.from({length: nt + 1}, (_, i) => mx / nt * i);
@@ -981,17 +986,18 @@ function halamanEvent() {
       </div></div>`;
     return `<div style="width:${w}px;flex:none">${tabel}${grafik}</div>`;
   };
-  const hal = [], nHal = Math.ceil(X.ev.length / per);
-  for (let h = 0; h < nHal; h++) {
-    const isi = X.ev.slice(h * per, (h + 1) * per);
-    hal.push(`<div style="height:100%;display:flex;flex-direction:column">
+  const nHal = hal0.length;
+  return hal0.map((bs, h) => {
+    // sisa tinggi halaman dibagi rata ke grafik di halaman ini
+    const sisa = ruang - bs.reduce((s0, b) => s0 + tinggi(b), 0) - (bs.length - 1) * G;
+    const plotH = Math.max(70, Math.min(300, PLOT + Math.floor(sisa / bs.length)));
+    return `<div style="height:100%;display:flex;flex-direction:column">
       <div style="background:linear-gradient(120deg,#3f6e4b,#4a7a53 45%,#7aa64a);color:#fff;padding:8px ${M}px;display:flex;justify-content:space-between;align-items:center;height:${HEAD - 8}px;box-sizing:border-box">
         <div style="min-width:0"><div style="font-size:14px;font-weight:700">${esc(akun)} · Event per ${X.baris === 'Driver' ? 'Driver' : 'Lokasi'} — ${periode}</div>
-          <div style="font-size:9.5px;opacity:.92">Cakupan: ${esc(scope())} · Batang merah = Total${X.baris === 'Driver' ? ' · 5 Driver teratas per event (kolom AMT 1)' : ''} · Dicetak ${cetak}</div></div>
+          <div style="font-size:9.5px;opacity:.92;${sel1}">Cakupan: ${esc(scope())} · Batang merah = Total${X.baris === 'Driver' ? ' · 5 Driver teratas per event (kolom AMT 1)' : ' · hanya lokasi yang ada event'} · Dicetak ${cetak}${kosongEv.length ? ' · Tanpa event: ' + esc(kosongEv.join(', ')) : ''}</div></div>
         <div style="font-size:10px;opacity:.9;flex:none">Halaman ${h + 1} / ${nHal}</div></div>
-      <div style="display:flex;flex-wrap:wrap;gap:${G}px;padding:8px ${M}px 0;align-content:flex-start">${isi.map(panel).join('')}</div></div>`);
-  }
-  return hal;
+      <div style="display:flex;flex-direction:column;gap:${G}px;padding:8px ${M}px 0">${bs.map(b => `<div style="display:flex;gap:${G}px;align-items:flex-start">${b.isi.map(e => panel(e, b.n, plotH)).join('')}</div>`).join('')}</div></div>`;
+  });
 }
 document.getElementById('btnPdf').onclick = async () => {
   const b = document.getElementById('btnPdf'); if (b.disabled || !D) return;
