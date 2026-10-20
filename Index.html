@@ -437,7 +437,8 @@ function donutSVG(pct, cat) {
     return `<path d="M${x0.toFixed(2)} ${y0.toFixed(2)} A${M} ${M} 0 ${a1-a0>.5?1:0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}" fill="none" stroke="${col}" stroke-width="${R-r}"/>`; };
   let s = `<svg viewBox="0 0 120 120" width="76" height="76" role="img" aria-label="${cat.name}"><circle cx="${cx}" cy="${cy}" r="${M}" fill="none" stroke="#f3f5f3" stroke-width="${R-r}"/>`;
   if (isFinite(pct)) { s += arc(0, Math.min(f, 1), cat.color); if (f > 1) s += arc(0, f - 1, cat.dark); }
-  s += `<text x="${cx}" y="${cy+7}" text-anchor="middle" style="font-size:21px;font-weight:700;fill:#1b1f1d">${!isFinite(pct) ? '–' : pct >= 10 ? (pct).toFixed(0) + '×' : Math.round(pct*100) + '%'}</text></svg>`;
+  const t = !isFinite(pct) ? '–' : Math.round(pct*100).toLocaleString('id-ID') + '%', fs = t.length > 6 ? 13 : t.length > 4 ? 17 : 21;   // persen terhadap pembanding (1.143% = 11,4 kali)
+  s += `<text x="${cx}" y="${cy + fs/3}" text-anchor="middle" style="font-size:${fs}px;font-weight:700;fill:#1b1f1d">${t}</text></svg>`;
   return s;
 }
 
