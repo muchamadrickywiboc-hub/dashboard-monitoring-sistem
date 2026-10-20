@@ -84,3 +84,14 @@ Satu lokasi memakai satu nama dan satu area di semua bulan: ejaan disamakan (tan
 - Distraction Mengemudi (DRIVER DISTRACTION) dan Seat Belt Detection (SEAT BELT DETECTION / DRIVER IS NOT USING SEAT-BELT) dihitung di Driver Discipline lewat `KASUS_WAJIB` di Kode.gs, menimpa baris lama di sheet Pemetaan. Menu *Perbarui sheet Data Kosong* juga menyamakan baris Pemetaan dan Catatan. Nama event di layar diatur di `LABEL_EVENT`.
 - Penjelasan cara ringkasan dibuat ada di Google Doc **Cara Ringkasan Dibuat** di folder "3. Data Dashboard" (diperbarui langsung di sana).
 - Deploy web app: Jalankan sebagai **Saya**, akses **Siapa saja** (tanpa akun, pengunjung hanya melihat halaman masuk).
+
+## Laporan Harian Operasional GPS & Dashcam (Lampiran 3A)
+
+Halaman kedua di web app yang sama: buka URL web app dengan `?laporan=harian` (kode di `LaporanHarian.gs` dan `HalamanHarian.html`, satu proyek Apps Script dengan dashboard bulanan). Login memakai akun yang sama; akun Control Room hanya lokasinya, Command Center lokasi di areanya, RTC memilih Area/Lokasi (tanpa pilihan = per Area).
+
+- **Event** per tanggal & lokasi dibaca dari sheet `Event` file `Tarikan <nn> ...` (mulai `CFG.BULAN_TARIKAN`) atau `Data <nn> ...` di folder "3. Data Dashboard"; tidak perlu unggah ulang. Case dipetakan ke 14 panel lewat `LH_PANEL` (teks Case langsung, lalu parameter di sheet Pemetaan). Camera Covering dan Illegal Shutdown tetap dihitung di laporan ini walau di Pemetaan "tidak dihitung".
+- **GPS / Dashcam / RTC** diisi lewat tombol *Input GPS / Dashcam / RTC* (jumlah terpasang dan online per tanggal & lokasi, beserta nama Operator dan Fleet Supervisor). Data disimpan di spreadsheet `Input Harian GPS Dashcam RTC` di folder data (dibuat otomatis); offline dan % online dihitung otomatis. Form mengusulkan angka hari sebelumnya.
+- **Export PDF**: 1 halaman A4 lanskap persis susunan Lampiran 3A (header, 3 tabel + pie, 14 panel dengan batang Total merah, kolom tanda tangan). Bila lokasinya banyak, halaman diperkecil agar tetap 1 halaman.
+- **Logo**: taruh file gambar yang namanya diawali `Logo` (mis. `Logo Pertamina Patra Niaga.png`, < 70 KB) di folder data untuk logo resolusi tinggi; tanpa file itu dipakai logo bawaan.
+- Akun Control Room mendapat tombol **Laporan Harian** di header dashboard bulanan (akun lain tidak). Halaman laporan harian punya tombol **Dashboard** untuk kembali.
+- Pemasangan: tambahkan file Script `LaporanHarian` dan file HTML `HalamanHarian` (Apps Script tidak menerima dua file bernama sama) di editor Apps Script, perbarui `Kode.gs`, lalu Deploy > Manage deployments > Edit > New version.

@@ -15,7 +15,7 @@
  *     prosesTarikan butuh layanan lanjutan "Drive API" (Apps Script > Layanan > Drive API) untuk membaca .xlsx.
  * Semua rekap (parameter, regional, lokasi, TOP 10 AMT, event per hari) dihitung di sini, tanpa rumus spreadsheet.
  *
- *  - doGet()            : web app.
+ *  - doGet()            : web app (?laporan=harian = Laporan Harian Lampiran 3A, LaporanHarian.gs).
  *  - getDashboardData() : dipanggil dashboard; hasil di-cache 6 jam (jalankan hapusCache setelah data diubah).
  *  - pasangPemicu()     : jalankan sekali; membangun ulang cache tiap jam supaya dashboard langsung terbuka.
  */
@@ -88,7 +88,8 @@ function UJI_BACA_SUMBER() {
 }
 
 /* ============================== WEB APP ============================== */
-function doGet() {
+function doGet(e) {
+  if (e && e.parameter && /^harian$/i.test(e.parameter.laporan || '')) return halamanLaporanHarian_();   // Lampiran 3A, lihat LaporanHarian.gs
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Monitoring Driving Behaviour, Driver Discipline & Fatigue Management')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
