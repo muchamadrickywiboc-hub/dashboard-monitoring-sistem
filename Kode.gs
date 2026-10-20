@@ -40,6 +40,14 @@ const TIPE = {
   'OVER SPEED': 'GPS', 'HARSH TURN / CORNERING': 'GPS', 'HARSH BRAKING': 'GPS', 'HARSH ACCELERATION': 'GPS',
   'BLACK ZONE': 'GPS', 'IDLING': 'GPS', 'DRIVING > 4 HOURS': 'GPS',
   'MENGGUNAKAN TELEPON': 'CCTV', 'MEROKOK / VAPE': 'CCTV', 'MICROSLEEP': 'CCTV', 'MENGUAP': 'CCTV',
+  'DISTRACTION MENGEMUDI': 'CCTV', 'SEAT BELT': 'CCTV',
+};
+/** Nama event yang tampil di dashboard dan export (nama parameter huruf besar -> label). Kunci parameter tetap mengikuti sheet Pemetaan. */
+const LABEL_EVENT = {
+  'OVER SPEED': 'Overspeed', 'HARSH BRAKING': 'Harsh Brake', 'HARSH ACCELERATION': 'Harsh Acceleration', 'HARSH TURN / CORNERING': 'Harsh Cornering',
+  'IDLING': 'Idle', 'DRIVING > 4 HOURS': 'Drive > 4 Hr', 'BLACK ZONE': 'Blackzone',
+  'MICROSLEEP': 'Fatigue', 'MENGUAP': 'Menguap', 'MEROKOK / VAPE': 'Merokok', 'MENGGUNAKAN TELEPON': 'Menggunakan Telepon',
+  'DISTRACTION MENGEMUDI': 'Distraction Mengemudi', 'SEAT BELT': 'Seat Belt Detection',
 };
 
 /* ============================== MENU ============================== */
@@ -420,8 +428,32 @@ function hitungJam_(J, m, d, s, h, jendela, peta) {
  * Dihitung dari data yang dibaca dashboard, jadi selalu sama dengan yang tampil. Diperbarui tiap pagi oleh pemicu
  * (pasangPemicu) atau lewat menu Dashboard > Perbarui sheet Data Kosong.
  */
+/** Menyamakan sheet Pemetaan dan Catatan dengan KASUS_WAJIB (Distraction Mengemudi dan Seat Belt kini dihitung). */
+function sinkronPemetaan_(ss) {
+  const sh = ss.getSheetByName('Pemetaan');
+  if (sh && sh.getLastRow() > 1) {
+    const v = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues(), ada = {};
+    v.forEach((r, i) => { const c = normKasus(r[0]), w = KASUS_WAJIB[c]; if (!c) return; ada[c] = 1;
+      if (w && (teks(r[1]) !== w[0] || teks(r[2]) !== w[1])) sh.getRange(i + 2, 2, 1, 2).setValues([w]); });
+    const baru = Object.keys(KASUS_WAJIB).filter(c => !ada[c]);
+    let akhir = v.length; while (akhir > 0 && !teks(v[akhir - 1][0])) akhir--;   // baris terakhir kolom Case (kolom Area/Lokasi bisa lebih panjang)
+    if (baru.length) sh.getRange(akhir + 2, 1, baru.length, 3).setValues(baru.map(c => [c].concat(KASUS_WAJIB[c])));
+  }
+  const sc = ss.getSheetByName('Catatan');
+  if (sc && sc.getLastRow()) {
+    const v = sc.getRange(1, 1, sc.getLastRow(), 1).getValues();
+    v.forEach((r, i) => {
+      const x = teks(r[0]);
+      if (/^Driver Discipline:/.test(x) && !/Distraction/.test(x)) sc.getRange(i + 1, 1).setValue('Driver Discipline: Blackzone=BLACKZONE, Idle=IDLE, Menggunakan Telepon=PHONE DETECTION, Merokok=SMOKING DETECTION, Distraction Mengemudi=DRIVER DISTRACTION, Seat Belt Detection=SEAT BELT DETECTION / DRIVER IS NOT USING SEAT-BELT.');
+      else if (/^Fatigue Management:/.test(x) && /Microsleep/.test(x)) sc.getRange(i + 1, 1).setValue('Fatigue Management: Fatigue=DRIVER FATIGUE, Menguap=YAWNING DETECTION / DRIVER HAS BEEN YAWNING.');
+      else if (/^Parameter lain:/.test(x)) sc.getRange(i + 1, 1).setValue('Tidak dihitung: CAMERA COVERING ALARM, ILLEGAL SHUTDOWN, REST AREA, VIDEO LOSS / HIGH SPEED / ABNORMAL STORAGE ALARM.');
+    });
+  }
+}
+
 function buatSheetDataKosong() {
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID), ss = SpreadsheetApp.open(fileAtur_());
+  try { sinkronPemetaan_(ss); } catch (e) { Logger.log('Sinkron pemetaan: ' + e.message); }
   const d = JSON.parse(dataUtama_()), peta = bacaPemetaan(nilaiSheet(ss, 'Pemetaan') || []);
   const NB = s0 => s0.charAt(0) + s0.slice(1).toLowerCase(), A = d.areas, tahun = d.tahun;
   const catatanSumber = (nilaiSheet(ss, 'Catatan') || []).map(r => teks(r[0])).filter(x => /terpotong|batas excel/i.test(x));
@@ -579,7 +611,12 @@ const KASUS_TARIKAN = {
   'BLACKZONE ALARM': ['Black Zone', 'Driver Discipline'], 'IDLE REPORT': ['Idling', 'Driver Discipline'],
   'DRIVER IS USING PHONE': ['Menggunakan Telepon', 'Driver Discipline'], 'DRIVER HAS BEEN SMOKING': ['Merokok / Vape', 'Driver Discipline'],
   'DRIVER HAS BEEN YAWNING': ['Menguap', 'Fatigue Management'],
-  'DRIVER IS NOT USING SEAT-BELT': ['', 'Tidak dihitung'],
+};
+/** Event yang selalu dihitung, menimpa baris lama di sheet Pemetaan ("Parameter lain" / "Tidak dihitung"). */
+const KASUS_WAJIB = {
+  'DRIVER DISTRACTION': ['Distraction Mengemudi', 'Driver Discipline'],
+  'SEAT BELT DETECTION': ['Seat Belt', 'Driver Discipline'], 'SEATBELT DETECTION': ['Seat Belt', 'Driver Discipline'],
+  'DRIVER IS NOT USING SEAT-BELT': ['Seat Belt', 'Driver Discipline'],
 };
 /** Menyeragamkan teks Case: huruf besar; "Blackzone Alarm - <nama zona>" -> "BLACKZONE ALARM"; "Over Speed Alarm (62 Km/H)" -> "OVER SPEED ALARM". */
 function normKasus(x) {
@@ -596,6 +633,11 @@ function bacaPemetaan(v) {
     if (c && (p || k)) { kasus[c] = { p: p || '(tidak dihitung)', k: KATEGORI[k] || 'LAIN' }; if (p && !urut.some(x => x.p === p)) urut.push({ p: p, k: KATEGORI[k] || 'LAIN' }); }   // tanpa parameter = sengaja tidak dihitung
     const a = teks(r[4]).toUpperCase(), ar = namaRegional(r[5]); if (a && ar) area[a] = ar;
     const l = teks(r[7]).toUpperCase(), lr = namaRegional(r[8]); if (l && lr) lokasi[l] = lr;
+  });
+  Object.keys(KASUS_WAJIB).forEach(c => {
+    const p = KASUS_WAJIB[c][0], k = KATEGORI[KASUS_WAJIB[c][1].toUpperCase()];
+    kasus[c] = { p: p, k: k };
+    if (!urut.some(x => x.p === p)) urut.push({ p: p, k: k });
   });
   Object.keys(KASUS_TARIKAN).forEach(c => {
     if (kasus[c]) return;
@@ -807,7 +849,7 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
   peta.urut.filter(o => o.k !== 'LAIN').forEach(o => {
     const P = o.p.toUpperCase();
     pIdx[o.p] = params.length;
-    params.push({ key: o.p, label: o.p, kat: PINDAH_KATEGORI[P] || o.k, katAsal: o.k, tipe: TIPE[P] || '-' });
+    params.push({ key: o.p, label: LABEL_EVENT[P] || o.p, kat: PINDAH_KATEGORI[P] || o.k, katAsal: o.k, tipe: TIPE[P] || '-' });
   });
 
   // Satu lokasi = satu nama & satu area di semua bulan. Ejaan disamakan (tanda hubung/spasi diabaikan, ALIAS_LOKASI),

@@ -876,17 +876,17 @@ function halamanPdf() {
   const tabelKat = c => { const ps = catParams(c.key);
     return `<div style="flex:1;min-width:0;border:1px solid #e3e8e3;border-radius:12px;overflow:hidden">
       <div style="background:${c.color};color:#fff;font-size:11.5px;font-weight:700;padding:6px 10px;text-transform:uppercase">${c.name}</div>
-      <table style="width:100%;border-collapse:collapse;font-size:10.5px"><colgroup><col style="width:43%"><col style="width:19%"><col style="width:16%"><col style="width:22%"></colgroup><thead><tr style="font-size:9px;text-transform:uppercase"><th style="text-align:left;padding:5px 8px">Parameter</th><th style="text-align:right;padding:5px 6px">${lbl(pm)}</th><th style="text-align:right;padding:5px 6px">${lbl(kc)}</th><th style="text-align:right;padding:5px 8px">Kenaikan</th></tr></thead><tbody>` +
+      <table style="width:100%;border-collapse:collapse;font-size:10.5px"><colgroup><col style="width:42%"><col style="width:19%"><col style="width:16%"><col style="width:23%"></colgroup><thead><tr style="font-size:9px;text-transform:uppercase"><th style="text-align:left;padding:5px 8px">Parameter</th><th style="text-align:right;padding:5px 6px">${lbl(pm)}</th><th style="text-align:right;padding:5px 6px">${lbl(kc)}</th><th style="text-align:right;padding:5px 8px">Kenaikan</th></tr></thead><tbody>` +
       ps.map(p => { const a = nv(p.key, kc), b = pm === null ? null : nv(p.key, pm);
-        return `<tr style="border-top:1px solid #eef1ee"><td style="padding:4px 8px">${p.label.toUpperCase()}</td><td style="text-align:right;padding:4px 6px">${b === null ? '–' : nf(b)}</td><td style="text-align:right;padding:4px 6px;font-weight:600">${a === null ? '–' : nf(a)}</td><td style="text-align:right;padding:4px 8px">${a === null ? '–' : pTxt(a, b)}</td></tr>`; }).join('') +
-      (() => { const a = nk(c.key, kc), b = pm === null ? null : nk(c.key, pm); return `<tr style="border-top:1.5px solid #cfd6cf;background:#f5f7f5;font-weight:700"><td style="padding:5px 8px">TOTAL</td><td style="text-align:right;padding:5px 6px">${b === null ? '–' : nf(b)}</td><td style="text-align:right;padding:5px 6px">${a === null ? '–' : nf(a)}</td><td style="text-align:right;padding:5px 8px">${pTxt(a || 0, b)}</td></tr>`; })() +
+        return `<tr style="border-top:1px solid #eef1ee"><td style="padding:3px 8px;font-size:9.5px">${p.label.toUpperCase()}</td><td style="text-align:right;padding:4px 6px">${b === null ? '–' : nf(b)}</td><td style="text-align:right;padding:4px 6px;font-weight:600">${a === null ? '–' : nf(a)}</td><td style="text-align:right;padding:3px 8px;white-space:nowrap">${a === null ? '–' : pTxt(a, b)}</td></tr>`; }).join('') +
+      (() => { const a = nk(c.key, kc), b = pm === null ? null : nk(c.key, pm); return `<tr style="border-top:1.5px solid #cfd6cf;background:#f5f7f5;font-weight:700"><td style="padding:5px 8px">TOTAL</td><td style="text-align:right;padding:5px 6px">${b === null ? '–' : nf(b)}</td><td style="text-align:right;padding:5px 6px">${a === null ? '–' : nf(a)}</td><td style="text-align:right;padding:5px 8px;white-space:nowrap">${pTxt(a || 0, b)}</td></tr>`; })() +
       '</tbody></table></div>'; };
   // grafik: per hari (bulanan) atau per jam (filter waktu)
   let bar = [], judulGrafik;
   if (W) { const HS = jam >= 0 ? [jam] : shift ? jamShift(shift) : Array.from({length: 24}, (_, i) => i); bar = HS.map(h => ({x: String(h).padStart(2, '0'), o: D.jamW[h]})); judulGrafik = 'Event per jam — ' + labelWaktu(); }
   else { const cur = hariBulan(mon); bar = cur ? cur.map((o, i) => ({x: String(i + 1), o})) : []; judulGrafik = `Event per hari — ${BLN[mon]} ${D.tahun}`; }
   const mx = Math.max(1, ...bar.map(b => b.o.DB + b.o.DD + b.o.FM));
-  const grafik = bar.length ? `<div style="display:flex;align-items:flex-end;gap:2px;height:262px;border-bottom:1px solid #cfd6cf;padding-top:4px">` + bar.map(b => { const t = b.o.DB + b.o.DD + b.o.FM;
+  const grafik = bar.length ? `<div style="display:flex;align-items:flex-end;gap:2px;height:250px;border-bottom:1px solid #cfd6cf;padding-top:4px">` + bar.map(b => { const t = b.o.DB + b.o.DD + b.o.FM;
       return `<div style="flex:1;display:flex;flex-direction:column-reverse;height:${t / mx * 100}%;min-width:0">${CATS.map(c => `<div style="height:${t ? b.o[c.key] / t * 100 : 0}%;background:${c.color}"></div>`).join('')}</div>`; }).join('') +
       `</div><div style="display:flex;gap:2px;font-size:7.5px;color:#737b76">${bar.map((b, i) => `<span style="flex:1;text-align:center">${bar.length > 16 && i % 2 ? '' : b.x}</span>`).join('')}</div>
       <div style="display:flex;gap:12px;font-size:9.5px;color:#5d665f;margin-top:4px">${CATS.map(c => `<span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c.color};margin-right:4px"></i>${c.name}</span>`).join('')}</div>`
@@ -906,7 +906,7 @@ function halamanPdf() {
   return `<div style="height:100%;display:flex;flex-direction:column">
   <div style="background:linear-gradient(120deg,#3f6e4b,#4a7a53 45%,#7aa64a);color:#fff;padding:14px 24px 12px;display:flex;justify-content:space-between;align-items:center;gap:20px">
     <div style="min-width:0"><div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.85">${akun} · Ringkasan Monitoring Armada</div>
-      <div style="font-size:19px;font-weight:700;line-height:1.25;margin-top:2px">Driving Behaviour, Driver Discipline &amp; Fatigue Management — ${periode}</div>
+      <div style="font-size:17px;font-weight:700;line-height:1.25;margin-top:2px;white-space:nowrap">Driving Behaviour, Driver Discipline &amp; Fatigue Management — ${periode}</div>
       <div style="font-size:10.5px;opacity:.92;margin-top:3px">Cakupan: ${scope()} · Dibanding: ${banding} · Dicetak ${cetak}${tj}</div></div>
     <div style="background:#fff;border-radius:10px;padding:7px 12px;display:flex;align-items:center;gap:10px;flex:none">${logo}</div></div>
   <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding:12px 24px 16px;min-height:0">
@@ -916,6 +916,82 @@ function halamanPdf() {
   </div>
 </div>`;
 }
+/* Export per event (Command Center & Control Room): tabel kecil + grafik batang per event, batang Total merah */
+const URUT_EVENT = ['OVER SPEED', 'HARSH BRAKING', 'HARSH ACCELERATION', 'HARSH TURN / CORNERING', 'IDLING', 'DRIVING > 4 HOURS', 'BLACK ZONE',
+  'MICROSLEEP', 'MENGUAP', 'MEROKOK / VAPE', 'MENGGUNAKAN TELEPON', 'DISTRACTION MENGEMUDI', 'SEAT BELT'];
+function dataEvent() {
+  const W = KC === 'W', A = RAW.areas, ur = p => { const i = URUT_EVENT.indexOf(p.key.toUpperCase()); return i < 0 ? 99 + P.indexOf(p) : i; };
+  const ps = P.slice().sort((a, b) => ur(a) - ur(b));
+  if (selLok < 0) {   // Command Center: baris = lokasi di area ini
+    const V = {}, T = {};
+    const add = (li, pi, n) => { if (li < 0 || pi < 0) return; const o = V[li] || (V[li] = {}); o[pi] = (o[pi] || 0) + n; T[li] = (T[li] || 0) + n; };
+    if (W) WIN.fakta.forEach(([b, ai, wl, pi, n]) => { if (!b && cocokReg(A[ai])) add(WIN.lokMap[wl], WIN.pMap[pi], n); });
+    else RAW.fakta.forEach(([m, ai, li, pi, n]) => { if (m === mon && cocokReg(A[ai])) add(li, pi, n); });
+    const lok = Object.keys(V).map(Number).sort((a, b) => T[b] - T[a] || lokNama(a).localeCompare(lokNama(b)));
+    return {baris: 'Lokasi', ev: ps.map(p => { const pi = P.indexOf(p), rows = lok.map(li => ({n: lokNama(li), v: (V[li] || {})[pi] || 0}));
+      return {p, rows, total: rows.reduce((s0, r) => s0 + r.v, 0)}; })};
+  }
+  // Control Room: baris = 5 Driver teratas + driver lain / tanpa nama
+  const nv = key => W ? ((D.nilaiW[key] || {}).W || 0) : (nilai(key, mon) || 0);
+  return {baris: 'Driver', ev: ps.map(p => { const pi = P.indexOf(p), total = nv(p.key);
+    const rows = (D.drv || []).filter(r => r[0] === KC && r[3] === pi).sort((a, b) => b[5] - a[5]).slice(0, 5).map(r => ({n: D.drvNama[r[4]], v: r[5]}));
+    const sisa = total - rows.reduce((s0, r) => s0 + r.v, 0);
+    if (sisa > 0) rows.push({n: rows.length ? 'Driver lain / tanpa nama' : 'Tanpa nama Driver', v: sisa});
+    return {p, rows, total}; })};
+}
+function halamanEvent() {
+  const X = dataEvent(), PW = 1123, PH = 794, M = 16, G = 10, HEAD = 46;
+  const n = Math.max(1, ...X.ev.map(e => e.rows.length)), RH = 13, putar = n > 6 || X.baris === 'Driver';
+  const panjang = Math.max(4, ...X.ev.flatMap(e => e.rows.map(r => r.n.length)));
+  const labelH = putar ? Math.min(78, 10 + Math.min(panjang, 18) * 3.6) : 14;
+  const tabelH = (n + 2) * RH + 2, ruang = PH - HEAD - 8 - M;
+  let cols = 2;
+  for (const c of [7, 6, 5, 4, 3]) { const w = (PW - 2 * M - (c - 1) * G) / c; if ((w - 40) / (n + 1) >= 4.5) { cols = c; break; } }
+  // tinggi grafik mengisi halaman: 2 baris panel bila muat, selain itu 1 baris
+  const sisaGrafik = b => (ruang - (b - 1) * G) / b - tabelH - 6 - 22 - labelH - 6;
+  const baris = sisaGrafik(2) >= 110 ? 2 : 1, plotH = Math.min(baris === 1 ? 300 : 220, Math.floor(sisaGrafik(baris)));
+  const grafikH = 22 + plotH + labelH + 6, w = (PW - 2 * M - (cols - 1) * G) / cols, per = cols * baris;
+  const akun = document.getElementById('akunNama').textContent || '';
+  const periode = KC === 'W' ? labelWaktu() : `${BLN[mon]} ${D.tahun}`;
+  const now = new Date(), cetak = now.toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'}) + ', ' + now.toLocaleTimeString('id-ID', {hour: '2-digit', minute: '2-digit'});
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+  const sel1 = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis', td = `padding:0 4px;line-height:${RH - 1}px;height:${RH - 1}px`;
+  const panel = e => {
+    const data = e.rows.concat([{n: 'Total', v: e.total, t: 1}]);
+    let mx = niceMax(Math.max(1, e.total)), nt = nTicks(mx); if (mx < 4) { mx = 4; nt = 4; } else if (mx / nt < 1) nt = mx;
+    const tabel = `<table style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;border:1px solid #9aa9c2"><colgroup><col><col style="width:46px"></colgroup>
+      <tr style="background:#1f3864;color:#fff;font-weight:700;height:${RH + 2}px"><td style="${td};text-align:center;${sel1}">${esc(e.p.label)}</td><td style="${td};text-align:center">Case</td></tr>` +
+      e.rows.map(r => `<tr style="height:${RH}px;border-top:1px solid #d5dbe5"><td style="${td};${sel1}">${esc(r.n)}</td><td style="${td};text-align:right">${nf(r.v)}</td></tr>`).join('') +
+      (e.rows.length ? '' : `<tr style="height:${RH}px"><td style="${td};color:#737b76">Tidak ada event</td><td style="${td};text-align:right">0</td></tr>`) +
+      Array.from({length: n - Math.max(1, e.rows.length)}, () => `<tr style="height:${RH}px;border-top:1px solid #eef1f5"><td style="${td}">&nbsp;</td><td style="${td}"></td></tr>`).join('') +
+      `<tr style="height:${RH}px;border-top:1.5px solid #1f3864;font-weight:700"><td style="${td}">Total</td><td style="${td};text-align:right">${nf(e.total)}</td></tr></table>`;
+    const bw = (w - 40) / data.length;
+    const ticks = Array.from({length: nt + 1}, (_, i) => mx / nt * i);
+    const grafik = `<div style="border:1px solid #d9dde3;border-radius:2px;margin-top:6px;height:${grafikH}px;position:relative;background:#fff">
+      <div style="text-align:center;font-size:11px;font-weight:600;color:#404040;padding-top:5px;${sel1}">${esc(e.p.label)}</div>
+      <div style="position:absolute;left:32px;right:6px;top:24px;height:${plotH}px;border-bottom:1px solid #bfbfbf">
+        ${ticks.map(t => `<div style="position:absolute;left:0;right:0;bottom:${t / mx * 100}%;border-top:1px solid ${t ? '#ececec' : 'transparent'}"></div><div style="position:absolute;left:-30px;width:26px;text-align:right;bottom:${t / mx * 100}%;transform:translateY(50%);font-size:7px;color:#737b76">${nf(t)}</div>`).join('')}
+        ${data.map((r, i) => `<div style="position:absolute;bottom:0;left:${i * bw + bw * 0.14}px;width:${bw * 0.72}px;height:${r.v / mx * 100}%;background:${r.t ? '#c00000' : '#4472c4'}"></div>`).join('')}
+      </div>
+      <div style="position:absolute;left:32px;right:6px;top:${24 + plotH + 3}px;height:${labelH}px">
+        ${data.map((r, i) => putar
+          ? `<div style="position:absolute;left:${i * bw + bw / 2 + 3.5}px;top:0;width:${labelH - 2}px;height:8px;line-height:8px;transform-origin:0 0;transform:rotate(90deg);font-size:6.5px;color:${r.t ? '#c00000' : '#595959'};${sel1}">${esc(r.n)}</div>`
+          : `<div style="position:absolute;left:${i * bw}px;width:${bw}px;top:0;text-align:center;font-size:7px;color:#595959;${sel1}">${esc(r.n)}</div>`).join('')}
+      </div></div>`;
+    return `<div style="width:${w}px;flex:none">${tabel}${grafik}</div>`;
+  };
+  const hal = [], nHal = Math.ceil(X.ev.length / per);
+  for (let h = 0; h < nHal; h++) {
+    const isi = X.ev.slice(h * per, (h + 1) * per);
+    hal.push(`<div style="height:100%;display:flex;flex-direction:column">
+      <div style="background:linear-gradient(120deg,#3f6e4b,#4a7a53 45%,#7aa64a);color:#fff;padding:8px ${M}px;display:flex;justify-content:space-between;align-items:center;height:${HEAD - 8}px;box-sizing:border-box">
+        <div style="min-width:0"><div style="font-size:14px;font-weight:700">${esc(akun)} · Event per ${X.baris === 'Driver' ? 'Driver' : 'Lokasi'} — ${periode}</div>
+          <div style="font-size:9.5px;opacity:.92">Cakupan: ${esc(scope())} · Batang merah = Total${X.baris === 'Driver' ? ' · 5 Driver teratas per event (kolom AMT 1)' : ''} · Dicetak ${cetak}</div></div>
+        <div style="font-size:10px;opacity:.9;flex:none">Halaman ${h + 1} / ${nHal}</div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:${G}px;padding:8px ${M}px 0;align-content:flex-start">${isi.map(panel).join('')}</div></div>`);
+  }
+  return hal;
+}
 document.getElementById('btnPdf').onclick = async () => {
   const b = document.getElementById('btnPdf'); if (b.disabled || !D) return;
   b.disabled = true; b.textContent = 'Menyiapkan PDF…';
@@ -923,11 +999,16 @@ document.getElementById('btnPdf').onclick = async () => {
   try {
     await Promise.all(PDF_LIB.map(muatSkrip));
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    pg = document.createElement('div'); pg.id = 'pdfPage'; pg.innerHTML = halamanPdf(); document.body.appendChild(pg);
-    const cv = await window.html2canvas(pg, {scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false});
+    const perEvent = AKUN && AKUN.peran !== 'PUSAT', hal = perEvent ? halamanEvent() : [halamanPdf()];
     const pdf = new window.jspdf.jsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
-    pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 297, 210);
-    const nama = `Ringkasan ${(document.getElementById('akunNama').textContent || 'RTC')} ${KC === 'W' ? labelWaktu().replace(/[·:]/g, '') : BLN[mon] + ' ' + D.tahun}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
+    for (let i = 0; i < hal.length; i++) {
+      pg = document.createElement('div'); pg.id = 'pdfPage'; pg.innerHTML = hal[i]; document.body.appendChild(pg);
+      const cv = await window.html2canvas(pg, {scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false});
+      if (i) pdf.addPage();
+      pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 297, 210);
+      pg.remove(); pg = null;
+    }
+    const nama = `${perEvent ? 'Event' : 'Ringkasan'} ${(document.getElementById('akunNama').textContent || 'RTC')} ${KC === 'W' ? labelWaktu().replace(/[·:]/g, '') : BLN[mon] + ' ' + D.tahun}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
     try { pdf.save(nama); } catch (e) { window.open(pdf.output('bloburl'), '_blank'); }
   } catch (e) { alertPdf(e && e.message ? e.message : String(e)); }
   finally { if (pg) pg.remove(); b.disabled = false; b.textContent = 'Export PDF'; }
