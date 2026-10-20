@@ -30,7 +30,7 @@ h1{margin:2px 0 4px;font-size:clamp(24px,3.2vw,36px);font-weight:700;letter-spac
 .akun{gap:10px;align-items:center}.akun button{font:600 12px var(--f-ui);border:0;background:#fff;color:var(--forest);border-radius:999px;padding:3px 10px;cursor:pointer}
 .akun a.btnlink{font:600 12px var(--f-ui);background:#fff;color:var(--forest);border-radius:999px;padding:3px 10px;text-decoration:none}
 body:not(.peran-lokasi):not(.peran-area) #btnHarian{display:none!important}
-.peran-lokasi #btnPdf{display:none!important}
+.peran-lokasi #btnPdf,.peran-area #btnPdf{display:none!important}
 .nologin .hero,.nologin .footer{display:none!important}
 .lg{min-height:100vh;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);background:var(--bg)}
 .lg-art{position:relative;overflow:hidden;color:#fff;padding:36px clamp(24px,4vw,56px) 0;display:flex;flex-direction:column;gap:18px;background:linear-gradient(150deg,#3f6e4b 0%,var(--forest) 30%,var(--leaf) 70%,#93b833 100%)}
@@ -1144,7 +1144,7 @@ function terapkanAkun(p) {
   AKUN = a;
   document.body.classList.remove('nologin', 'peran-area', 'peran-lokasi');
   if (a.peran === 'AREA') document.body.classList.add('peran-area'); else if (a.peran === 'LOKASI') document.body.classList.add('peran-lokasi');
-  // tombol Laporan (Daily & Monthly) untuk Command Center & Control Room; Export PDF tidak untuk Control Room
+  // tombol Laporan (Daily & Monthly) untuk Command Center & Control Room; Export PDF dashboard hanya untuk RTC
   const bh = document.getElementById('btnHarian');
   if ((a.peran === 'LOKASI' || a.peran === 'AREA') && bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian();
   document.getElementById('loginwrap').hidden = true;
