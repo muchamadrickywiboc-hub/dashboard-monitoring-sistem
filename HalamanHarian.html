@@ -117,9 +117,11 @@ window.onerror = (m, src, baris) => {
   b.hidden = false; b.className = 'note err';
   b.textContent = 'Halaman gagal dimuat: ' + m + (baris ? ' (baris ' + baris + ')' : '') + '.';
   // tampilkan isi baris di sekitar error apa adanya, untuk melacak bagian kode yang berubah saat disajikan
-  if (baris) { const L = document.documentElement.outerHTML.split('\n'), pre = document.createElement('pre');
+  // nomor baris dihitung dari awal blok <script>; tampilkan baris itu dari tiap blok skrip apa adanya
+  if (baris) { const pre = document.createElement('pre');
     pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font-size:11px;background:#fff;border:1px solid #ddd;padding:8px;color:#333';
-    pre.textContent = L.slice(Math.max(0, baris - 4), baris + 2).map((x, i) => (Math.max(0, baris - 4) + i + 1) + ': ' + x.slice(0, 400)).join('\n');
+    pre.textContent = [...document.scripts].map((sc, k) => { const L = sc.textContent.split('\n'); if (L.length < baris) return '';
+      return 'Skrip ' + (k + 1) + ' (' + L.length + ' baris):\n' + L.slice(Math.max(0, baris - 3), baris + 1).map((x, i) => (Math.max(0, baris - 3) + i + 1) + ': ' + x.slice(0, 600)).join('\n'); }).filter(Boolean).join('\n\n');
     b.appendChild(pre); }
 };
 </script>
