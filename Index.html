@@ -949,7 +949,7 @@ function halamanEvent() {
   for (const c of [7, 6, 5, 4, 3]) { const w = (PW - 2 * M - (c - 1) * G) / c; if ((w - 40) / (n + 1) >= 4.5) { cols = c; break; } }
   // tinggi grafik mengisi halaman: 2 baris panel bila muat, selain itu 1 baris
   const sisaGrafik = b => (ruang - (b - 1) * G) / b - tabelH - 6 - 22 - labelH - 6;
-  const baris = sisaGrafik(2) >= 110 ? 2 : 1, plotH = Math.min(baris === 1 ? 300 : 220, Math.floor(sisaGrafik(baris)));
+  const baris = sisaGrafik(2) >= 110 ? 2 : 1, plotH = Math.max(80, Math.min(baris === 1 ? 300 : 220, Math.floor(sisaGrafik(baris))));
   const grafikH = 22 + plotH + labelH + 6, w = (PW - 2 * M - (cols - 1) * G) / cols, per = cols * baris;
   const akun = document.getElementById('akunNama').textContent || '';
   const periode = KC === 'W' ? labelWaktu() : `${BLN[mon]} ${D.tahun}`;

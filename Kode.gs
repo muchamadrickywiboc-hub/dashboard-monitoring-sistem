@@ -422,12 +422,6 @@ function hitungJam_(J, m, d, s, h, jendela, peta) {
 }
 
 /* ============================== SHEET DATA KOSONG ============================== */
-/**
- * Menulis sheet "Data Kosong" di file Pengaturan Dashboard: per bulan x regional, tanggal yang tidak ada datanya,
- * hari dengan event sangat sedikit, dan berapa persen event yang tidak punya jam kejadian (tidak ikut filter shift/jam).
- * Dihitung dari data yang dibaca dashboard, jadi selalu sama dengan yang tampil. Diperbarui tiap pagi oleh pemicu
- * (pasangPemicu) atau lewat menu Dashboard > Perbarui sheet Data Kosong.
- */
 /** Menyamakan sheet Pemetaan dan Catatan dengan KASUS_WAJIB (Distraction Mengemudi dan Seat Belt kini dihitung). */
 function sinkronPemetaan_(ss) {
   const sh = ss.getSheetByName('Pemetaan');
@@ -451,6 +445,12 @@ function sinkronPemetaan_(ss) {
   }
 }
 
+/**
+ * Menulis sheet "Data Kosong" di file Pengaturan Dashboard: per bulan x regional, tanggal yang tidak ada datanya,
+ * hari dengan event sangat sedikit, dan berapa persen event yang tidak punya jam kejadian (tidak ikut filter shift/jam).
+ * Dihitung dari data yang dibaca dashboard, jadi selalu sama dengan yang tampil. Diperbarui tiap pagi oleh pemicu
+ * (pasangPemicu) atau lewat menu Dashboard > Perbarui sheet Data Kosong.
+ */
 function buatSheetDataKosong() {
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID), ss = SpreadsheetApp.open(fileAtur_());
   try { sinkronPemetaan_(ss); } catch (e) { Logger.log('Sinkron pemetaan: ' + e.message); }
