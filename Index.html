@@ -28,6 +28,8 @@ h1{margin:2px 0 4px;font-size:clamp(24px,3.2vw,36px);font-weight:700;letter-spac
 .flabel{font-size:13px;font-weight:600;margin-right:4px}
 .winfo{font-size:12.5px;opacity:.9}
 .akun{gap:10px;align-items:center}.akun button{font:600 12px var(--f-ui);border:0;background:#fff;color:var(--forest);border-radius:999px;padding:3px 10px;cursor:pointer}
+.akun a.btnlink{font:600 12px var(--f-ui);background:#fff;color:var(--forest);border-radius:999px;padding:3px 10px;text-decoration:none}
+body:not(.peran-lokasi) #btnHarian{display:none!important}
 .nologin .hero,.nologin .footer{display:none!important}
 .lg{min-height:100vh;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);background:var(--bg)}
 .lg-art{position:relative;overflow:hidden;color:#fff;padding:36px clamp(24px,4vw,56px) 0;display:flex;flex-direction:column;gap:18px;background:linear-gradient(150deg,#3f6e4b 0%,var(--forest) 30%,var(--leaf) 70%,#93b833 100%)}
@@ -295,7 +297,7 @@ td{padding:7px 10px}
         <h1>Monitoring Driving Behaviour, Driver Discipline &amp; Fatigue Management — <span class="tBulan">2026</span></h1>
         <div class="sub">Sebaran pelanggaran Driving Behaviour, Driver Discipline &amp; Fatigue Management per area, lokasi dan Driver · data <span id="tPeriode">2026</span></div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnKeluar">Keluar</button></div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><a class="btnlink" id="btnHarian" target="_top" href="#" hidden title="Laporan Harian Operasional GPS & Dashcam (Lampiran 3A)">Laporan Harian</a><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnKeluar">Keluar</button></div></div>
     </div>
     <div class="ctrlrow" id="bulanRow">
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
@@ -1141,6 +1143,9 @@ function terapkanAkun(p) {
   AKUN = a;
   document.body.classList.remove('nologin', 'peran-area', 'peran-lokasi');
   if (a.peran === 'AREA') document.body.classList.add('peran-area'); else if (a.peran === 'LOKASI') document.body.classList.add('peran-lokasi');
+  // tombol Laporan Harian (Lampiran 3A) hanya untuk Control Room; alamat web app diambil dari server
+  const bh = document.getElementById('btnHarian');
+  if (a.peran === 'LOKASI' && bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian();
   document.getElementById('loginwrap').hidden = true;
   document.getElementById('akunBox').hidden = false;
   const label = a.peran === 'PUSAT' ? 'RTC' : a.peran === 'AREA' ? 'Command Center ' + rn(a.area) : 'Control Room ' + a.lok;

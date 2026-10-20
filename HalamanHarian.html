@@ -55,7 +55,7 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 <body>
 <div class="bar">
   <div><h1>Laporan Harian Operasional GPS &amp; Dashcam</h1><small>Lampiran 3A</small></div>
-  <div class="akun" id="akunBox" hidden><span id="akunNama"></span><button class="btn" id="btnKeluar" type="button">Keluar</button></div>
+  <div class="akun" id="akunBox" hidden><span id="akunNama"></span><a class="btn" id="btnDash" target="_top" href="#" hidden style="text-decoration:none">Dashboard</a><button class="btn" id="btnKeluar" type="button">Keluar</button></div>
 </div>
 
 <div class="wrap">
@@ -157,6 +157,7 @@ function mulai() {
   $('login').hidden = true; $('app').hidden = false;
   $('prev').innerHTML = '<div class="note"><span class="spin"></span>Memuat daftar lokasi…</div>';
   run('lhLogo').then(u => { if (u) LOGO = u; }).catch(() => {});
+  run('urlLaporanHarian').then(u => { if (u) { $('btnDash').href = u.replace(/\?laporan=harian$/, ''); $('btnDash').hidden = false; } }).catch(() => {});
   run('lhInfo', TOKEN).then(j => {
     INFO = JSON.parse(j);
     const a = INFO.akun;

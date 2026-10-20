@@ -42,6 +42,9 @@ function halamanLaporanHarian_() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+/** Alamat halaman Laporan Harian, untuk tombol di dashboard bulanan (hanya tampil untuk akun Control Room). */
+function urlLaporanHarian() { return ScriptApp.getService().getUrl() + '?laporan=harian'; }
+
 /** Case (sudah dinormKasus) -> indeks panel. Teks Case langsung, lalu parameter di sheet Pemetaan. */
 function petaPanel_(peta) {
   const out = {};
