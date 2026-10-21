@@ -214,30 +214,36 @@ function tglKendala_(x) {
 }
 /**
  * Justifikasi Uptime satu bulan. Setiap baris = satu Nopol per tanggal & perangkat; Status "Offline" = offline.
- * Lokasi & area diambil dari Master GPS / Master CCTV berdasarkan Nopol (cadangan: kolom Lokasi + Master Lokasi).
+ * Lokasi & area hanya dari kolom Lokasi / Area sheet ini. Nama unit yang lebih rinci
+ * ("FT SIBOLGA POLTAPLUS MOR I") dicocokkan ke nama lokasi terpanjang di Master Lokasi yang menjadi awalannya ("FT SIBOLGA").
  * { hari: { d: [[lokasi, area, jenis, jumlahNopol, nopolOffline], ...] }, off: [[d, lokasi, area, lokasiDiSheet, perangkat, nopol, durasi, justifikasi, keterangan], ...] }
  * Cache 10 menit.
  */
 function kendalaBulan_(m) {
-  const kunci = 'LHJU2_' + m, ada = ambilCache_(kunci);
+  const kunci = 'LHJU3_' + m, ada = ambilCache_(kunci);
   if (ada) return JSON.parse(ada);
   const ss = SpreadsheetApp.openById(LH.KENDALA_ID), v = nilaiSheet(ss, 'Justifikasi Uptime') || [], k = petaKolom(v[0] || []);
   const kol = awalan => { const h = Object.keys(k).filter(x => x.indexOf(awalan) === 0)[0]; return h === undefined ? undefined : k[h]; };
-  const iT = k['TANGGAL'], iL = k['LOKASI'], iP = k['PERANGKAT'], iN = k['NOPOL'], iS = k['STATUS'], iD = kol('DURASI'), iJ = kol('JUSTIFIKASI'), iK = kol('KETERANGAN');
+  const iT = k['TANGGAL'], iA = k['AREA'], iL = k['LOKASI'], iP = k['PERANGKAT'], iN = k['NOPOL'], iS = k['STATUS'], iD = kol('DURASI'), iJ = kol('JUSTIFIKASI'), iK = kol('KETERANGAN');
   if (iT === undefined || iL === undefined || iP === undefined || iN === undefined) throw new Error('Sheet Justifikasi Uptime harus punya kolom Tanggal, Lokasi, Perangkat, dan Nopol.');
-  // lokasi & area resmi tiap Nopol dari Master GPS / Master CCTV (Justifikasi bisa memakai nama unit yang lebih rinci)
-  const kunciNopol = x => teks(x).toUpperCase().replace(/[^A-Z0-9]/g, ''), M = { gps: {}, cctv: {} }, areaL = {};
-  const muat = (nama, f) => { const w = nilaiSheet(ss, nama) || [], h = petaKolom(w[0] || []); w.slice(1).forEach(r => f(r, h)); };
-  muat('Master Lokasi', (r, h) => { const l = teks(r[h['LOKASI']]).toUpperCase(); if (l) areaL[kunciLok(l)] = areaNorm(r[h['AREA']]); });
-  [['gps', 'Master GPS'], ['cctv', 'Master CCTV']].forEach(([j, nama]) => muat(nama, (r, h) => {
-    const n = kunciNopol(r[h['NOPOL']]), l = teks(r[h['LOKASI']]).toUpperCase();
-    if (n && l) M[j][n] = [ALIAS_LOKASI[l] || l, areaNorm(r[h['AREA']]) || areaL[kunciLok(l)] || ''];
-  }));
+  const kunciNopol = x => teks(x).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // nama lokasi resmi (Master Lokasi + alias), terpanjang dulu agar "FT SIBOLGA X" tidak jatuh ke nama yang lebih pendek
+  const areaL = {}, resmi = [];
+  const w = nilaiSheet(ss, 'Master Lokasi') || [], h = petaKolom(w[0] || []);
+  w.slice(1).forEach(r => { const l = teks(r[h['LOKASI']]).toUpperCase(); if (l) { const n = ALIAS_LOKASI[l] || l; areaL[kunciLok(n)] = areaNorm(r[h['AREA']]); resmi.push(l); } });
+  Object.keys(ALIAS_LOKASI).forEach(l => resmi.push(l));
+  resmi.sort((a, b) => b.length - a.length);
+  const petaLok = {};
+  const lokasiDari = l => petaLok[l] || (petaLok[l] = (() => {
+    if (ALIAS_LOKASI[l]) return ALIAS_LOKASI[l];
+    const r = resmi.filter(x => l === x || l.indexOf(x + ' ') === 0)[0];
+    return r ? ALIAS_LOKASI[r] || r : l;
+  })());
   const N = {};   // d|lokasi|jenis|nopol -> [d, lokasi, area, jenis, offline, baris]
   v.slice(1).forEach(r => {
     const tg = tglKendala_(r[iT]), jenis = jenisPerangkat_(teks(r[iP])), lokAsli = teks(r[iL]).toUpperCase(), nopol = kunciNopol(r[iN]);
     if (!tg || tg.m !== m || !jenis || !lokAsli || !nopol) return;
-    const [lok, area] = M[jenis][nopol] || M[jenis === 'gps' ? 'cctv' : 'gps'][nopol] || [ALIAS_LOKASI[lokAsli] || lokAsli, areaL[kunciLok(lokAsli)] || ''];
+    const lok = lokasiDari(lokAsli), area = areaL[kunciLok(lok)] || (iA === undefined ? '' : areaNorm(r[iA]));
     const off = iS !== undefined && teks(r[iS]) ? /OFF/i.test(teks(r[iS])) : (angka(iD === undefined ? 0 : r[iD]) || 0) > 0;
     const u = tg.d + '|' + kunciLok(lok) + '|' + jenis + '|' + nopol, o = N[u] || (N[u] = [tg.d, lok, area, jenis, false, null]);
     if (off && !o[4]) { o[4] = true; o[5] = r; }   // satu kendaraan dihitung sekali per hari
