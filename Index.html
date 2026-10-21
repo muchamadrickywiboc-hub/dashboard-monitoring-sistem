@@ -1090,6 +1090,8 @@ document.getElementById('btnPdf').onclick = async () => {
     }
     const nama = `${perEvent ? 'Event' : 'Ringkasan'} ${(document.getElementById('akunNama').textContent || 'RTC')} ${KC === 'W' ? labelWaktu().replace(/[·:]/g, '') : BLN[mon] + ' ' + D.tahun}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
     try { pdf.save(nama); } catch (e) { window.open(pdf.output('bloburl'), '_blank'); }
+    google.script.run.withFailureHandler(() => {}).catatEkspor(TOKEN, {halaman: 'Dashboard', jenis: perEvent ? 'Event' : 'Ringkasan',
+      periode: KC === 'W' ? labelWaktu() : BLN[mon] + ' ' + D.tahun, cakupan: (sel === 'ALL' ? 'Semua area' : rn(sel)) + (selLok >= 0 ? ' · ' + RAW.lok[selLok][0] : ''), file: nama, halamanPdf: hal.length});
   } catch (e) { alertPdf(e && e.message ? e.message : String(e)); }
   finally { if (pg) pg.remove(); b.disabled = false; b.textContent = 'Export PDF'; }
 };

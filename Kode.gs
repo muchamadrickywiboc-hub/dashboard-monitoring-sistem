@@ -64,6 +64,7 @@ function onOpen() {
       .addItem('Baca ulang tarikan (area / bulan)…', 'menuBacaUlangArea')
       .addSeparator()
       .addItem('Buat / lengkapi akun (Pusat, Area, Lokasi)', 'buatSheetAkun')
+      .addItem('Rapikan akun ganda (lokasi sama)', 'rapikanAkunGanda')
       .addItem('Amankan password akun', 'amankanPasswordAkun')
       .addItem('Buat ulang semua password (format pendek)', 'buatUlangPasswordAkun')
       .addItem('Keluarkan semua sesi login', 'keluarkanSemuaSesi')
@@ -347,6 +348,50 @@ function buatSheetAkun() {
   sh.autoResizeColumns(1, AKUN_HDR.length);
   const pesan = baru.length ? baru.length + ' akun baru ditambahkan dengan password acak. Catat/bagikan password-nya, lalu jalankan menu "Amankan password akun".' : 'Semua akun sudah ada, tidak ada yang ditambahkan.';
   try { SpreadsheetApp.getUi().alert(pesan); } catch (e) { Logger.log(pesan); }
+}
+/* ============================== LOG EXPORT ============================== */
+const LOG_EKSPOR = 'Log Export';
+const LOG_EKSPOR_HDR = ['Waktu', 'Username', 'Akun', 'Peran', 'Area', 'Lokasi akun', 'Halaman', 'Jenis', 'Periode', 'Cakupan', 'Nama file', 'Jumlah halaman', 'Waktu export di PDF'];
+/** Dipanggil halaman setelah PDF diunduh: satu baris di spreadsheet "Log Export" (folder data), terbaru di paling atas. */
+function catatEkspor(token, o) {
+  const ses = sesi_(token); o = o || {};
+  const t = x => { const v = teks(x).slice(0, 200); return /^[=+\-@]/.test(v) ? "'" + v : v; };   // cegah teks dibaca sebagai rumus
+  const wPdf = o.waktuPdf ? new Date(o.waktuPdf) : null;
+  const row = [new Date(), ses.u || '', ses.nama || '', ses.peran || '', ses.area || '', ses.lok || '', t(o.halaman), t(o.jenis), t(o.periode), t(o.cakupan), t(o.file),
+    Number(o.halamanPdf) || '', wPdf && !isNaN(wPdf) ? wPdf : ''];
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const sh = bukaAtauBuat(DriveApp.getFolderById(CFG.FOLDER_ID), LOG_EKSPOR, [[LOG_EKSPOR, LOG_EKSPOR_HDR]]).getSheetByName(LOG_EKSPOR);
+    sh.insertRowAfter(1);
+    sh.getRange(2, 1, 1, row.length).setValues([row]).setFontWeight('normal').setFontColor('#000000').setBackground(null);
+    sh.getRange(2, 1).setNumberFormat('dd/MM/yyyy HH:mm:ss'); if (row[12]) sh.getRange(2, 13).setNumberFormat('dd/MM/yyyy HH:mm:ss');
+  } finally { lock.releaseLock(); }
+  return true;
+}
+
+/**
+ * Menu: akun Lokasi yang menunjuk lokasi yang sama (ejaan lama / ALIAS_LOKASI, mis. FT PANGKAL BALAM & FT PANGKALAN BALAM)
+ * dijadikan satu. Yang dipertahankan: baris yang Lokasi-nya sudah memakai nama sekarang; kolom Lokasi & Nama disamakan.
+ */
+function rapikanAkunGanda() {
+  const sh = sheetAkun_(); if (!sh || sh.getLastRow() < 2) return;
+  const v = sh.getRange(2, 1, sh.getLastRow() - 1, AKUN_HDR.length).getValues(), grup = {};
+  v.forEach((r, i) => {
+    if (teks(r[3]).toUpperCase() !== 'LOKASI' || !teks(r[5])) return;
+    (grup[kunciLok(r[5])] = grup[kunciLok(r[5])] || []).push(i);
+  });
+  const hapus = [], pesan = [];
+  Object.keys(grup).forEach(k => {
+    const ii = grup[k], lok = teks(v[ii[0]][5]).toUpperCase(), baku = ALIAS_LOKASI[lok] || lok;
+    const simpan = ii.filter(i => teks(v[i][5]).toUpperCase() === baku)[0];
+    const pakai = simpan !== undefined ? simpan : ii[0];
+    if (teks(v[pakai][5]).toUpperCase() !== baku) { sh.getRange(pakai + 2, 6).setValue(baku); sh.getRange(pakai + 2, 3).setValue('Lokasi ' + baku); }
+    ii.filter(i => i !== pakai).forEach(i => { hapus.push(i); pesan.push(teks(v[i][0]) + ' -> ' + teks(v[pakai][0])); });
+  });
+  hapus.sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
+  CacheService.getScriptCache().remove('LGLIST');
+  const t = hapus.length ? hapus.length + ' akun ganda dihapus (dipakai akun sebelah kanan): ' + pesan.join(', ') : 'Tidak ada akun ganda.';
+  try { SpreadsheetApp.getUi().alert(t); } catch (e) { Logger.log(t); }
 }
 /** Password pendek yang mudah diingat: username tanpa titik + 2 angka acak, mis. ft.jambi -> ftjambi48. */
 function pwPendek_(u) {
@@ -701,6 +746,10 @@ function bacaPemetaan(v) {
 const ALIAS_LOKASI = {
   'FT SIMELUE': 'FT SIMEULUE', 'IT PANGKAL BALAM': 'FT PANGKALAN BALAM', 'FT WAYAME': 'IT WAYAME',
   'FT GORONTALO': 'IT GORONTALO', 'FT KENDARI': 'IT KENDARI',
+  'FT PANGKAL BALAM': 'FT PANGKALAN BALAM', 'FT KOLONEDALE': 'FT KOLONODALE', 'FT SIANTAR': 'FT PEMATANG SIANTAR',
+  'IT IT PONTIANAK': 'IT PONTIANAK', 'PONTIANAK': 'IT PONTIANAK', 'FT PONTIANAK': 'IT PONTIANAK',
+  'SAMARINDA': 'FT SAMARINDA', 'IT SAMARINDA': 'FT SAMARINDA', 'BALIKPAPAN': 'IT BALIKPAPAN', 'BANJARMASIN': 'IT BANJARMASIN',
+  'IT BADAS': 'FT BADAS', 'FT TENAU': 'IT TENAU', 'FT DONGGALA': 'IT DONGGALA',
 };
 function kunciLok(l) { const u = teks(l).toUpperCase(); return (ALIAS_LOKASI[u] || u).replace(/[^A-Z0-9]/g, ''); }
 /** "Sumbagut 1" / "SUMBAGUT II" -> "SUMBAGUT"; nama area yang tidak dikenal -> '' (area diambil dari lokasinya). */
