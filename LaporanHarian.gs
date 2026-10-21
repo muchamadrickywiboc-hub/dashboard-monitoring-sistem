@@ -48,7 +48,15 @@ function halamanLaporanHarian_() {
 }
 
 /** Alamat halaman Laporan, untuk tombol di dashboard bulanan (hanya tampil untuk akun Control Room). */
-function urlLaporanHarian() { return ScriptApp.getService().getUrl() + '?laporan=harian'; }
+/** Laporan Harian (dan export PDF-nya) untuk akun Command Center (AREA). false = disembunyikan; ubah ke true untuk memunculkan kembali. */
+const LH_UNTUK_AREA = false;
+function urlLaporanHarian(peran) { return peran === 'AREA' && !LH_UNTUK_AREA ? '' : ScriptApp.getService().getUrl() + '?laporan=harian'; }
+/** Sesi untuk halaman Laporan; akun AREA ditolak selama LH_UNTUK_AREA = false. */
+function sesiLH_(token) {
+  const ses = sesi_(token);
+  if (ses.peran === 'AREA' && !LH_UNTUK_AREA) throw new Error('Laporan Harian sedang tidak tersedia untuk akun Command Center.');
+  return ses;
+}
 
 /** Case (sudah dinormKasus) -> indeks panel. Teks Case langsung, lalu parameter di sheet Pemetaan. */
 function petaPanel_(peta) {
@@ -102,7 +110,7 @@ function lokasiLH_(ses) {
 }
 /** Dipanggil halaman: akun, daftar lokasi dalam cakupan, dan tanggal terakhir yang ada event. */
 function lhInfo(token) {
-  const ses = sesi_(token);
+  const ses = sesiLH_(token);
   return JSON.stringify({ akun: { nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }, areas: AREAS, tahun: CFG.TAHUN, lokasi: lokasiLH_(ses), tanggalAkhir: tanggalAkhirLH_() });
 }
 /** Tanggal terakhir yang punya data event (yyyy-mm-dd), untuk pilihan awal halaman. */
@@ -129,7 +137,7 @@ const cocokLH_ = (c, lok, area) => c.lok ? kunciLok(lok) === kunciLok(c.lok) : !
  * Baris tabel = lokasi dalam cakupan (Pusat tanpa pilihan area: per Area).
  */
 function lhLaporan(token, periode, area, lokasi) {
-  const ses = sesi_(token), p = teks(periode), bulanan = /^\d{4}-\d{1,2}$/.test(p);
+  const ses = sesiLH_(token), p = teks(periode), bulanan = /^\d{4}-\d{1,2}$/.test(p);
   const tg = tanggalTeks(bulanan ? p + '-01' : p);
   if (!tg) throw new Error('Tanggal tidak valid.');
   const m = tg.m, hari = bulanan ? null : tg.d;
@@ -270,7 +278,7 @@ function bacaInputLH_() {
 }
 /** Isi form untuk satu tanggal & lokasi: data tanggal itu, atau data terakhir sebelumnya sebagai usulan. */
 function lhAmbilInput(token, tanggal, lokasi) {
-  const ses = sesi_(token), tg = tanggalTeks(tanggal), lok = ses.peran === 'LOKASI' ? ses.lok : teks(lokasi).toUpperCase();
+  const ses = sesiLH_(token), tg = tanggalTeks(tanggal), lok = ses.peran === 'LOKASI' ? ses.lok : teks(lokasi).toUpperCase();
   if (!tg || !lok) return JSON.stringify({ ada: null, sebelumnya: null });
   const t = teksTanggal_(tg), L = bacaInputLH_().filter(r => kunciLok(r.lokasi) === kunciLok(lok));
   const sebelum = L.filter(r => r.tanggal < t).sort((a, b) => a.tanggal < b.tanggal ? 1 : -1)[0] || null;
@@ -279,7 +287,7 @@ function lhAmbilInput(token, tanggal, lokasi) {
 }
 /** Menyimpan (menimpa) input satu tanggal & lokasi. Akun Lokasi hanya lokasinya, akun Area hanya lokasi di areanya. */
 function lhSimpanInput(token, o) {
-  const ses = sesi_(token), tg = tanggalTeks(o && o.tanggal);
+  const ses = sesiLH_(token), tg = tanggalTeks(o && o.tanggal);
   if (!tg) throw new Error('Tanggal tidak valid.');
   const info = { lokasi: lokasiLH_(ses) };
   const lok = ses.peran === 'LOKASI' ? ses.lok : teks(o.lokasi).toUpperCase();
@@ -327,17 +335,17 @@ function simpanTtdLH_(lok, nama, gambar, oleh) {
 }
 /** Pratinjau tanda tangan di form input (lokasi + nama operator). */
 function lhTtd(token, lokasi, nama) {
-  const ses = sesi_(token), lok = ses.peran === 'LOKASI' ? ses.lok : teks(lokasi).toUpperCase();
+  const ses = sesiLH_(token), lok = ses.peran === 'LOKASI' ? ses.lok : teks(lokasi).toUpperCase();
   const L = lokasiLH_(ses).filter(x => kunciLok(x.n) === kunciLok(lok))[0];
   return L ? ttdLH_(L.n, nama) : '';
 }
 
 /* ---- Waktu export PDF pertama per laporan (mode | periode | lokasi), disimpan di Script Properties ---- */
 const kunciEkspor_ = k => 'LHEXP_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, teks(k))).slice(0, 20);
-function lhEksporPertama(token, k) { sesi_(token); return PropertiesService.getScriptProperties().getProperty(kunciEkspor_(k)) || ''; }
+function lhEksporPertama(token, k) { sesiLH_(token); return PropertiesService.getScriptProperties().getProperty(kunciEkspor_(k)) || ''; }
 /** Mencatat waktu export (ISO dari browser) hanya bila laporan ini belum pernah diexport; mengembalikan waktu yang tersimpan. */
 function lhCatatEkspor(token, k, iso) {
-  sesi_(token);
+  sesiLH_(token);
   const t = new Date(iso);
   if (isNaN(t) || Math.abs(t.getTime() - Date.now()) > 864e5) throw new Error('Waktu export tidak valid.');
   const P = PropertiesService.getScriptProperties(), kunci = kunciEkspor_(k), lock = LockService.getScriptLock(); lock.waitLock(10000);

@@ -1226,9 +1226,9 @@ function terapkanAkun(p) {
   AKUN = a;
   document.body.classList.remove('nologin', 'peran-area', 'peran-lokasi');
   if (a.peran === 'AREA') document.body.classList.add('peran-area'); else if (a.peran === 'LOKASI') document.body.classList.add('peran-lokasi');
-  // tombol Laporan (Daily & Monthly) untuk Command Center & Control Room; Export PDF dashboard hanya untuk RTC
+  // tombol Laporan (Daily & Monthly) untuk Control Room (Command Center bila LH_UNTUK_AREA = true di LaporanHarian.gs); Export PDF dashboard hanya untuk RTC
   const bh = document.getElementById('btnHarian');
-  if ((a.peran === 'LOKASI' || a.peran === 'AREA') && bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian();
+  if ((a.peran === 'LOKASI' || a.peran === 'AREA') && bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian(a.peran);
   document.getElementById('loginwrap').hidden = true;
   document.getElementById('akunBox').hidden = false;
   const label = a.peran === 'PUSAT' ? 'RTC' : a.peran === 'AREA' ? 'Command Center ' + rn(a.area) : 'Control Room ' + a.lok;
