@@ -158,7 +158,8 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 @media (max-width:480px){.lg-logo img{height:22px}.lg-logo img+.lsep+img{height:19px}.lg-logo img.rtc{height:27px}.lg-logo{gap:8px;padding:8px 12px}}
 /* Event di Setiap Lokasi: grafik total + kartu per lokasi */
 .evsub{margin:6px 0 4px;font-size:13.5px;font-weight:600;color:var(--ink-2)}
-.evkol{overflow-x:auto}.evkol svg{display:block;width:100%;height:auto}
+.evkol{overflow-x:auto}.evkol svg{display:block;width:100%;height:auto}.evkol .kb{cursor:pointer}.evkol .kb:hover{opacity:1}
+#kTip{position:fixed;z-index:50;pointer-events:none;background:#1b1f1d;color:#fff;font-size:12.5px;line-height:1.45;padding:8px 11px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);display:none;max-width:240px}#kTip b{font-size:13px}
 .evgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;align-items:start}
 .evcard{border:1px solid var(--grid);border-radius:12px;padding:10px 12px;break-inside:avoid}
 .evh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:4px}
@@ -1153,7 +1154,7 @@ function gambar(L) {
       <div class="legend"><span><i style="background:var(--gps)"></i>GPS</span><span><i style="background:var(--cam)"></i>Dashcam (ADAS)</span></div>${grafikGaris(L.perHari)}</div>
     <div class="panel"><div class="ph"><h2>Event harian</h2><p>Jumlah seluruh event per tanggal</p></div>${grafikKolom(L.perHari)}</div>
   </section>`;
-  h += `<section class="panel"><div class="ph"><h2>Event di Setiap ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · jumlah case per jenis event, diurutkan dari yang terbanyak</p></div>${grafikLokasi(L)}</section>`;
+  h += `<section class="panel"><div class="ph"><h2>Event di Setiap ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · ${L.panel[0] && L.panel[0].rows.length === 1 ? 'jumlah case per jenis event · batang gelap = terbanyak, garis putus-putus = rata-rata' : 'jumlah case per jenis event, diurutkan dari yang terbanyak'}</p></div>${grafikLokasi(L)}</section>`;
   $('isi').innerHTML = h;
 }
 // warna tetap per jenis event (urutan panel di LaporanHarian.gs)
@@ -1167,6 +1168,10 @@ function grafikLokasi(L) {
   const rows = Array.from({length: n}, (_, r) => { const v = L.panel.map(p => p.rows[r].v); return {n: L.panel[0].rows[r].n, v, t: v.reduce((s, x) => s + x, 0)}; }).sort((a, b) => b.t - a.t || a.n.localeCompare(b.n));
   const nama = x => esc(L.baris === 'Area' ? x : judul(x));
   if (!J.length) return '<div class="kosong">Belum ada event pada periode ini.</div>';
+  // satu lokasi: grafik batang per jenis event (urutan tetap), seperti grafik tren di dashboard
+  if (n === 1) { const tot = rows[0].t;
+    return kolomLokasi(L.panel.map(p => ({n: p.grafik, t: p.total})), x => esc(x), {miring: false, label: 'Jumlah event per jenis event',
+      tip: r => `<b>${esc(r.n)}</b><br>${nf(r.t)} event<br>${tot ? fp(r.t / tot * 100) : '0%'} dari total`}); }
   const kartu = rows.map(r => { const m = Math.max(1, ...J.map(o => r.v[o.i]));
     return `<div class="evcard${r.t ? '' : ' nol'}"><div class="evh"><b title="${nama(r.n)}">${nama(r.n)}</b><span>${nf(r.t)}</span></div>` + (r.t
       ? J.map(o => `<div class="evm${r.v[o.i] ? '' : ' nol'}"><span title="${esc(o.p.tabel)}">${esc(o.p.grafik)}</span><span class="evt"><i style="width:${r.v[o.i] / m * 100}%;background:${o.c}"></i></span><span>${nf(r.v[o.i])}</span></div>`).join('')
@@ -1174,21 +1179,32 @@ function grafikLokasi(L) {
   return (rows.length > 1 ? `<h3 class="evsub">Total event per ${L.baris.toLowerCase()}</h3>${kolomLokasi(rows, nama)}<h3 class="evsub">Rincian jenis event per ${L.baris.toLowerCase()}</h3>` : '') + `<div class="evgrid">${kartu}</div>`;
 }
 // grafik batang tegak: total event tiap lokasi, batang tertinggi paling gelap, garis putus-putus = rata-rata
-function kolomLokasi(rows, nama) {
-  const n = rows.length, W = Math.max(1100, n * 46), H = 330, ml = 46, mr = 70, mt = 26, mb = 96, iw = W - ml - mr, ih = H - mt - mb;
+function kolomLokasi(rows, nama, o = {}) {
+  const miring = o.miring !== false, n = rows.length, W = Math.max(1100, n * 46), H = miring ? 330 : 300, ml = 46, mr = 70, mt = 26, mb = miring ? 96 : 60, iw = W - ml - mr, ih = H - mt - mb;
+  const maks = Math.max(...rows.map(r => r.t));
   const m0 = Math.max(1, ...rows.map(r => r.t)) * 1.08, p = Math.pow(10, Math.floor(Math.log10(m0))), mx = Math.max(5, [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => m0 / p <= x) * p);
   const nt = [5, 4, 3, 6].find(k => Number.isInteger(mx / k) && /^(1|2|2\.5|5)0*$/.test(String(mx / k / Math.pow(10, Math.floor(Math.log10(mx / k)))))) || 4;
   const y = v => mt + ih - v / mx * ih, w = iw / n, bw = Math.min(34, w * .62), avg = rows.reduce((s, r) => s + r.t, 0) / n;
   const tk = Array.from({length: nt + 1}, (_, i) => mx / nt * i);
-  return `<div class="evkol"><svg viewBox="0 0 ${W} ${H}" style="min-width:${Math.min(W, 760)}px" role="img" aria-label="Total event per lokasi">
+  const tipTeks = r => o.tip ? o.tip(r) : `<b>${nama(r.n)}</b><br>${nf(r.t)} event`;
+  const potong = t => { const k = String(t).split(' '), b = ['']; k.forEach(x => { if ((b[b.length - 1] + ' ' + x).trim().length > 13 && b[b.length - 1]) b.push(x); else b[b.length - 1] = (b[b.length - 1] + ' ' + x).trim(); }); return b.slice(0, 2); };
+  return `<div class="evkol"><svg viewBox="0 0 ${W} ${H}" style="min-width:${Math.min(W, 760)}px" role="img" aria-label="${o.label || 'Total event per lokasi'}">
     ${tk.map(v => `<line x1="${ml}" x2="${W - mr}" y1="${y(v)}" y2="${y(v)}" stroke="#e6e9e6"/><text class="tick" x="${ml - 6}" y="${y(v) + 4}" text-anchor="end">${sk(v)}</text>`).join('')}
-    ${rows.map((r, i) => { const cx = ml + w * i + w / 2, top = i === 0 && r.t;
-      return (r.t ? `<rect x="${(cx - bw / 2).toFixed(1)}" y="${y(r.t).toFixed(1)}" width="${bw.toFixed(1)}" height="${(mt + ih - y(r.t)).toFixed(1)}" rx="3" fill="${top ? '#2f5a37' : '#4a7a53'}" opacity="${top ? 1 : .55}"><title>${nama(r.n)}: ${nf(r.t)} event</title></rect>
+    ${rows.map((r, i) => { const cx = ml + w * i + w / 2, top = r.t && r.t === maks;
+      return (r.t ? `<rect class="kb" data-tip="${esc(tipTeks(r))}" x="${(cx - bw / 2).toFixed(1)}" y="${y(r.t).toFixed(1)}" width="${bw.toFixed(1)}" height="${(mt + ih - y(r.t)).toFixed(1)}" rx="3" fill="${top ? '#2f5a37' : '#4a7a53'}" opacity="${top ? 1 : .55}"></rect>
         <text x="${cx}" y="${y(r.t) - 6}" text-anchor="middle" style="font-size:11px;font-weight:${top ? 700 : 600};fill:#1b1f1d">${sk(r.t)}</text>` : '') +
-        `<text class="tick" transform="translate(${cx + 3},${mt + ih + 12}) rotate(-40)" text-anchor="end" style="${top ? 'font-weight:700;fill:#1b1f1d' : ''}">${nama(r.n)}</text>`; }).join('')}
+        (miring ? `<text class="tick" transform="translate(${cx + 3},${mt + ih + 12}) rotate(-40)" text-anchor="end" style="${top ? 'font-weight:700;fill:#1b1f1d' : ''}">${nama(r.n)}</text>`
+          : potong(r.n).map((t, j) => `<text class="tick" x="${cx}" y="${mt + ih + 17 + j * 14}" text-anchor="middle" style="${top ? 'font-weight:700;fill:#1b1f1d' : ''}">${nama(t)}</text>`).join('')); }).join('')}
     <line x1="${ml}" x2="${W - mr}" y1="${y(avg)}" y2="${y(avg)}" stroke="#1b1f1d" stroke-width="1.4" stroke-dasharray="5 4"/>
     <text x="${W - mr + 6}" y="${y(avg) + 4}" style="font-size:11.5px;font-weight:600;fill:#1b1f1d">rata² ${sk(avg)}</text></svg></div>`;
 }
+// tooltip batang grafik (seperti dashboard)
+document.addEventListener('mouseover', e => { const b = e.target.closest && e.target.closest('.kb'); let t = document.getElementById('kTip');
+  if (!b) { if (t) t.style.display = 'none'; return; }
+  if (!t) { t = document.createElement('div'); t.id = 'kTip'; document.body.appendChild(t); }
+  t.innerHTML = b.dataset.tip; t.style.display = 'block'; });
+document.addEventListener('mousemove', e => { const t = document.getElementById('kTip'); if (!t || t.style.display !== 'block') return;
+  t.style.left = Math.min(e.clientX + 14, innerWidth - t.offsetWidth - 8) + 'px'; t.style.top = Math.max(8, e.clientY - t.offsetHeight - 12) + 'px'; });
 /* grafik SVG sederhana untuk laporan bulanan */
 const GW = 640, GH = 230, GL = 40, GR = 10, GT = 12, GB = 26;
 function sumbuX(n) { const w = (GW - GL - GR) / n; return Array.from({length: n}, (_, i) => (i + 1) % (n > 20 ? 2 : 1) === 1 || n <= 10 ? `<text class="tick" x="${GL + w * i + w / 2}" y="${GH - 8}" text-anchor="middle">${i + 1}</text>` : '').join(''); }
