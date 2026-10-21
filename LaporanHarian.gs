@@ -191,7 +191,7 @@ function lhLaporan(token, periode, area, lokasi) {
     perHari: bulanan ? Array.from({ length: nHari }, (_, k) => { const d = k + 1, u = upHari[d] || kosong();
       return { d: d, event: (evHari[d] || []).reduce((s, v) => s + v, 0), gps: bagi(u.gps), dashcam: bagi(u.cctv) }; }) : [],
     offline: offline, offlineTotal: offSemua.length,
-    operator: satu ? satu.operator : '', supervisor: satu ? satu.supervisor : '',
+    operator: satu ? satu.operator : '', supervisor: satu ? satu.supervisor : '', operatorTtd: satu ? ttdLH_(satu.lokasi, satu.operator) : '',
     adaEvent: adaEvent,
   });
 }
@@ -252,6 +252,7 @@ const teksTanggal_ = tg => CFG.TAHUN + '-' + ('0' + (tg.m + 1)).slice(-2) + '-' 
 /* ---- Input harian GPS / Dashcam / RTC ---- */
 function sheetInputLH_() {
   const ss = bukaAtauBuat(DriveApp.getFolderById(CFG.FOLDER_ID), LH.INPUT_NAMA, [['Input', LH.INPUT_HDR]]);
+  LH.ss = ss;
   const sh = ss.getSheetByName('Input');
   sh.getRange('A:A').setNumberFormat('@');   // tanggal disimpan sebagai teks yyyy-mm-dd
   return sh;
@@ -273,7 +274,8 @@ function lhAmbilInput(token, tanggal, lokasi) {
   if (!tg || !lok) return JSON.stringify({ ada: null, sebelumnya: null });
   const t = teksTanggal_(tg), L = bacaInputLH_().filter(r => kunciLok(r.lokasi) === kunciLok(lok));
   const sebelum = L.filter(r => r.tanggal < t).sort((a, b) => a.tanggal < b.tanggal ? 1 : -1)[0] || null;
-  return JSON.stringify({ ada: L.filter(r => r.tanggal === t)[0] || null, sebelumnya: sebelum });
+  const ada = L.filter(r => r.tanggal === t)[0] || null, isi = ada || sebelum;
+  return JSON.stringify({ ada: ada, sebelumnya: sebelum, ttd: isi ? ttdLH_(isi.lokasi, isi.operator) : '' });
 }
 /** Menyimpan (menimpa) input satu tanggal & lokasi. Akun Lokasi hanya lokasinya, akun Area hanya lokasi di areanya. */
 function lhSimpanInput(token, o) {
@@ -294,8 +296,40 @@ function lhSimpanInput(token, o) {
     const i = v.findIndex((r, j) => j > 0 && tanggalTeks(r[0]) && teksTanggal_(tanggalTeks(r[0])) === t && kunciLok(r[2]) === kunciLok(L.n));
     if (i > 0) sh.getRange(i + 1, 1, 1, baru.length).setValues([baru]); else sh.appendRow(baru);
     CacheService.getScriptCache().remove('LHIN');
+    // tanda tangan: o.ttd = data URI baru, '' = hapus, undefined = tidak diubah
+    if (o.ttd !== undefined && teks(o.operator)) {
+      if (o.ttd && (!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/.test(o.ttd) || o.ttd.length > 45000)) throw new Error('File tanda tangan tidak valid atau terlalu besar.');
+      simpanTtdLH_(L.n, o.operator, o.ttd || null, ses.u || ses.nama);
+    }
   } finally { kunci.releaseLock(); }
   return JSON.stringify({ ok: true, lokasi: L.n, tanggal: t });
+}
+
+/* ---- Tanda tangan Operator: sheet "TTD" di spreadsheet input, satu baris per lokasi + nama operator.
+   Gambar disimpan sebagai data URI PNG (diperkecil di browser, < 45.000 karakter = muat dalam satu sel). ---- */
+const TTD_HDR = ['Lokasi', 'Nama Operator', 'Tanda Tangan', 'Diubah oleh', 'Waktu'];
+function sheetTtdLH_() { if (!LH.ss) sheetInputLH_(); return sheetAtauBuat(LH.ss, 'TTD', TTD_HDR); }
+const kunciTtd_ = (lok, nama) => kunciLok(lok) + '|' + teks(nama).toUpperCase();
+function ttdLH_(lok, nama) {
+  if (!teks(nama)) return '';
+  const c = CacheService.getScriptCache(), k = 'LHTTD_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, kunciTtd_(lok, nama))).slice(0, 16);
+  const ada = c.get(k); if (ada !== null) return ada;
+  const r = sheetTtdLH_().getDataRange().getValues().slice(1).filter(x => kunciTtd_(x[0], x[1]) === kunciTtd_(lok, nama))[0];
+  const out = r && /^data:image\/(png|jpeg);base64,/.test(teks(r[2])) ? teks(r[2]) : '';
+  try { c.put(k, out, LH.CACHE_DETIK); } catch (e) { /* tanpa cache */ }
+  return out;
+}
+function simpanTtdLH_(lok, nama, gambar, oleh) {
+  const sh = sheetTtdLH_(), v = sh.getDataRange().getValues(), i = v.findIndex((x, j) => j > 0 && kunciTtd_(x[0], x[1]) === kunciTtd_(lok, nama));
+  if (gambar === null) { if (i > 0) sh.deleteRow(i + 1); }
+  else { const baru = [lok, teks(nama), gambar, oleh, new Date()]; if (i > 0) sh.getRange(i + 1, 1, 1, baru.length).setValues([baru]); else sh.appendRow(baru); }
+  CacheService.getScriptCache().remove('LHTTD_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, kunciTtd_(lok, nama))).slice(0, 16));
+}
+/** Pratinjau tanda tangan di form input (lokasi + nama operator). */
+function lhTtd(token, lokasi, nama) {
+  const ses = sesi_(token), lok = ses.peran === 'LOKASI' ? ses.lok : teks(lokasi).toUpperCase();
+  const L = lokasiLH_(ses).filter(x => kunciLok(x.n) === kunciLok(lok))[0];
+  return L ? ttdLH_(L.n, nama) : '';
 }
 
 /** Logo dari folder data (file gambar yang namanya diawali "Logo"), sebagai data URI; '' bila tidak ada. */

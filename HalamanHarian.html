@@ -168,6 +168,13 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 .evt{height:9px;background:var(--surface-2);border-radius:3px;overflow:hidden}.evt i{display:block;height:100%;border-radius:3px}
 .evm.nol{color:var(--muted)}.evm.nol span:last-child{font-weight:500}
 .evcard.nol{background:var(--surface-2)}.evcard.nol .evh{color:var(--muted);margin:0}.evkosong{font-size:11.5px;color:var(--muted)}
+.ttd{display:block;max-height:54px;max-width:180px;margin-top:6px;object-fit:contain}
+.ttdbox{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.ttdprev{width:200px;height:80px;border:1.5px dashed var(--grid);border-radius:12px;display:grid;place-items:center;background:#fff;overflow:hidden}
+.ttdprev img{max-width:92%;max-height:72px;object-fit:contain}.ttdprev span{font-size:12px;color:var(--muted)}
+.ttdaksi{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:1;min-width:200px}.ttdaksi .sub2{flex-basis:100%;margin:0}
+.pdfwaktu{position:absolute;right:24px;top:72px;text-align:right;font-size:12px;line-height:1.5;color:rgba(255,255,255,.92)}.pdfwaktu b{display:block;font-size:13.5px;color:#fff}
+.pdfhead{position:relative}
 </style>
 </head>
 <body>
@@ -245,6 +252,10 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
       <label class="fld">Nama Operator<input id="inOp" maxlength="80"></label>
       <label class="fld">Nama Fleet Supervisor<input id="inSv" maxlength="80"></label>
     </div>
+    <div class="grp"><b>Tanda tangan Operator</b>
+      <div class="ttdbox"><div class="ttdprev" id="ttdPrev"><span>Belum ada tanda tangan</span></div>
+        <div class="ttdaksi"><label class="btn" for="inTtd">Upload file</label><input type="file" id="inTtd" accept="image/png,image/jpeg" hidden><button class="btn" type="button" id="ttdHapus" hidden>Hapus</button>
+          <span class="sub2">PNG / JPG, sebaiknya latar putih atau transparan. Disimpan per nama operator di lokasi ini.</span></div></div></div>
     <div class="msg" id="inErr"></div>
     <div class="row-end"><button class="btn" type="button" id="inBatal">Batal</button><button class="btn pri" type="submit" id="inSimpan">Simpan</button></div>
   </form>
@@ -1121,7 +1132,7 @@ function gambar(L) {
       <div class="n">Nopol offline tercatat: <b style="color:var(--ink)">${nf(L.offlineTotal)}</b></div></div>
   </section>`;
   if (!bln) h += `<section class="infobar"><div><div class="k">Tanggal</div><div class="v">${esc(per)}</div></div>
-    <div><div class="k">Operator</div><div class="v">${esc(L.operator || '–')}</div></div>
+    <div><div class="k">Operator</div><div class="v">${esc(L.operator || '–')}</div>${L.operatorTtd ? `<img class="ttd" src="${L.operatorTtd}" alt="Tanda tangan ${esc(L.operator)}">` : ''}</div>
     <div><div class="k">Fleet Supervisor · PT Pertamina Patra Niaga</div><div class="v">${esc(L.supervisor || '–')}</div></div></section>`;
   if (bln) h += `<section class="grid g-2">
     <div class="panel"><div class="ph"><h2>Uptime harian</h2><p>Persentase Nopol online per tanggal</p></div>
@@ -1129,8 +1140,6 @@ function gambar(L) {
     <div class="panel"><div class="ph"><h2>Event harian</h2><p>Jumlah seluruh event per tanggal</p></div>${grafikKolom(L.perHari)}</div>
   </section>`;
   h += `<section class="panel"><div class="ph"><h2>Event di Setiap ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · jumlah case per jenis event, diurutkan dari yang terbanyak</p></div>${grafikLokasi(L)}</section>`;
-  h += `<section class="panel"><div class="ph"><h2>Nopol offline</h2><p>${L.offlineTotal ? `${nf(L.offlineTotal)} catatan offline${L.offlineTotal > L.offline.length ? `, ditampilkan ${nf(L.offline.length)} pertama` : ''}` : 'Tidak ada Nopol offline pada periode ini'}</p></div>${tabelOffline(L)}</section>`;
-  h += `<div class="foot"><span>Sumber event: ${esc(L.sumber || '–')} · GPS &amp; Dashcam: Justifikasi Uptime</span><span>PT Pertamina Patra Niaga</span></div>`;
   $('isi').innerHTML = h;
 }
 // warna tetap per jenis event (urutan panel di LaporanHarian.gs)
@@ -1166,12 +1175,6 @@ function kolomLokasi(rows, nama) {
     <line x1="${ml}" x2="${W - mr}" y1="${y(avg)}" y2="${y(avg)}" stroke="#1b1f1d" stroke-width="1.4" stroke-dasharray="5 4"/>
     <text x="${W - mr + 6}" y="${y(avg) + 4}" style="font-size:11.5px;font-weight:600;fill:#1b1f1d">rata² ${sk(avg)}</text></svg></div>`;
 }
-function tabelOffline(L) {
-  if (!L.offline.length) return '';
-  return `<div class="tbl"><table><thead><tr><th>Tanggal</th><th style="text-align:left">Lokasi</th><th style="text-align:left">Perangkat</th><th style="text-align:left">Nopol</th><th>Durasi (menit)</th><th style="text-align:left">Justifikasi</th><th style="text-align:left">Keterangan</th></tr></thead><tbody>
-    ${L.offline.map(r => `<tr><td>${esc(tglPanjang(r.tanggal))}</td><td class="kiri">${esc(judul(r.lokasi))}</td><td class="kiri">${esc(r.perangkat)}</td><td class="kiri">${esc(r.nopol)}</td><td>${r.durasi === '' ? '–' : nf(r.durasi)}</td><td class="wrap-t">${esc(r.justifikasi || '–')}</td><td class="wrap-t">${esc(r.keterangan || '–')}</td></tr>`).join('')}
-  </tbody></table></div>`;
-}
 /* grafik SVG sederhana untuk laporan bulanan */
 const GW = 640, GH = 230, GL = 40, GR = 10, GT = 12, GB = 26;
 function sumbuX(n) { const w = (GW - GL - GR) / n; return Array.from({length: n}, (_, i) => (i + 1) % (n > 20 ? 2 : 1) === 1 || n <= 10 ? `<text class="tick" x="${GL + w * i + w / 2}" y="${GH - 8}" text-anchor="middle">${i + 1}</text>` : '').join(''); }
@@ -1204,6 +1207,11 @@ function grafikKolom(H) {
 const CDN = ['https:', '', 'cdnjs.cloudflare.com', 'ajax', 'libs', ''].join('/');   // alamat disusun tanpa teks "//" utuh
 const PDF_LIB = [CDN + 'html2canvas/1.4.1/html2canvas.min.js', CDN + 'jspdf/2.5.1/jspdf.umd.min.js'];
 const muatSkrip = src => new Promise((ok, bad) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = () => bad(new Error('Pustaka PDF gagal dimuat. Periksa koneksi internet.')); document.head.appendChild(t); });
+// waktu export: "21 Oktober 2026, 11:57:02 WIB" (jam perangkat; zona waktu disebut bila WIB/WITA/WIT)
+function waktuEkspor() {
+  const d = new Date(), j = n => String(n).padStart(2, '0'), off = -d.getTimezoneOffset() / 60, zona = {7: 'WIB', 8: 'WITA', 9: 'WIT'}[off] || ('GMT' + (off >= 0 ? '+' : '') + off);
+  return `${d.getDate()} ${BLN[d.getMonth()]} ${d.getFullYear()}, ${j(d.getHours())}:${j(d.getMinutes())}:${j(d.getSeconds())} ${zona}`;
+}
 $('btnPdf').onclick = async () => {
   const b = $('btnPdf'); if (b.disabled || !LAP) return;
   b.disabled = true; b.textContent = 'Menyiapkan PDF…';
@@ -1214,6 +1222,7 @@ $('btnPdf').onclick = async () => {
     // salinan laporan selebar 1120px: kepala (logo, judul, periode) + isi, tanpa tombol
     box = document.createElement('div'); box.id = 'pdfWrap';
     box.innerHTML = `<div class="pdfhead"><div class="brandbar">${document.querySelector('.hero .tab').outerHTML}</div>
+      <div class="pdfwaktu">Waktu export<b>${esc(waktuEkspor())}</b></div>
       <div class="eyebrow" style="margin-top:14px">${esc($('tEyebrow').textContent)}</div><h1>Laporan Operasional GPS &amp; Dashcam</h1><div class="sub">${esc($('tSub').textContent)}</div></div>
       <div class="wrap">${$('isi').innerHTML}</div>`;
     document.body.appendChild(box);
@@ -1255,6 +1264,26 @@ function hitungOff() {
   $('offRtc').textContent = !ada ? '' : o > t ? 'Online melebihi jumlah terpasang.' : `Offline ${nf(t - o)} · Online ${t ? Math.round(o / t * 100) : 0}%`;
 }
 IN.forEach(k => { $('in' + k).oninput = hitungOff; });
+// tanda tangan: TTD = data URI tampil di form; TTD_UBAH = undefined (tidak diubah) / data URI baru / '' (hapus)
+let TTD = '', TTD_UBAH;
+function tampilTtd(src) { TTD = src || ''; $('ttdPrev').innerHTML = TTD ? `<img src="${TTD}" alt="Tanda tangan">` : '<span>Belum ada tanda tangan</span>'; $('ttdHapus').hidden = !TTD; }
+// gambar diperkecil (lebar maks. 360px) dan disimpan sebagai PNG supaya muat di satu sel spreadsheet
+function kecilkanTtd(file) {
+  return new Promise((ok, bad) => { const fr = new FileReader(); fr.onerror = () => bad(new Error('File tidak bisa dibaca.'));
+    fr.onload = () => { const im = new Image(); im.onerror = () => bad(new Error('File bukan gambar PNG/JPG.'));
+      im.onload = () => { for (const w of [360, 280, 200]) { const s = Math.min(1, w / im.width, 140 / im.height), c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(im.width * s)); c.height = Math.max(1, Math.round(im.height * s)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+          const d = c.toDataURL('image/png'); if (d.length <= 45000) return ok(d); }
+        bad(new Error('Gambar tanda tangan terlalu rumit. Gunakan gambar yang lebih sederhana (latar polos).')); };
+      im.src = fr.result; };
+    fr.readAsDataURL(file); });
+}
+$('inTtd').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (!/^image\/(png|jpeg)$/.test(f.type)) { $('inErr').textContent = 'File tanda tangan harus PNG atau JPG.'; return; }
+  kecilkanTtd(f).then(d => { tampilTtd(d); TTD_UBAH = d; $('inErr').textContent = ''; }).catch(err => { $('inErr').textContent = err.message; }); };
+$('ttdHapus').onclick = () => { tampilTtd(''); TTD_UBAH = ''; };
+$('inOp').onchange = () => { if (TTD_UBAH !== undefined) return; const n = $('inOp').value.trim(); if (!n) return tampilTtd('');
+  run('lhTtd', TOKEN, $('inLok').value, n).then(tampilTtd).catch(() => {}); };
 function isiForm(o, dariSebelumnya) {
   IN.forEach(k => { $('in' + k).value = o ? o[KEY[k]] : ''; });
   $('inOp').value = o ? o.operator || '' : ''; $('inSv').value = o ? o.supervisor || '' : '';
@@ -1262,8 +1291,8 @@ function isiForm(o, dariSebelumnya) {
   hitungOff();
 }
 function muatForm() {
-  $('inErr').textContent = ''; isiForm(null); $('inSub').textContent = 'Memuat…';
-  run('lhAmbilInput', TOKEN, $('inTgl').value, $('inLok').value).then(j => { const r = JSON.parse(j); isiForm(r.ada || r.sebelumnya, !r.ada && !!r.sebelumnya); })
+  $('inErr').textContent = ''; isiForm(null); tampilTtd(''); TTD_UBAH = undefined; $('inSub').textContent = 'Memuat…';
+  run('lhAmbilInput', TOKEN, $('inTgl').value, $('inLok').value).then(j => { const r = JSON.parse(j); isiForm(r.ada || r.sebelumnya, !r.ada && !!r.sebelumnya); tampilTtd(r.ttd); })
     .catch(e => { if (!cekLogin(e)) $('inErr').textContent = pesan(e); });
 }
 $('btnInput').onclick = () => {
@@ -1280,6 +1309,7 @@ $('inBatal').onclick = () => $('dlg').close();
 $('fInput').onsubmit = e => {
   e.preventDefault();
   const o = {tanggal: $('inTgl').value, lokasi: $('inLok').value, operator: $('inOp').value, supervisor: $('inSv').value};
+  if (TTD_UBAH !== undefined) { if (!o.operator.trim()) { $('inErr').textContent = 'Isi Nama Operator untuk menyimpan tanda tangan.'; return; } o.ttd = TTD_UBAH; }
   for (const k of IN) { const v = $('in' + k).value; if (v === '') { $('inErr').textContent = 'Lengkapi jumlah RTC (isi 0 bila tidak ada).'; return; } o[KEY[k]] = +v; }
   if (o.rtcO > o.rtcT) { $('inErr').textContent = 'Jumlah RTC online tidak boleh lebih dari jumlah RTC.'; return; }
   $('inSimpan').disabled = true; $('inErr').textContent = '';
