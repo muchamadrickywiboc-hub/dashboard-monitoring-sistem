@@ -732,11 +732,16 @@ function prosesTarikan() {
     const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
     const logSs = bukaAtauBuat(folder, LOG_NAMA, [[LOG_NAMA, LOG_HDR]]);
     const logSh = logSs.getSheetByName(LOG_NAMA);
-    const logV = logSh.getDataRange().getValues();
+    const daftar = daftarTarikan_(), ada = {};
+    daftar.forEach(o => { ada[o.id] = 1; });
+    // baris log file yang sudah tidak ada di folder (dihapus / diganti file baru) dibuang, supaya peringatan "gagal dibaca" lama tidak muncul terus
+    let logV = logSh.getDataRange().getValues(), dibuang = 0;
+    if (daftar.length) for (let i = logV.length - 1; i >= 1; i--) if (!ada[teks(logV[i][0])]) { logSh.deleteRow(i + 1); dibuang++; }
+    logV = logSh.getDataRange().getValues();
     const sudah = {};
     logV.slice(1).forEach((r, i) => { sudah[r[0]] = { baris: i + 2, diubah: Number(r[4]) || 0, status: teks(r[7]) }; });
 
-    const antre = daftarTarikan_().filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^GAGAL/.test(sudah[o.id].status));   // baru, berubah, atau gagal sebelumnya
+    const antre = daftar.filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^GAGAL/.test(sudah[o.id].status));   // baru, berubah, atau gagal sebelumnya
     antre.sort((a, b) => a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0);
     let n = 0;
     for (const o of antre) {
@@ -750,7 +755,7 @@ function prosesTarikan() {
       n++;
     }
     Logger.log('File tarikan diproses: ' + n + ' dari ' + antre.length + ' yang menunggu.');
-    if (n) { try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }   // cache lama ditimpa, tidak dikosongkan dulu
+    if (n || dibuang) { try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }   // cache lama ditimpa, tidak dikosongkan dulu
   } finally { kunci.releaseLock(); }
 }
 
