@@ -67,6 +67,7 @@ function onOpen() {
       .addSeparator()
       .addItem('Buat / lengkapi akun (Pusat, Area, Lokasi)', 'buatSheetAkun')
       .addItem('Rapikan akun ganda (lokasi sama)', 'rapikanAkunGanda')
+      .addItem('Lengkapi sheet Pemetaan (case tarikan)', 'lengkapiPemetaan')
       .addItem('Amankan password akun', 'amankanPasswordAkun')
       .addItem('Buat ulang semua password (format pendek)', 'buatUlangPasswordAkun')
       .addItem('Keluarkan semua sesi login', 'keluarkanSemuaSesi')
@@ -553,16 +554,20 @@ function hitungJam_(J, m, d, s, h, jendela, peta) {
 }
 
 /* ============================== SHEET DATA KOSONG ============================== */
-/** Menyamakan sheet Pemetaan dan Catatan dengan KASUS_WAJIB (Distraction Mengemudi dan Seat Belt kini dihitung). */
+/** Menyamakan sheet Pemetaan dan Catatan dengan KASUS_WAJIB (Distraction Mengemudi dan Seat Belt kini dihitung) dan KASUS_TARIKAN. */
 function sinkronPemetaan_(ss) {
   const sh = ss.getSheetByName('Pemetaan');
+  let n = 0;
   if (sh && sh.getLastRow() > 1) {
     const v = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues(), ada = {};
     v.forEach((r, i) => { const c = normKasus(r[0]), w = KASUS_WAJIB[c]; if (!c) return; ada[c] = 1;
       if (w && (teks(r[1]) !== w[0] || teks(r[2]) !== w[1])) sh.getRange(i + 2, 2, 1, 2).setValues([w]); });
-    const baru = Object.keys(KASUS_WAJIB).filter(c => !ada[c]);
+    // case wajib + case dari file tarikan (KASUS_TARIKAN) yang belum ada ditambahkan di bawah; baris yang sudah ada tidak diubah
+    const baru = Object.keys(KASUS_WAJIB).filter(c => !ada[c]).map(c => [c].concat(KASUS_WAJIB[c]))
+      .concat(Object.keys(KASUS_TARIKAN).filter(c => !ada[c] && !KASUS_WAJIB[c]).map(c => [c].concat(KASUS_TARIKAN[c])));
     let akhir = v.length; while (akhir > 0 && !teks(v[akhir - 1][0])) akhir--;   // baris terakhir kolom Case (kolom Area/Lokasi bisa lebih panjang)
-    if (baru.length) sh.getRange(akhir + 2, 1, baru.length, 3).setValues(baru.map(c => [c].concat(KASUS_WAJIB[c])));
+    if (baru.length) sh.getRange(akhir + 2, 1, baru.length, 3).setValues(baru);
+    n = baru.length;
   }
   const sc = ss.getSheetByName('Catatan');
   if (sc && sc.getLastRow()) {
@@ -574,6 +579,13 @@ function sinkronPemetaan_(ss) {
       else if (/^Parameter lain:/.test(x)) sc.getRange(i + 1, 1).setValue('Tidak dihitung: CAMERA COVERING ALARM, ILLEGAL SHUTDOWN, REST AREA, VIDEO LOSS / HIGH SPEED / ABNORMAL STORAGE ALARM.');
     });
   }
+  return n;
+}
+/** Menu: menambahkan case file tarikan yang belum ada ke sheet Pemetaan (SOS, HARSH ... ALARM, DRIVER ATTENTION HAS BEEN DISTRACTED, dll.). */
+function lengkapiPemetaan() {
+  const n = sinkronPemetaan_(SpreadsheetApp.open(fileAtur_()));
+  const t = n ? n + ' case baru ditambahkan ke sheet Pemetaan.' : 'Sheet Pemetaan sudah lengkap.';
+  try { SpreadsheetApp.getUi().alert(t); } catch (e) { Logger.log(t); }
 }
 
 /**
