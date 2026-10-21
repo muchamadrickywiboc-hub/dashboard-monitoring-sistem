@@ -351,20 +351,38 @@ function buatSheetAkun() {
 }
 /* ============================== LOG EXPORT ============================== */
 const LOG_EKSPOR = 'Log Export';
-const LOG_EKSPOR_HDR = ['Waktu', 'Username', 'Akun', 'Peran', 'Area', 'Lokasi akun', 'Halaman', 'Jenis', 'Periode', 'Cakupan', 'Nama file', 'Jumlah halaman', 'Waktu export di PDF'];
-/** Dipanggil halaman setelah PDF diunduh: satu baris di spreadsheet "Log Export" (folder data), terbaru di paling atas. */
+const LOG_EKSPOR_HDR = ['ID_Log', 'Area', 'Lokasi', 'Jenis Laporan', 'Tanggal Data', 'Target Pelaporan', 'Realisasi Pelaporan'];
+const TARGET_LAPOR_JAM = 7;   // Daily: H+1 pukul 07.00; Monthly: tanggal 1 bulan berikutnya pukul 07.00
+/**
+ * Dipanggil halaman setelah PDF diunduh: satu baris di spreadsheet "Log Export" (folder data), terbaru di paling atas.
+ * o: { area, lokasi, jenis ('Daily' / 'Monthly' / 'Dashboard ...'), tanggalData ('yyyy-mm-dd' / 'yyyy-mm' / teks), waktuPdf (ISO) }
+ */
 function catatEkspor(token, o) {
   const ses = sesi_(token); o = o || {};
   const t = x => { const v = teks(x).slice(0, 200); return /^[=+\-@]/.test(v) ? "'" + v : v; };   // cegah teks dibaca sebagai rumus
-  const wPdf = o.waktuPdf ? new Date(o.waktuPdf) : null;
-  const row = [new Date(), ses.u || '', ses.nama || '', ses.peran || '', ses.area || '', ses.lok || '', t(o.halaman), t(o.jenis), t(o.periode), t(o.cakupan), t(o.file),
-    Number(o.halamanPdf) || '', wPdf && !isNaN(wPdf) ? wPdf : ''];
+  const area = t(o.area || ses.area || ''), lokasi = t(o.lokasi || ses.lok || ''), jenis = t(o.jenis);
+  const d = teks(o.tanggalData).match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/);
+  let tgl = t(o.tanggalData), target = '', fmtTgl = '@';
+  if (d && d[3]) { tgl = new Date(+d[1], +d[2] - 1, +d[3]); fmtTgl = 'dd/MM/yyyy'; if (jenis === 'Daily') target = new Date(+d[1], +d[2] - 1, +d[3] + 1, TARGET_LAPOR_JAM); }
+  else if (d) { tgl = new Date(+d[1], +d[2] - 1, 1); fmtTgl = 'MMMM yyyy'; if (jenis === 'Monthly') target = new Date(+d[1], +d[2], 1, TARGET_LAPOR_JAM); }
+  const w = o.waktuPdf ? new Date(o.waktuPdf) : null, realisasi = w && !isNaN(w) && Math.abs(w - Date.now()) < 864e5 * 400 ? w : new Date();
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
-    const sh = bukaAtauBuat(DriveApp.getFolderById(CFG.FOLDER_ID), LOG_EKSPOR, [[LOG_EKSPOR, LOG_EKSPOR_HDR]]).getSheetByName(LOG_EKSPOR);
+    const ss = bukaAtauBuat(DriveApp.getFolderById(CFG.FOLDER_ID), LOG_EKSPOR, [[LOG_EKSPOR, LOG_EKSPOR_HDR]]);
+    let sh = ss.getSheetByName(LOG_EKSPOR);
+    if (sh.getRange(1, 1, 1, LOG_EKSPOR_HDR.length).getValues()[0].join('|') !== LOG_EKSPOR_HDR.join('|')) {   // format kolom lama -> disimpan, buat sheet baru
+      sh.setName(LOG_EKSPOR + ' (format lama)');
+      sh = ss.insertSheet(LOG_EKSPOR, 0);
+      sh.getRange(1, 1, 1, LOG_EKSPOR_HDR.length).setValues([LOG_EKSPOR_HDR]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#4a7a53');
+      sh.setFrozenRows(1);
+    }
+    const ids = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues() : [];
+    const no = ids.reduce((m, r) => Math.max(m, +(teks(r[0]).match(/(\d+)$/) || [0, 0])[1]), 0) + 1;
     sh.insertRowAfter(1);
-    sh.getRange(2, 1, 1, row.length).setValues([row]).setFontWeight('normal').setFontColor('#000000').setBackground(null);
-    sh.getRange(2, 1).setNumberFormat('dd/MM/yyyy HH:mm:ss'); if (row[12]) sh.getRange(2, 13).setNumberFormat('dd/MM/yyyy HH:mm:ss');
+    sh.getRange(2, 1, 1, 7).setValues([['LOG-' + ('00000' + no).slice(-6), area, lokasi, jenis, tgl, target, realisasi]])
+      .setFontWeight('normal').setFontColor('#000000').setBackground(null);
+    sh.getRange(2, 5).setNumberFormat(fmtTgl);
+    sh.getRange(2, 6, 1, 2).setNumberFormat('dd/MM/yyyy HH:mm:ss');
   } finally { lock.releaseLock(); }
   return true;
 }

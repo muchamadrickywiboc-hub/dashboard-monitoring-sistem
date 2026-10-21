@@ -189,6 +189,7 @@ function lhLaporan(token, periode, area, lokasi) {
 
   return JSON.stringify({
     mode: bulanan ? 'bulanan' : 'harian', periode: bulanan ? awal.slice(0, 7) : awal,
+    area: c.area || (c.lok ? areaDari(c.lok, '') : ''),
     lokasi: c.lok || (c.area ? 'Command Center ' + c.area : 'Semua Area'), baris: perArea ? 'Area' : 'Lokasi', sumber: E.sumber,
     panel: LH_PANEL.map((pn, i) => ({ tabel: pn.tabel, grafik: pn.grafik, rows: baris.map((n, j) => ({ n: n, v: V[i][j] || 0 })), total: V[i].reduce((s, v) => s + (v || 0), 0) })),
     perangkat: {

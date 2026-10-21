@@ -1287,8 +1287,8 @@ $('btnPdf').onclick = async () => {
     const nama = `Laporan ${LAP.mode === 'bulanan' ? 'Monthly' : 'Daily'} ${LAP.baris === 'Area' ? LAP.lokasi : judul(LAP.lokasi)} ${per}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
     try { pdf.save(nama); } catch (e) { window.open(pdf.output('bloburl'), '_blank'); }
     if (!pertama) run('lhCatatEkspor', TOKEN, kunci, waktu.toISOString()).catch(() => {});
-    run('catatEkspor', TOKEN, {halaman: 'Laporan Harian', jenis: LAP.mode === 'bulanan' ? 'Monthly' : 'Daily', periode: per,
-      cakupan: LAP.baris === 'Area' ? LAP.lokasi : judul(LAP.lokasi), file: nama, halamanPdf: potong.length, waktuPdf: waktu.toISOString()}).catch(() => {});
+    run('catatEkspor', TOKEN, {area: LAP.area || '', lokasi: LAP.baris === 'Area' ? 'Semua lokasi' : LAP.lokasi,
+      jenis: LAP.mode === 'bulanan' ? 'Monthly' : 'Daily', tanggalData: LAP.periode, waktuPdf: waktu.toISOString()}).catch(() => {});
   } catch (e) { const d = document.createElement('div'); d.className = 'errbar'; d.textContent = 'Export PDF gagal: ' + pesan(e); $('isi').prepend(d); }
   finally { if (box) box.remove(); b.disabled = !LAP; b.textContent = 'Export PDF'; }
 };
