@@ -60,6 +60,7 @@ function onOpen() {
       .addItem('Pasang pemicu otomatis', 'pasangPemicu')
       .addItem('Proses file tarikan sekarang', 'prosesTarikan')
       .addItem('Proses ulang semua file tarikan', 'prosesUlangSemuaTarikan')
+      .addItem('Baca ulang tarikan satu area…', 'menuBacaUlangArea')
       .addSeparator()
       .addItem('Buat / lengkapi akun (Pusat, Area, Lokasi)', 'buatSheetAkun')
       .addItem('Amankan password akun', 'amankanPasswordAkun')
@@ -843,6 +844,52 @@ function prosesUlangSemuaTarikan() {
   if (n > 0) sh.getRange(2, 5, n, 1).setValue(0);   // kolom "Diubah" = 0 -> dianggap berubah
   prosesTarikan();
 }
+
+/**
+ * Membaca ulang semua file tarikan satu area (mis. setelah file di folder area itu diganti / diunggah ulang):
+ * 1. baris hasil dari file yang sudah tidak ada di folder area (diunggah ulang dengan file baru / dihapus) dibuang,
+ *    supaya tidak terhitung dobel;
+ * 2. semua file area itu ditandai berubah lalu diproses ulang (sisa antrean dilanjutkan pemicu 15 menit).
+ */
+function bacaUlangTarikanArea(area) {
+  area = teks(area).toUpperCase();
+  const daftar = daftarTarikan_().filter(o => o.area === area);
+  if (!daftar.length) throw new Error('Tidak ada file tarikan untuk area ' + area + '. Periksa nama area di spreadsheet Tarikan Sistem.');
+  const ada = {}; daftar.forEach(o => { ada[o.id] = 1; });
+  const folder = DriveApp.getFolderById(CFG.FOLDER_ID), it = folder.getFilesByType(MimeType.GOOGLE_SHEETS), kolomArea = { 'Event': 1, 'AMT': 0, 'Event Jam': 2, 'AMT Jam': 2 };
+  let buang = 0;
+  while (it.hasNext()) {
+    const f = it.next(); if (!/^TARIKAN\s+\d{1,2}\b/i.test(teks(f.getName()))) continue;
+    const ss = SpreadsheetApp.open(f);
+    Object.keys(kolomArea).forEach(n => {
+      const sh = ss.getSheetByName(n); if (!sh || sh.getLastRow() < 2) return;
+      const v = sh.getDataRange().getValues(), w = v[0].length, ka = kolomArea[n];
+      const sisa = v.slice(1).filter(r => teks(r[ka]).toUpperCase() !== area || ada[teks(r[w - 1])]);
+      if (sisa.length === v.length - 1) return;
+      buang += v.length - 1 - sisa.length;
+      sh.getRange(2, 1, v.length - 1, w).clearContent();
+      if (sisa.length) sh.getRange(2, 1, sisa.length, w).setValues(sisa);
+    });
+  }
+  // tandai semua file area ini berubah -> diproses ulang
+  const itL = folder.getFilesByName(LOG_NAMA);
+  if (itL.hasNext()) {
+    const sh = SpreadsheetApp.open(itL.next()).getSheetByName(LOG_NAMA), v = sh.getDataRange().getValues();
+    v.forEach((r, i) => { if (i && ada[teks(r[0])]) sh.getRange(i + 1, 5).setValue(0); });
+  }
+  const pesan = area + ': ' + daftar.length + ' file ditandai untuk dibaca ulang, ' + buang + ' baris lama dari file yang sudah tidak ada dibuang. '
+    + 'Pemrosesan berjalan sekarang; sisanya dilanjutkan otomatis tiap 15 menit (lihat sheet Log Tarikan).';
+  Logger.log(pesan);
+  prosesTarikan();
+  return pesan;
+}
+function menuBacaUlangArea() {
+  const ui = SpreadsheetApp.getUi(), r = ui.prompt('Baca ulang tarikan', 'Nama area (sesuai spreadsheet Tarikan Sistem), mis. SUMBAGSEL:', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK || !teks(r.getResponseText())) return;
+  ui.alert(bacaUlangTarikanArea(r.getResponseText()));
+}
+/** Jalankan dari editor: baca ulang semua file tarikan Sumbagsel. */
+function BACA_ULANG_SUMBAGSEL() { bacaUlangTarikanArea('SUMBAGSEL'); }
 
 function namaAmt(x) {
   const s = teks(x).replace(/\s*[\[(].*?[\])]\s*/g, ' ').replace(/^[\s.\-]+|[\s.\-]+$/g, '').toUpperCase();
