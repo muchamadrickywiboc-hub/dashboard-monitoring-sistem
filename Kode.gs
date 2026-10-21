@@ -724,6 +724,10 @@ const KASUS_TARIKAN = {
   'BLACKZONE ALARM': ['Black Zone', 'Driver Discipline'], 'IDLE REPORT': ['Idling', 'Driver Discipline'],
   'DRIVER IS USING PHONE': ['Menggunakan Telepon', 'Driver Discipline'], 'DRIVER HAS BEEN SMOKING': ['Merokok / Vape', 'Driver Discipline'],
   'DRIVER HAS BEEN YAWNING': ['Menguap', 'Fatigue Management'],
+  'HARSH CORNERING ALARM': ['Harsh Turn / Cornering', 'Driving Behaviour'], 'HARSH TURN ALARM': ['Harsh Turn / Cornering', 'Driving Behaviour'],
+  'HARSH BRAKING ALARM': ['Harsh Braking', 'Driving Behaviour'], 'HARSH BRAKE ALARM': ['Harsh Braking', 'Driving Behaviour'], 'HARSH BREAKING ALARM': ['Harsh Braking', 'Driving Behaviour'],
+  'HARSH ACCELERATION ALARM': ['Harsh Acceleration', 'Driving Behaviour'],
+  'DRIVER ATTENTION HAS BEEN DISTRACTED': ['Distraction Mengemudi', 'Driver Discipline'],
 };
 /** Event yang selalu dihitung, menimpa baris lama di sheet Pemetaan ("Parameter lain" / "Tidak dihitung"). */
 const KASUS_WAJIB = {
@@ -731,11 +735,11 @@ const KASUS_WAJIB = {
   'SEAT BELT DETECTION': ['Seat Belt', 'Driver Discipline'], 'SEATBELT DETECTION': ['Seat Belt', 'Driver Discipline'],
   'DRIVER IS NOT USING SEAT-BELT': ['Seat Belt', 'Driver Discipline'],
 };
-/** Menyeragamkan teks Case: huruf besar; "Blackzone Alarm - <nama zona>" -> "BLACKZONE ALARM"; "Over Speed Alarm (62 Km/H)" -> "OVER SPEED ALARM". */
+/** Menyeragamkan teks Case: huruf besar; "Blackzone Alarm - <nama zona>" -> "BLACKZONE ALARM"; "Over Speed Alarm (62 Km/H)" -> "OVER SPEED ALARM"; "Harsh Cornering Alarm (0.08G)" -> "HARSH CORNERING ALARM". */
 function normKasus(x) {
   let s = teks(x).toUpperCase();
   if (/^BLACK ?ZONE ALARM/.test(s)) return 'BLACKZONE ALARM';
-  s = s.replace(/\s*\(\d+\s*KM\/H\)\s*$/, '');
+  s = s.replace(/\s*\(\s*[\d.,]+\s*(?:KM\/H|G)?\s*\)\s*$/, '');   // nilai ukur di belakang: (62 Km/H), (0.08G)
   return s;
 }
 
