@@ -27,6 +27,7 @@ const CFG = {
   BULAN_TARIKAN: 10,       // mulai bulan ini (10 = Oktober) data HANYA dari tarikan (link Tarikan Sistem); bulan sebelumnya dari file "Data <nn> ..." (summary)
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
+  JEDA_GABUNG_DETIK: 10,   // alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
 };
 const REGIONS = ['SUMBAGUT', 'SUMBAGSEL', 'JABALINUS', 'KALIMANTAN', 'SULAWESI', 'MALUPA'];
 /** Area = satuan filter dashboard (kolom Area di data). */
@@ -790,13 +791,21 @@ function prosesSatuTarikan(folder, o) {
     const k = petaKolom(sh.getRange(1, 1, 1, nc).getValues()[0]);
     const kol = h => { if (k[h] === undefined) return null; return sh.getRange(2, k[h] + 1, nr, 1).getValues(); };
     const tb = kol('TBBM'), al = kol('ALARM STATUS'), am = kol('AMT 1'), gid = kol('ALERT GROUP ID'), wk = kol('TIME') || kol('START ALERT');
+    const pl = kol('PLATE') || kol('IMEI'), jeda = (CFG.JEDA_GABUNG_DETIK || 0) * 1000;
     if (!tb || !al) throw new Error('kolom TBBM / Alarm Status tidak ditemukan');
-    const ev = {}, evj = {}, amt = {}, amj = {}, lihat = {};
+    const ev = {}, evj = {}, amt = {}, amj = {}, lihat = {}, akhir = {};
+    // urut waktu supaya alert beruntun per nopol bisa digabung
+    const ms = wk ? wk.map(r => waktuMs(r[0])) : [], urut = [];
+    for (let i = 0; i < nr; i++) urut.push(i);
+    if (jeda && pl && wk) urut.sort((a, b) => (ms[a] || 0) - (ms[b] || 0));
     let n = 0;
-    for (let i = 0; i < nr; i++) {
+    for (const i of urut) {
       const c = normKasus(al[i][0]); if (!c) continue;
       const g = gid ? teks(gid[i][0]) : '';
       if (g) { if (lihat[g]) continue; lihat[g] = 1; }   // baris dobel (Alert Group ID sama) dihitung sekali
+      // alert yang sama dari kendaraan yang sama berulang tiap 1-10 detik (mis. Yawning) = satu kejadian
+      const kp = pl ? teks(pl[i][0]).toUpperCase() + '\u0001' + c : '', t = ms[i];
+      if (jeda && kp && t !== null && t !== undefined) { const s = akhir[kp]; akhir[kp] = t; if (s !== undefined && t - s <= jeda) continue; }
       const lok = teks(tb[i][0]).toUpperCase();
       const ke = lok + '\u0001' + c; ev[ke] = (ev[ke] || 0) + 1; n++;
       const jam = wk ? jamDari(wk[i][0]) : null;
@@ -820,6 +829,12 @@ function prosesSatuTarikan(folder, o) {
   }
 }
 
+/** Waktu (ms) dari kolom Time: nilai tanggal-jam Sheets atau teks "yyyy-mm-dd hh:mm:ss"; null bila tidak terbaca. */
+function waktuMs(x) {
+  if (x instanceof Date) return x.getTime();
+  const t = teks(x).match(/^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  return t ? new Date(+t[1], +t[2] - 1, +t[3], +t[4], +t[5], +(t[6] || 0)).getTime() : null;
+}
 /** Jam kejadian (0-23) dari kolom Time: nilai tanggal-jam Sheets atau teks "yyyy-mm-ddThh:mm:ss". */
 function jamDari(x) {
   if (x instanceof Date) return x.getHours();
