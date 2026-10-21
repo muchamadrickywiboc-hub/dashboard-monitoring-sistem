@@ -52,7 +52,7 @@ function halamanLaporanHarian_() {
 
 /** Alamat halaman Laporan, untuk tombol di dashboard bulanan (hanya tampil untuk akun Control Room). */
 /** Laporan Harian (dan export PDF-nya) untuk akun Command Center (AREA). false = disembunyikan; ubah ke true untuk memunculkan kembali. */
-const LH_UNTUK_AREA = false;
+const LH_UNTUK_AREA = true;
 function urlLaporanHarian(peran) { return peran === 'AREA' && !LH_UNTUK_AREA ? '' : ScriptApp.getService().getUrl() + '?laporan=harian'; }
 /** Sesi untuk halaman Laporan; akun AREA ditolak selama LH_UNTUK_AREA = false. */
 function sesiLH_(token) {
