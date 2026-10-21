@@ -1069,7 +1069,7 @@ function bacaLogTarikan(folder) {
  *   fakta  : [[bulan, indeks area, indeks lokasi, indeks parameter, jumlah]]
  *   harian : [[bulan, tanggal, indeks area, indeks lokasi, DB, DD, FM]]
  *   driver : { all, area, lok, nama } -> [[bulan, indeks area, indeks lokasi, indeks parameter, indeks nama, jumlah]]
- *            10 Driver teratas per bulan x parameter, untuk semua area, per area, dan per lokasi (kolom AMT 1).
+ *            5 Driver teratas per bulan x parameter, untuk semua area, per area, dan per lokasi (kolom AMT 1).
  */
 function hitung_(EV, AM, peta, catatan, peringatan) {
   const ada = {}; EV.forEach(e => { ada[e[0]] = 1; });
@@ -1116,7 +1116,7 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
   });
   if (tanpaArea) catatan.push('Data: ' + tanpaArea + ' event tanpa Area dan Lokasi yang jelas tidak dihitung.');
 
-  // Driver: jumlah per bulan x lokasi x parameter x nama, lalu 10 teratas per parameter
+  // Driver: jumlah per bulan x lokasi x parameter x nama, lalu 5 teratas per parameter
   //         untuk semua area, per area, dan per lokasi. Nama disimpan sekali di daftar `nama`.
   const X = {};
   AM.forEach(r => {
@@ -1139,7 +1139,7 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
     });
     const K = {}; Object.keys(G).forEach(k => (K[G[k].g] = K[G[k].g] || []).push(G[k]));
     const out = [];
-    Object.keys(K).forEach(g => K[g].sort((a, b) => b.n - a.n).slice(0, 10)
+    Object.keys(K).forEach(g => K[g].sort((a, b) => b.n - a.n).slice(0, 5)
       .forEach(o => out.push([o.m, terbesar(o.areaT), terbesar(o.lokT), o.p, ni(o.nama), o.n])));
     return out;
   };
