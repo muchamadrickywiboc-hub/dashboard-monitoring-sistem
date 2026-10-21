@@ -40,6 +40,9 @@ const LH_PANEL = [
   { k: 'DS', tabel: 'Distraction Mengemudi', grafik: 'Distraction Mengemudi', kasus: ['DRIVER DISTRACTION', 'DRIVER ATTENTION HAS BEEN DISTRACTED'], param: ['DISTRACTION MENGEMUDI'] },
 ];
 
+/** Panel yang tidak ditampilkan untuk akun Lokasi (Control Room): Illegal Shutdown, Camera Covering, Fatigue, Driving > 4 hrs, Distraction Mengemudi. */
+const LH_SEMBUNYI_LOKASI = ['IS', 'CC', 'FT', 'D4', 'DS'];
+
 function halamanLaporanHarian_() {
   return HtmlService.createHtmlOutputFromFile('HalamanHarian')
     .setTitle('Laporan Operasional GPS & Dashcam')
@@ -157,10 +160,10 @@ function lhLaporan(token, periode, area, lokasi) {
   else info.filter(o => cocokLH_(c, o.n, o.a)).forEach(o => tambah(o.n, o.a));
 
   // event
-  const V = LH_PANEL.map(() => []), evHari = {};
+  const V = LH_PANEL.map(() => []), evHari = {}, tampil = LH_PANEL.map(p => !(ses.peran === 'LOKASI' && LH_SEMBUNYI_LOKASI.indexOf(p.k) >= 0));
   let adaEvent = false;
   Object.keys(E.tanggal).filter(diHari).forEach(d => E.tanggal[d].forEach(r => {
-    if (!masuk(r[0], r[1])) return;
+    if (!tampil[r[2]] || !masuk(r[0], r[1])) return;
     const i = iBaris(r[0], r[1]); if (i < 0) return;
     V[r[2]][i] = (V[r[2]][i] || 0) + r[3]; adaEvent = true;
     (evHari[d] || (evHari[d] = LH_PANEL.map(() => 0)))[r[2]] += r[3];
@@ -192,7 +195,7 @@ function lhLaporan(token, periode, area, lokasi) {
     mode: bulanan ? 'bulanan' : 'harian', periode: bulanan ? awal.slice(0, 7) : awal,
     area: c.area || (c.lok ? areaDari(c.lok, '') : ''),
     lokasi: c.lok || (c.area ? 'Command Center ' + c.area : 'Semua Area'), baris: perArea ? 'Area' : 'Lokasi', sumber: E.sumber,
-    panel: LH_PANEL.map((pn, i) => ({ tabel: pn.tabel, grafik: pn.grafik, rows: baris.map((n, j) => ({ n: n, v: V[i][j] || 0 })), total: V[i].reduce((s, v) => s + (v || 0), 0) })),
+    panel: LH_PANEL.map((pn, i) => ({ w: i, tabel: pn.tabel, grafik: pn.grafik, rows: baris.map((n, j) => ({ n: n, v: V[i][j] || 0 })), total: V[i].reduce((s, v) => s + (v || 0), 0) })).filter((_, i) => tampil[i]),
     perangkat: {
       gps: bagi(up.gps), dashcam: bagi(up.cctv), rtc: { terpasang: jml('rtcT'), online: jml('rtcO') },
       adaJustifikasi: adaJust, lokasiInput: inp.length, lokasiCakupan: perArea ? info.length : baris.length,
