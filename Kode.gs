@@ -73,7 +73,7 @@ function onOpen() {
 
 /** Menu: membangun ulang data dashboard di sini (bukan menghapus cache), jadi pengunjung tidak ikut menunggu. */
 function hapusCache() {
-  CacheService.getScriptCache().remove('LGLIST');
+  CacheService.getScriptCache().removeAll(['LGLIST', 'DASHB4_N']);   // DASHB4 = cache JSON lama (tidak dipakai lagi)
   panaskanCache();
   try { SpreadsheetApp.getActiveSpreadsheet().toast('Data dashboard sudah diperbarui. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Data dashboard diperbarui.'); }
 }
@@ -83,7 +83,7 @@ function UJI_BACA_SUMBER() {
   const d = bangunData_();
   Logger.log('Bulan berisi data: ' + d.bulanAda.map(m => BULAN[m]).join(', '));
   Logger.log('Parameter: ' + d.params.map(p => p.label + ' (' + p.kat + ')').join('; '));
-  Logger.log('Lokasi: ' + d.lok.length + ' | baris fakta: ' + d.fakta.length + ' | baris harian: ' + d.harian.length);
+  Logger.log('Lokasi: ' + d.lok.length + ' | baris fakta: ' + d.fakta.length + ' | baris harian: ' + d.harian.length + ' | baris Illegal Shutdown: ' + d.ilegal.length);
   Logger.log('Top Driver: ' + (d.driver ? d.driver.all.length + ' / ' + d.driver.area.length + ' / ' + d.driver.lok.length + ' baris (semua / area / lokasi), ' + d.driver.nama.length + ' nama' : 'data AMT belum ada'));
   if (d.peringatan.length) Logger.log('Peringatan: ' + d.peringatan.join(' | '));
 }
@@ -98,24 +98,42 @@ function doGet(e) {
 }
 
 /** Dijalankan pemicu waktu: membangun ulang cache supaya pengunjung tidak menunggu spreadsheet dihitung. */
-function panaskanCache() { const json = JSON.stringify(bangunData_()); simpanUtama_(json); simpanSnapshot_(json); }
-/** Data utama disimpan dua bentuk: JSON (untuk dipotong per akun) dan gzip+base64 (langsung dikirim ke akun Pusat). */
-function simpanUtama_(json) { simpanCache_(json); simpanCache_(zip_(json), 'DASHB4Z'); }
+function panaskanCache() { simpanUtama_(JSON.stringify(bangunData_())); }
+/* Data utama hanya disimpan dalam bentuk gzip+base64 (sekitar 10x lebih kecil dari JSON):
+   - di CacheService (kunci DASHB4Z). JSON mentah bisa melewati batas cache sehingga gagal tersimpan diam-diam,
+     lalu setiap pengunjung menghitung ulang semua spreadsheet (inilah yang membuat dashboard lama terbuka);
+   - di file Drive (salinan), dipakai bila cache kosong.
+   Akun Pusat menerima bentuk terkompresi apa adanya; akun Area/Lokasi dibuka dulu lalu dipotong. */
+function simpanUtama_(json) { const z = zip_(json); const ok = simpanCache_(z, 'DASHB4Z'); simpanSnapshot_(z); if (!ok) Logger.log('Cache dashboard gagal disimpan (' + Math.round(z.length / 1024) + ' KB).'); return z; }
 function zip_(s) { return Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(s, 'application/json')).getBytes()); }
+function unzip_(z) { return Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(z), 'application/x-gzip')).getDataAsString(); }
 
-/* Salinan data terakhir di file Drive: dipakai bila cache kosong (kedaluwarsa / gagal disimpan), supaya dashboard
-   tidak menunggu semua spreadsheet dihitung ulang. Diperbarui oleh panaskanCache (pemicu tiap jam & prosesTarikan). */
-const SNAP_NAMA = '_Cache Dashboard (otomatis, jangan dihapus).json';
+const SNAP_NAMA = '_Cache Dashboard (otomatis, jangan dihapus).txt';
 const SNAP_MAKS_JAM = 3;   // salinan lebih tua dari ini dianggap basi -> dibangun ulang
 function fileSnapshot_() { const it = DriveApp.getFolderById(CFG.FOLDER_ID).getFilesByName(SNAP_NAMA); return it.hasNext() ? it.next() : null; }
-function simpanSnapshot_(json) {
-  try { const f = fileSnapshot_(); if (f) f.setContent(json); else DriveApp.getFolderById(CFG.FOLDER_ID).createFile(SNAP_NAMA, json, MimeType.PLAIN_TEXT); }
+function simpanSnapshot_(z) {
+  try { const f = fileSnapshot_(); if (f) f.setContent(z); else DriveApp.getFolderById(CFG.FOLDER_ID).createFile(SNAP_NAMA, z, MimeType.PLAIN_TEXT); }
   catch (e) { Logger.log('Salinan data tidak tersimpan: ' + e.message); }
 }
 function bacaSnapshot_() {
   try { const f = fileSnapshot_(); if (!f || Date.now() - f.getLastUpdated().getTime() > SNAP_MAKS_JAM * 3600000) return null; return f.getBlob().getDataAsString(); }
   catch (e) { return null; }
 }
+/** Data utama (gzip+base64): cache -> salinan Drive -> hitung ulang (hanya satu pengunjung, yang lain menunggu). */
+function dataUtamaZ_() {
+  const ada = ambilCache_('DASHB4Z');
+  if (ada) return ada;
+  const kunci = LockService.getScriptLock(); kunci.tryLock(120000);
+  try {
+    const lagi = ambilCache_('DASHB4Z');
+    if (lagi) return lagi;
+    const snap = bacaSnapshot_();
+    if (snap) { simpanCache_(snap, 'DASHB4Z'); return snap; }
+    return simpanUtama_(JSON.stringify(bangunData_()));
+  } finally { try { kunci.releaseLock(); } catch (e) { /* tidak memegang kunci */ } }
+}
+/** Data utama sebagai teks JSON. */
+function dataUtama_() { return unzip_(dataUtamaZ_()); }
 
 /** Jalankan sekali dari editor: memasang pemicu panaskanCache tiap jam. */
 function pasangPemicu() {
@@ -134,7 +152,8 @@ function simpanCache_(json, kunci, detik) {
     for (let i = 0; i * size < json.length; i++) parts[kunci + '_' + i] = json.substr(i * size, size);
     parts[kunci + '_N'] = String(Object.keys(parts).length);
     CacheService.getScriptCache().putAll(parts, detik || CFG.CACHE_DETIK);
-  } catch (e) { /* tanpa cache */ }
+    return true;
+  } catch (e) { Logger.log('Cache ' + kunci + ' gagal disimpan: ' + e.message); return false; }
 }
 function ambilCache_(kunci) {
   const cache = CacheService.getScriptCache(), n = Number(cache.get(kunci + '_N') || 0);
@@ -149,9 +168,7 @@ function ambilCache_(kunci) {
 function getDashboardData(token) {
   const ses = sesi_(token);
   if (ses.peran === 'PUSAT') {
-    let z = ambilCache_('DASHB4Z');
-    if (!z) { z = zip_(dataUtama_()); simpanCache_(z, 'DASHB4Z'); }
-    return 'Z' + JSON.stringify({ nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }) + '\n' + z;
+    return 'Z' + JSON.stringify({ nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }) + '\n' + dataUtamaZ_();
   }
   const kunci = 'SZ_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
   let z = ambilCache_(kunci);
@@ -160,26 +177,12 @@ function getDashboardData(token) {
 }
 /** DIAGNOSA kecepatan: jalankan dari editor, lihat View > Logs. */
 function UJI_KECEPATAN() {
-  let t = Date.now(); const c = ambilCache_('DASHB4'); Logger.log('Baca cache: ' + (Date.now() - t) + ' ms, ' + (c ? Math.round(c.length / 1024) + ' KB' : 'KOSONG'));
+  let t = Date.now(); const c = ambilCache_('DASHB4Z'); Logger.log('Baca cache: ' + (Date.now() - t) + ' ms, ' + (c ? Math.round(c.length / 1024) + ' KB' : 'KOSONG'));
   t = Date.now(); const s = bacaSnapshot_(); Logger.log('Baca salinan Drive: ' + (Date.now() - t) + ' ms, ' + (s ? Math.round(s.length / 1024) + ' KB' : 'tidak ada / basi'));
-  t = Date.now(); const json = JSON.stringify(bangunData_()); Logger.log('Hitung ulang semua data: ' + (Date.now() - t) + ' ms, ' + Math.round(json.length / 1024) + ' KB');
-  t = Date.now(); const z = zip_(json); Logger.log('Kompres: ' + (Date.now() - t) + ' ms, ' + Math.round(z.length / 1024) + ' KB dikirim');
-  simpanUtama_(json); simpanSnapshot_(json); Logger.log('Cache & salinan diperbarui.');
-}
-function dataUtama_() {
-  const ada = ambilCache_('DASHB4');
-  if (ada) return ada;
-  // cache kosong: satu pengunjung saja yang membangun ulang, yang lain menunggu lalu memakai hasilnya
-  const kunci = LockService.getScriptLock(); kunci.tryLock(120000);
-  try {
-    const lagi = ambilCache_('DASHB4');
-    if (lagi) return lagi;
-    const snap = bacaSnapshot_();
-    if (snap) { simpanUtama_(snap); return snap; }
-    const json = JSON.stringify(bangunData_());
-    simpanUtama_(json); simpanSnapshot_(json);
-    return json;
-  } finally { try { kunci.releaseLock(); } catch (e) { /* tidak memegang kunci */ } }
+  t = Date.now(); const d = bangunData_(); const json = JSON.stringify(d); Logger.log('Hitung ulang semua data: ' + (Date.now() - t) + ' ms, JSON ' + Math.round(json.length / 1024) + ' KB');
+  Logger.log('Ukuran per bagian (KB): ' + Object.keys(d).map(k => k + ' ' + Math.round(JSON.stringify(d[k]).length / 1024)).join(', '));
+  t = Date.now(); const z = simpanUtama_(json); Logger.log('Kompres & simpan: ' + (Date.now() - t) + ' ms, ' + Math.round(z.length / 1024) + ' KB dikirim');
+  t = Date.now(); const ok = ambilCache_('DASHB4Z'); Logger.log('Cek cache setelah disimpan: ' + (ok ? 'OK (' + (Date.now() - t) + ' ms)' : 'GAGAL'));
 }
 
 /* ============================== AKUN & LOGIN ============================== */
