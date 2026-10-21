@@ -8,7 +8,7 @@
  *   - GPS & Dashcam (ADAS) dibaca dari sheet "Justifikasi Uptime" spreadsheet "LAPORAN KENDALA DEVICE CONTROL ROOM" (LH.KENDALA_ID):
  *     setiap Nopol yang tercatat pada satu tanggal = 100%, yang Status-nya Offline = offline.
  *     Bulanan: jumlah Nopol tercatat dan offline dijumlahkan untuk semua tanggal di bulan itu.
- *     Lokasi & area tiap Nopol diambil dari sheet Master GPS / Master CCTV.
+ *     Lokasi & area diambil dari kolom Lokasi / Area sheet itu sendiri (nama unit dicocokkan ke Master Lokasi).
  *   - RTC (jumlah & online) serta nama Operator / Fleet Supervisor diisi lewat form Input Harian di halaman ini,
  *     disimpan di spreadsheet LH.INPUT_NAMA di folder data (dibuat otomatis).
  *   - Logo: file gambar di folder data yang namanya diawali "Logo" (mis. "Logo Pertamina Patra Niaga.png").
@@ -75,7 +75,7 @@ function petaPanel_(peta) {
  * Disimpan di cache 15 menit.
  */
 function eventBulanLH_(m) {
-  const kunci = 'LH1_' + m, ada = ambilCache_(kunci);
+  const kunci = 'LH2_' + m, ada = ambilCache_(kunci);
   if (ada) return JSON.parse(ada);
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID), cari = m + 1 >= CFG.BULAN_TARIKAN ? 'TARIKAN' : 'DATA';
   let atur = null, file = null;
@@ -89,8 +89,9 @@ function eventBulanLH_(m) {
     const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(atur), 'Pemetaan') || []), pp = petaPanel_(peta);
     const T = {};
     (nilaiSheet(SpreadsheetApp.open(file), 'Event') || []).slice(1).forEach(r => {
-      const tg = tanggalTeks(r[0]), pi = pp[normKasus(r[3])], n = angka(r[4]) || 0, l = teks(r[2]).toUpperCase();
-      if (!tg || tg.m !== m || pi === undefined || !n || !l) return;
+      // baris tanpa Lokasi tetap dihitung di total area (sama seperti dashboard: baris "(TANPA LOKASI)")
+      const tg = tanggalTeks(r[0]), pi = pp[normKasus(r[3])], n = angka(r[4]) || 0, l = teks(r[2]).toUpperCase() || '(TANPA LOKASI)';
+      if (!tg || tg.m !== m || pi === undefined || !n) return;
       const lok = ALIAS_LOKASI[l] || l, area = areaNorm(r[1]) || peta.lokasi[lok] || '';
       if (area) out.lokArea[lok] = area;
       const k = tg.d + '|' + lok + '|' + pi;
