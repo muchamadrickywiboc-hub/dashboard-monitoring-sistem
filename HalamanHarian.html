@@ -175,6 +175,9 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 .ttdaksi{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:1;min-width:200px}.ttdaksi .sub2{flex-basis:100%;margin:0}
 .pdfwaktu{position:absolute;right:24px;top:72px;text-align:right;font-size:12px;line-height:1.5;color:rgba(255,255,255,.92)}.pdfwaktu b{display:block;font-size:13.5px;color:#fff}
 .pdfhead{position:relative}
+.expopsi{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 6px}.expopsi .btn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;height:auto;padding:12px 14px;text-align:left}
+.expopsi .btn span{font-size:12px;color:var(--muted);font-weight:600}.expopsi .btn b{font-size:14px}.expopsi .btn:hover{border-color:var(--forest)}
+@media (max-width:640px){.expopsi{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -237,6 +240,17 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
   <main class="wrap" id="isi"><div class="loading"><span class="spin"></span>Memuat daftar lokasi…</div></main>
 </div>
 
+<dialog id="dlgExp">
+  <div class="dlg">
+    <h3>Waktu export</h3>
+    <p class="sub2">Laporan ini pernah diexport. Pilih waktu yang dicantumkan di PDF.</p>
+    <div class="expopsi">
+      <button class="btn" type="button" id="expBtnPertama"><span>Waktu export pertama</span><b id="expPertama"></b></button>
+      <button class="btn" type="button" id="expBtnSekarang"><span>Waktu sekarang</span><b id="expSekarang"></b></button>
+    </div>
+    <div class="row-end"><button class="btn" type="button" id="expBatal">Batal</button></div>
+  </div>
+</dialog>
 <dialog id="dlg">
   <form class="dlg" id="fInput" method="dialog">
     <h3>Input harian RTC &amp; penanda tangan</h3>
@@ -1208,13 +1222,29 @@ const CDN = ['https:', '', 'cdnjs.cloudflare.com', 'ajax', 'libs', ''].join('/')
 const PDF_LIB = [CDN + 'html2canvas/1.4.1/html2canvas.min.js', CDN + 'jspdf/2.5.1/jspdf.umd.min.js'];
 const muatSkrip = src => new Promise((ok, bad) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = () => bad(new Error('Pustaka PDF gagal dimuat. Periksa koneksi internet.')); document.head.appendChild(t); });
 // waktu export: "21 Oktober 2026, 11:57:02 WIB" (jam perangkat; zona waktu disebut bila WIB/WITA/WIT)
-function waktuEkspor() {
-  const d = new Date(), j = n => String(n).padStart(2, '0'), off = -d.getTimezoneOffset() / 60, zona = {7: 'WIB', 8: 'WITA', 9: 'WIT'}[off] || ('GMT' + (off >= 0 ? '+' : '') + off);
+function waktuEkspor(d) {
+  d = d || new Date(); const j = n => String(n).padStart(2, '0'), off = -d.getTimezoneOffset() / 60, zona = {7: 'WIB', 8: 'WITA', 9: 'WIT'}[off] || ('GMT' + (off >= 0 ? '+' : '') + off);
   return `${d.getDate()} ${BLN[d.getMonth()]} ${d.getFullYear()}, ${j(d.getHours())}:${j(d.getMinutes())}:${j(d.getSeconds())} ${zona}`;
+}
+// waktu export pertama disimpan di server per laporan (mode + periode + lokasi); export berikutnya memilih pakai waktu itu atau waktu sekarang
+const kunciLap = () => [LAP.mode, LAP.periode, LAP.lokasi].join('|');
+function pilihWaktu(pertama) {
+  return new Promise(ok => {
+    $('expPertama').textContent = waktuEkspor(pertama); $('expSekarang').textContent = waktuEkspor(new Date());
+    const d = $('dlgExp'), selesai = v => { d.onclose = null; d.close(); ok(v); };
+    $('expBtnPertama').onclick = () => selesai(pertama); $('expBtnSekarang').onclick = () => selesai(new Date()); $('expBatal').onclick = () => selesai(null);
+    d.onclose = () => ok(null); d.showModal();
+  });
 }
 $('btnPdf').onclick = async () => {
   const b = $('btnPdf'); if (b.disabled || !LAP) return;
-  b.disabled = true; b.textContent = 'Menyiapkan PDF…';
+  b.disabled = true; b.textContent = 'Memeriksa…';
+  const kunci = kunciLap(); let pertama = '';
+  try { pertama = await run('lhEksporPertama', TOKEN, kunci); } catch (e) { /* tanpa riwayat: pakai waktu sekarang */ }
+  const tPertama = pertama ? new Date(pertama) : null;
+  const waktu = tPertama && !isNaN(tPertama) ? await pilihWaktu(tPertama) : new Date();
+  if (!waktu) { b.disabled = false; b.textContent = 'Export PDF'; return; }
+  b.textContent = 'Menyiapkan PDF…';
   let box = null;
   try {
     await Promise.all(PDF_LIB.map(muatSkrip));
@@ -1222,7 +1252,7 @@ $('btnPdf').onclick = async () => {
     // salinan laporan selebar 1120px: kepala (logo, judul, periode) + isi, tanpa tombol
     box = document.createElement('div'); box.id = 'pdfWrap';
     box.innerHTML = `<div class="pdfhead"><div class="brandbar">${document.querySelector('.hero .tab').outerHTML}</div>
-      <div class="pdfwaktu">Waktu export<b>${esc(waktuEkspor())}</b></div>
+      <div class="pdfwaktu">Waktu export<b>${esc(waktuEkspor(waktu))}</b></div>
       <div class="eyebrow" style="margin-top:14px">${esc($('tEyebrow').textContent)}</div><h1>Laporan Operasional GPS &amp; Dashcam</h1><div class="sub">${esc($('tSub').textContent)}</div></div>
       <div class="wrap">${$('isi').innerHTML}</div>`;
     document.body.appendChild(box);
@@ -1232,6 +1262,9 @@ $('btnPdf').onclick = async () => {
     const W = box.offsetWidth, tinggiHal = Math.floor(W * 281 / 210), batas = [];   // sisakan ruang jarak atas & nomor halaman
     const isi = box.querySelector('.wrap'), awalIsi = isi.offsetTop;
     [...isi.children].forEach(el => batas.push(awalIsi + el.offsetTop - 10));
+    // bagian panjang (grafik & kartu per lokasi) juga boleh dipotong di antara grafik / baris kartu, supaya tidak menyisakan halaman kosong
+    const atasBox = box.getBoundingClientRect().top;
+    box.querySelectorAll('.evsub, .evkol, .evcard').forEach(el => batas.push(Math.round(el.getBoundingClientRect().top - atasBox) - 8));
     batas.push(box.offsetHeight);
     const potong = []; let y = 0;
     while (y < box.offsetHeight - 2) {
@@ -1253,6 +1286,7 @@ $('btnPdf').onclick = async () => {
     const per = LAP.mode === 'bulanan' ? blnPanjang(LAP.periode) : LAP.periode;
     const nama = `Laporan ${LAP.mode === 'bulanan' ? 'Monthly' : 'Daily'} ${LAP.baris === 'Area' ? LAP.lokasi : judul(LAP.lokasi)} ${per}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
     try { pdf.save(nama); } catch (e) { window.open(pdf.output('bloburl'), '_blank'); }
+    if (!pertama) run('lhCatatEkspor', TOKEN, kunci, waktu.toISOString()).catch(() => {});
   } catch (e) { const d = document.createElement('div'); d.className = 'errbar'; d.textContent = 'Export PDF gagal: ' + pesan(e); $('isi').prepend(d); }
   finally { if (box) box.remove(); b.disabled = !LAP; b.textContent = 'Export PDF'; }
 };

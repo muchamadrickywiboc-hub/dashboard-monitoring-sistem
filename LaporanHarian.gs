@@ -332,6 +332,19 @@ function lhTtd(token, lokasi, nama) {
   return L ? ttdLH_(L.n, nama) : '';
 }
 
+/* ---- Waktu export PDF pertama per laporan (mode | periode | lokasi), disimpan di Script Properties ---- */
+const kunciEkspor_ = k => 'LHEXP_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, teks(k))).slice(0, 20);
+function lhEksporPertama(token, k) { sesi_(token); return PropertiesService.getScriptProperties().getProperty(kunciEkspor_(k)) || ''; }
+/** Mencatat waktu export (ISO dari browser) hanya bila laporan ini belum pernah diexport; mengembalikan waktu yang tersimpan. */
+function lhCatatEkspor(token, k, iso) {
+  sesi_(token);
+  const t = new Date(iso);
+  if (isNaN(t) || Math.abs(t.getTime() - Date.now()) > 864e5) throw new Error('Waktu export tidak valid.');
+  const P = PropertiesService.getScriptProperties(), kunci = kunciEkspor_(k), lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try { if (!P.getProperty(kunci)) P.setProperty(kunci, t.toISOString()); return P.getProperty(kunci); }
+  finally { lock.releaseLock(); }
+}
+
 /** Logo dari folder data (file gambar yang namanya diawali "Logo"), sebagai data URI; '' bila tidak ada. */
 function lhLogo() {
   const c = CacheService.getScriptCache(), ada = c.get('LHLOGO');
