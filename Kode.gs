@@ -60,7 +60,7 @@ function onOpen() {
       .addItem('Pasang pemicu otomatis', 'pasangPemicu')
       .addItem('Proses file tarikan sekarang', 'prosesTarikan')
       .addItem('Proses ulang semua file tarikan', 'prosesUlangSemuaTarikan')
-      .addItem('Baca ulang tarikan satu area…', 'menuBacaUlangArea')
+      .addItem('Baca ulang tarikan (area / bulan)…', 'menuBacaUlangArea')
       .addSeparator()
       .addItem('Buat / lengkapi akun (Pusat, Area, Lokasi)', 'buatSheetAkun')
       .addItem('Amankan password akun', 'amankanPasswordAkun')
@@ -846,50 +846,59 @@ function prosesUlangSemuaTarikan() {
 }
 
 /**
- * Membaca ulang semua file tarikan satu area (mis. setelah file di folder area itu diganti / diunggah ulang):
- * 1. baris hasil dari file yang sudah tidak ada di folder area (diunggah ulang dengan file baru / dihapus) dibuang,
+ * Membaca ulang file tarikan (mis. setelah file di folder area diganti / diunggah ulang).
+ *   area  : nama area di Tarikan Sistem ("SUMBAGSEL"); "SUMBAGUT" mencakup Sumbagut 1 & 2; '' = semua area
+ *   bulan : 1-12, atau kosong = semua bulan tarikan
+ * 1. baris hasil dari file yang sudah tidak ada di folder (diunggah ulang dengan file baru / dihapus) dibuang,
  *    supaya tidak terhitung dobel;
- * 2. semua file area itu ditandai berubah lalu diproses ulang (sisa antrean dilanjutkan pemicu 15 menit).
+ * 2. semua file yang cocok ditandai berubah lalu diproses ulang (sisa antrean dilanjutkan pemicu 15 menit).
  */
-function bacaUlangTarikanArea(area) {
-  area = teks(area).toUpperCase();
-  const daftar = daftarTarikan_().filter(o => o.area === area);
-  if (!daftar.length) throw new Error('Tidak ada file tarikan untuk area ' + area + '. Periksa nama area di spreadsheet Tarikan Sistem.');
-  const ada = {}; daftar.forEach(o => { ada[o.id] = 1; });
+function bacaUlangTarikan(area, bulan) {
+  area = teks(area).toUpperCase(); bulan = Number(bulan) || 0;
+  const cocokArea = a => !area || teks(a).toUpperCase() === area || areaNorm(a) === area;
+  const semua = daftarTarikan_(), daftar = semua.filter(o => cocokArea(o.area) && (!bulan || +o.tgl.slice(5, 7) === bulan));
+  const label = (area || 'Semua area') + (bulan ? ' bulan ' + BULAN[bulan - 1].charAt(0) + BULAN[bulan - 1].slice(1).toLowerCase() : '');
+  if (!daftar.length) throw new Error('Tidak ada file tarikan untuk ' + label + '. Periksa nama area di spreadsheet Tarikan Sistem.');
+  const ada = {}; semua.forEach(o => { ada[o.id] = 1; });   // semua file yang masih ada di folder
+  const ulang = {}; daftar.forEach(o => { ulang[o.id] = 1; });
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID), it = folder.getFilesByType(MimeType.GOOGLE_SHEETS), kolomArea = { 'Event': 1, 'AMT': 0, 'Event Jam': 2, 'AMT Jam': 2 };
   let buang = 0;
   while (it.hasNext()) {
-    const f = it.next(); if (!/^TARIKAN\s+\d{1,2}\b/i.test(teks(f.getName()))) continue;
+    const f = it.next(), m = teks(f.getName()).match(/^TARIKAN\s+(\d{1,2})\b/i);
+    if (!m || (bulan && +m[1] !== bulan)) continue;
     const ss = SpreadsheetApp.open(f);
     Object.keys(kolomArea).forEach(n => {
       const sh = ss.getSheetByName(n); if (!sh || sh.getLastRow() < 2) return;
       const v = sh.getDataRange().getValues(), w = v[0].length, ka = kolomArea[n];
-      const sisa = v.slice(1).filter(r => teks(r[ka]).toUpperCase() !== area || ada[teks(r[w - 1])]);
+      const sisa = v.slice(1).filter(r => !cocokArea(r[ka]) || ada[teks(r[w - 1])]);
       if (sisa.length === v.length - 1) return;
       buang += v.length - 1 - sisa.length;
       sh.getRange(2, 1, v.length - 1, w).clearContent();
       if (sisa.length) sh.getRange(2, 1, sisa.length, w).setValues(sisa);
     });
   }
-  // tandai semua file area ini berubah -> diproses ulang
+  // tandai file yang cocok sebagai berubah -> diproses ulang oleh prosesTarikan
   const itL = folder.getFilesByName(LOG_NAMA);
   if (itL.hasNext()) {
     const sh = SpreadsheetApp.open(itL.next()).getSheetByName(LOG_NAMA), v = sh.getDataRange().getValues();
-    v.forEach((r, i) => { if (i && ada[teks(r[0])]) sh.getRange(i + 1, 5).setValue(0); });
+    v.forEach((r, i) => { if (i && ulang[teks(r[0])]) sh.getRange(i + 1, 5).setValue(0); });
   }
-  const pesan = area + ': ' + daftar.length + ' file ditandai untuk dibaca ulang, ' + buang + ' baris lama dari file yang sudah tidak ada dibuang. '
-    + 'Pemrosesan berjalan sekarang; sisanya dilanjutkan otomatis tiap 15 menit (lihat sheet Log Tarikan).';
+  const pesan = label + ': ' + daftar.length + ' file ditandai untuk dibaca ulang, ' + buang + ' baris lama dari file yang sudah tidak ada dibuang. '
+    + 'Pemrosesan berjalan sekarang (maks. 4,5 menit); sisanya dilanjutkan otomatis tiap 15 menit (lihat sheet Log Tarikan).';
   Logger.log(pesan);
   prosesTarikan();
   return pesan;
 }
+function bacaUlangTarikanArea(area) { return bacaUlangTarikan(area, 0); }
 function menuBacaUlangArea() {
-  const ui = SpreadsheetApp.getUi(), r = ui.prompt('Baca ulang tarikan', 'Nama area (sesuai spreadsheet Tarikan Sistem), mis. SUMBAGSEL:', ui.ButtonSet.OK_CANCEL);
-  if (r.getSelectedButton() !== ui.Button.OK || !teks(r.getResponseText())) return;
-  ui.alert(bacaUlangTarikanArea(r.getResponseText()));
+  const ui = SpreadsheetApp.getUi(), r = ui.prompt('Baca ulang tarikan', 'Nama area (mis. SUMBAGSEL, SUMBAGUT), atau kosongkan untuk semua area. Tambahkan nomor bulan bila perlu, mis. "SUMBAGSEL 10" atau "10":', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const s = teks(r.getResponseText()), m = s.match(/(?:^|\s)(\d{1,2})$/);
+  ui.alert(bacaUlangTarikan(m ? s.slice(0, m.index).trim() : s, m ? +m[1] : 0));
 }
-/** Jalankan dari editor: baca ulang semua file tarikan Sumbagsel. */
-function BACA_ULANG_SUMBAGSEL() { bacaUlangTarikanArea('SUMBAGSEL'); }
+/** Jalankan dari editor. */
+function BACA_ULANG_SUMBAGSEL() { bacaUlangTarikan('SUMBAGSEL', 0); }
+function BACA_ULANG_SEMUA_OKTOBER() { bacaUlangTarikan('', 10); }
 
 function namaAmt(x) {
   const s = teks(x).replace(/\s*[\[(].*?[\])]\s*/g, ' ').replace(/^[\s.\-]+|[\s.\-]+$/g, '').toUpperCase();
