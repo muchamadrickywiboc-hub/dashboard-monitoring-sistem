@@ -56,6 +56,7 @@ function onOpen() {
     SpreadsheetApp.getUi().createMenu('Dashboard')
       .addItem('Perbarui data dashboard sekarang', 'hapusCache')
       .addItem('Uji baca sumber', 'UJI_BACA_SUMBER')
+      .addItem('Uji kecepatan dashboard', 'UJI_KECEPATAN')
       .addItem('Pasang pemicu otomatis', 'pasangPemicu')
       .addItem('Proses file tarikan sekarang', 'prosesTarikan')
       .addItem('Proses ulang semua file tarikan', 'prosesUlangSemuaTarikan')
@@ -97,7 +98,10 @@ function doGet(e) {
 }
 
 /** Dijalankan pemicu waktu: membangun ulang cache supaya pengunjung tidak menunggu spreadsheet dihitung. */
-function panaskanCache() { const json = JSON.stringify(bangunData_()); simpanCache_(json); simpanSnapshot_(json); }
+function panaskanCache() { const json = JSON.stringify(bangunData_()); simpanUtama_(json); simpanSnapshot_(json); }
+/** Data utama disimpan dua bentuk: JSON (untuk dipotong per akun) dan gzip+base64 (langsung dikirim ke akun Pusat). */
+function simpanUtama_(json) { simpanCache_(json); simpanCache_(zip_(json), 'DASHB4Z'); }
+function zip_(s) { return Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(s, 'application/json')).getBytes()); }
 
 /* Salinan data terakhir di file Drive: dipakai bila cache kosong (kedaluwarsa / gagal disimpan), supaya dashboard
    tidak menunggu semua spreadsheet dihitung ulang. Diperbarui oleh panaskanCache (pemicu tiap jam & prosesTarikan). */
@@ -141,9 +145,26 @@ function ambilCache_(kunci) {
 }
 
 /** Dipanggil dashboard setelah login: data sesuai cakupan akun (Pusat = semua, Area = satu area, Lokasi = satu lokasi). */
+// Dikirim terkompresi: 'Z' + info akun (JSON, kosong untuk Area/Lokasi) + '\n' + gzip base64. Dibuka di browser (bukaData).
 function getDashboardData(token) {
   const ses = sesi_(token);
-  return potongJson_(dataUtama_(), ses, 'SC_');
+  if (ses.peran === 'PUSAT') {
+    let z = ambilCache_('DASHB4Z');
+    if (!z) { z = zip_(dataUtama_()); simpanCache_(z, 'DASHB4Z'); }
+    return 'Z' + JSON.stringify({ nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }) + '\n' + z;
+  }
+  const kunci = 'SZ_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
+  let z = ambilCache_(kunci);
+  if (!z) { z = zip_(potongJson_(dataUtama_(), ses, 'SC_')); simpanCache_(z, kunci, 900); }
+  return 'Z\n' + z;
+}
+/** DIAGNOSA kecepatan: jalankan dari editor, lihat View > Logs. */
+function UJI_KECEPATAN() {
+  let t = Date.now(); const c = ambilCache_('DASHB4'); Logger.log('Baca cache: ' + (Date.now() - t) + ' ms, ' + (c ? Math.round(c.length / 1024) + ' KB' : 'KOSONG'));
+  t = Date.now(); const s = bacaSnapshot_(); Logger.log('Baca salinan Drive: ' + (Date.now() - t) + ' ms, ' + (s ? Math.round(s.length / 1024) + ' KB' : 'tidak ada / basi'));
+  t = Date.now(); const json = JSON.stringify(bangunData_()); Logger.log('Hitung ulang semua data: ' + (Date.now() - t) + ' ms, ' + Math.round(json.length / 1024) + ' KB');
+  t = Date.now(); const z = zip_(json); Logger.log('Kompres: ' + (Date.now() - t) + ' ms, ' + Math.round(z.length / 1024) + ' KB dikirim');
+  simpanUtama_(json); simpanSnapshot_(json); Logger.log('Cache & salinan diperbarui.');
 }
 function dataUtama_() {
   const ada = ambilCache_('DASHB4');
@@ -154,9 +175,9 @@ function dataUtama_() {
     const lagi = ambilCache_('DASHB4');
     if (lagi) return lagi;
     const snap = bacaSnapshot_();
-    if (snap) { simpanCache_(snap); return snap; }
+    if (snap) { simpanUtama_(snap); return snap; }
     const json = JSON.stringify(bangunData_());
-    simpanCache_(json); simpanSnapshot_(json);
+    simpanUtama_(json); simpanSnapshot_(json);
     return json;
   } finally { try { kunci.releaseLock(); } catch (e) { /* tidak memegang kunci */ } }
 }

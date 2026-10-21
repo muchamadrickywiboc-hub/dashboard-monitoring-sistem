@@ -1163,8 +1163,17 @@ document.getElementById('btnPdf').onclick = async () => {
 function alertPdf(m) { const l = document.getElementById('bwarn'); l.hidden = false; l.textContent = 'Export PDF gagal: ' + m; }
 
 const REFRESH_MS = 5*60*1000;
+// data dari getDashboardData: 'Z' + info akun + '\n' + gzip base64 (lihat Kode.gs), dibuka di sini
+async function bukaData(j) {
+  if (typeof j !== 'string' || j[0] !== 'Z') return j;
+  const i = j.indexOf('\n'), akun = j.slice(1, i), b = atob(j.slice(i + 1)), u = new Uint8Array(b.length);
+  for (let k = 0; k < b.length; k++) u[k] = b.charCodeAt(k);
+  const p = JSON.parse(await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
+  if (akun) p.akun = JSON.parse(akun);
+  return p;
+}
 function start(json) {
-  const p = JSON.parse(json);
+  const p = typeof json === 'string' ? JSON.parse(json) : json;
   if (LGLANGKAH) lgTutupProses();
   const wasLatest = !D || mon === LAST;
   terapkanAkun(p);
@@ -1345,7 +1354,7 @@ document.getElementById('btnKeluar').onclick = () => {
 function muat(diam) {
   if (!TOKEN) { tampilLogin(''); return; }
   if (!diam || !D) { const l = document.getElementById('loading'); l.hidden = false; l.innerHTML = '<span class="spin"></span> Memuat data dashboard…'; }
-  google.script.run.withSuccessHandler(start).withFailureHandler(e => { if (LGLANGKAH === 2 && !/LOGIN/.test(e && e.message ? e.message : String(e))) return lgGagalProses('Data gagal dimuat: ' + (e && e.message ? e.message : e)); if (perluLogin(e)) return; if (!(diam && D)) gagal(e); }).getDashboardData(TOKEN);
+  google.script.run.withSuccessHandler(j => bukaData(j).then(start).catch(e => { if (!(diam && D)) gagal(e); })).withFailureHandler(e => { if (LGLANGKAH === 2 && !/LOGIN/.test(e && e.message ? e.message : String(e))) return lgGagalProses('Data gagal dimuat: ' + (e && e.message ? e.message : e)); if (perluLogin(e)) return; if (!(diam && D)) gagal(e); }).getDashboardData(TOKEN);
 }
 muat();
 setInterval(() => { if (TOKEN && D) muat(true); }, REFRESH_MS);
