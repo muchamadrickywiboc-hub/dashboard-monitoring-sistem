@@ -156,6 +156,17 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 @media (max-width:1000px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.g-2{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){.kpis,.infobar{grid-template-columns:minmax(0,1fr)}.infobar>div{border-right:0;border-bottom:1px solid var(--grid)}.rrow{grid-template-columns:110px minmax(0,1fr) 48px;gap:8px}.grid2{grid-template-columns:1fr}.kpi .v{font-size:28px}}
 @media (max-width:480px){.lg-logo img{height:22px}.lg-logo img+.lsep+img{height:19px}.lg-logo img.rtc{height:27px}.lg-logo{gap:8px;padding:8px 12px}}
+/* grafik Event di Setiap Lokasi */
+.evlok{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.evrow{display:grid;grid-template-columns:minmax(120px,200px) minmax(0,1fr) 64px;align-items:center;gap:12px;padding:4px 8px;border-radius:8px}
+.evrow:hover{background:var(--surface-2)}
+.evn{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.evtrack{height:16px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.evbar{display:flex;height:100%;min-width:0}.evbar i{display:block;height:100%;min-width:1px}
+.evbar i+i{box-shadow:inset 1px 0 0 rgba(255,255,255,.7)}
+.evv{text-align:right;font-weight:700;font-size:13.5px;font-variant-numeric:tabular-nums}
+.evrow.nol .evn,.evrow.nol .evv{color:var(--muted);font-weight:500}
+@media (max-width:640px){.evrow{grid-template-columns:96px minmax(0,1fr) 52px;gap:8px}}
 </style>
 </head>
 <body>
@@ -1116,34 +1127,24 @@ function gambar(L) {
       <div class="legend"><span><i style="background:var(--gps)"></i>GPS</span><span><i style="background:var(--cam)"></i>Dashcam (ADAS)</span></div>${grafikGaris(L.perHari)}</div>
     <div class="panel"><div class="ph"><h2>Event harian</h2><p>Jumlah seluruh event per tanggal</p></div>${grafikKolom(L.perHari)}</div>
   </section>`;
-  const maxEv = Math.max(1, ...L.panel.map(p => p.total));
-  h += `<section class="grid g-2">
-    <div class="panel"><div class="ph"><h2>Event per jenis</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · ${esc(lbl)}</p></div>
-      <div class="rank">${[...L.panel].sort((a, b) => b.total - a.total).map(p => `<div class="rrow${p.total ? '' : ' nol'}"><span class="rname" title="${esc(p.tabel)}">${esc(p.grafik)}</span><span class="rtrack"><span class="rfill" style="display:block;width:${p.total / maxEv * 100}%"></span></span><span class="rval">${nf(p.total)}</span></div>`).join('')}</div></div>
-    <div class="panel"><div class="ph"><h2>Uptime per ${L.baris.toLowerCase()}</h2><p>GPS &amp; Dashcam dari Justifikasi Uptime</p></div>${tabelUptime(L, satuan)}</div>
-  </section>`;
-  h += `<section class="panel"><div class="ph"><h2>Event per ${L.baris.toLowerCase()}</h2><p>Jumlah case tiap jenis event</p></div>${tabelEvent(L)}</section>`;
+  h += `<section class="panel"><div class="ph"><h2>Event di Setiap ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · jumlah case per jenis event, diurutkan dari yang terbanyak</p></div>${grafikLokasi(L)}</section>`;
   h += `<section class="panel"><div class="ph"><h2>Nopol offline</h2><p>${L.offlineTotal ? `${nf(L.offlineTotal)} catatan offline${L.offlineTotal > L.offline.length ? `, ditampilkan ${nf(L.offline.length)} pertama` : ''}` : 'Tidak ada Nopol offline pada periode ini'}</p></div>${tabelOffline(L)}</section>`;
   h += `<div class="foot"><span>Sumber event: ${esc(L.sumber || '–')} · GPS &amp; Dashcam: Justifikasi Uptime</span><span>PT Pertamina Patra Niaga</span></div>`;
   $('isi').innerHTML = h;
 }
-function tabelUptime(L, satuan) {
-  const R = L.perBaris.filter(r => r.gps.terpasang || r.dashcam.terpasang);
-  if (!R.length) return '<div class="kosong">Belum ada data Justifikasi Uptime.</div>';
-  const sel = b => `<td>${nf(b.online)} / ${nf(b.terpasang)}</td><td><span class="pct ${kelas(persen(b))}">${fp(persen(b))}</span></td>`;
-  return `<div class="tbl"><table><thead><tr><th>${L.baris}</th><th>GPS online</th><th>%</th><th>Dashcam online</th><th>%</th></tr></thead><tbody>
-    ${R.map(r => `<tr><td>${esc(L.baris === 'Area' ? r.n : judul(r.n))}</td>${sel(r.gps)}${sel(r.dashcam)}</tr>`).join('')}
-    ${R.length > 1 ? `<tr class="tot"><td>Total</td>${sel(L.perangkat.gps)}${sel(L.perangkat.dashcam)}</tr>` : ''}
-  </tbody></table></div><div class="kosong" style="padding:0">Satuan: ${satuan}.</div>`;
-}
-function tabelEvent(L) {
+// warna tetap per jenis event (urutan panel di LaporanHarian.gs)
+const WARNA_EV = ['#7a5cc7', '#0f78bf', '#c0392b', '#e8833a', '#d4a017', '#5d6d7e', '#1b1f1d', '#8e2418', '#3f8a3a', '#a0522d', '#e05c9a', '#17a2a2', '#b8ca10', '#2e86de'];
+// grafik batang bertumpuk: satu batang per lokasi/area, potongan = jenis event
+function grafikLokasi(L) {
   const n = L.panel[0] ? L.panel[0].rows.length : 0;
   if (!n) return '<div class="kosong">Tidak ada lokasi dalam cakupan.</div>';
-  const rows = Array.from({length: n}, (_, i) => ({n: L.panel[0].rows[i].n, v: L.panel.map(p => p.rows[i].v)}));
-  return `<div class="tbl"><table><thead><tr><th>${L.baris}</th>${L.panel.map(p => `<th title="${esc(p.tabel)}">${esc(p.grafik)}</th>`).join('')}<th>Total</th></tr></thead><tbody>
-    ${rows.map(r => `<tr><td>${esc(L.baris === 'Area' ? r.n : judul(r.n))}</td>${r.v.map(v => `<td>${v ? nf(v) : '<span style="color:var(--axis)">0</span>'}</td>`).join('')}<td><b>${nf(r.v.reduce((s, v) => s + v, 0))}</b></td></tr>`).join('')}
-    <tr class="tot"><td>Total</td>${L.panel.map(p => `<td>${nf(p.total)}</td>`).join('')}<td>${nf(L.panel.reduce((s, p) => s + p.total, 0))}</td></tr>
-  </tbody></table></div>`;
+  const J = L.panel.map((p, i) => ({p, i, c: WARNA_EV[i % WARNA_EV.length]})).filter(o => o.p.total);
+  const rows = Array.from({length: n}, (_, r) => { const v = L.panel.map(p => p.rows[r].v); return {n: L.panel[0].rows[r].n, v, t: v.reduce((s, x) => s + x, 0)}; }).sort((a, b) => b.t - a.t || a.n.localeCompare(b.n));
+  const mx = Math.max(1, ...rows.map(r => r.t)), nama = x => esc(L.baris === 'Area' ? x : judul(x));
+  return `${J.length ? `<div class="legend">${J.map(o => `<span><i style="background:${o.c}"></i>${esc(o.p.grafik)}</span>`).join('')}</div>` : '<div class="kosong">Belum ada event pada periode ini.</div>'}
+    <div class="evlok">${rows.map(r => `<div class="evrow${r.t ? '' : ' nol'}"><span class="evn" title="${nama(r.n)}">${nama(r.n)}</span>
+      <span class="evtrack"><span class="evbar" style="width:${r.t / mx * 100}%">${J.filter(o => r.v[o.i]).map(o => `<i style="width:${r.v[o.i] / r.t * 100}%;background:${o.c}" title="${nama(r.n)} · ${esc(o.p.grafik)}: ${nf(r.v[o.i])}"></i>`).join('')}</span></span>
+      <span class="evv">${nf(r.t)}</span></div>`).join('')}</div>`;
 }
 function tabelOffline(L) {
   if (!L.offline.length) return '';
