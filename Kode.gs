@@ -83,7 +83,7 @@ function UJI_BACA_SUMBER() {
   const d = bangunData_();
   Logger.log('Bulan berisi data: ' + d.bulanAda.map(m => BULAN[m]).join(', '));
   Logger.log('Parameter: ' + d.params.map(p => p.label + ' (' + p.kat + ')').join('; '));
-  Logger.log('Lokasi: ' + d.lok.length + ' | baris fakta: ' + d.fakta.length + ' | baris harian: ' + d.harian.length + ' | baris Illegal Shutdown: ' + d.ilegal.length);
+  Logger.log('Lokasi: ' + d.lok.length + ' | baris fakta: ' + d.fakta.length + ' | baris harian: ' + d.harian.length);
   Logger.log('Top Driver: ' + (d.driver ? d.driver.all.length + ' / ' + d.driver.area.length + ' / ' + d.driver.lok.length + ' baris (semua / area / lokasi), ' + d.driver.nama.length + ' nama' : 'data AMT belum ada'));
   if (d.peringatan.length) Logger.log('Peringatan: ' + d.peringatan.join(' | '));
 }
@@ -292,7 +292,6 @@ function sesi_(token) {
 function potongCakupan_(d, ses) {
   d.akun = { nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' };
   if (ses.peran === 'PUSAT') return d;
-  delete d.ilegal;   // Illegal Shutdown hanya untuk akun RTC (PUSAT)
   const ai = AREAS.indexOf(ses.area || ''), kl = ses.lok ? kunciLok(ses.lok) : '';
   const L = d.lok.map(x => ses.peran === 'AREA' ? x[1] === ai : kunciLok(x[0]) === kl && (ai < 0 || x[1] === ai));
   d.lok = d.lok.map((x, i) => L[i] ? x : ['', x[1]]);
@@ -592,15 +591,13 @@ function bangunData_() {
   const peta = bacaPemetaan(nilaiSheet(ssA, 'Pemetaan') || []);
   const catatan = (nilaiSheet(ssA, 'Catatan') || []).map(r => teks(r[0])).filter(s => s);
 
-  const EV = [], AM = [], IL = [];   // EV: [bulan, tanggal, regional, lokasi, parameter, kategori, jumlah]; AM: [bulan, regional, lokasi, nama, parameter, kategori, jumlah]
-  // IL: Illegal Shutdown [bulan, tanggal, regional, lokasi, jumlah] — tidak masuk 3 kategori, hanya tampil untuk akun RTC (PUSAT)
+  const EV = [], AM = [];   // EV: [bulan, tanggal, regional, lokasi, parameter, kategori, jumlah]; AM: [bulan, regional, lokasi, nama, parameter, kategori, jumlah]
   const belum = {};
   dataBulan.sort((a, b) => a.m - b.m).forEach(o => {
     const ss = SpreadsheetApp.open(o.f);
     (nilaiSheet(ss, 'Event') || []).slice(1).forEach(r => {
       const kc = normKasus(r[3]), c = peta.kasus[kc], n = angka(r[4]) || 0;
       if (!kc || !n) return;
-      if (/^ILLEGAL\s*SHUT\s*DOWN/.test(kc)) { const t0 = tanggalTeks(r[0]); if (t0 && t0.m === o.m) IL.push([o.m, t0.d, areaNorm(r[1]), teks(r[2]).toUpperCase(), n]); return; }
       if (!c) { belum[kc] = 1; return; }
       const tg = tanggalTeks(r[0]);
       if (!tg || tg.m !== o.m) return;
@@ -619,7 +616,7 @@ function bangunData_() {
   else if (!tarikan[CFG.BULAN_TARIKAN - 1]) peringatan.push('Data ' + BULAN[CFG.BULAN_TARIKAN - 1].charAt(0) + BULAN[CFG.BULAN_TARIKAN - 1].slice(1).toLowerCase() + ' dan seterusnya menunggu file tarikan selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang.');
   const log = bacaLogTarikan(folder);
   if (log.gagal.length) peringatan.push('File tarikan gagal dibaca: ' + log.gagal.slice(0, 5).join('; '));
-  const hasil = hitung_(EV, AM, peta, catatan, peringatan, IL);
+  const hasil = hitung_(EV, AM, peta, catatan, peringatan);
   // bulan yang punya jam kejadian (sheet "Event Jam" di file Tarikan) -> filter Tanggal / Shift / Jam aktif
   hasil.jamAda = dataBulan.filter(o => o.f === tarikan[o.m]).filter(o => { const sh = SpreadsheetApp.open(o.f).getSheetByName('Event Jam'); return sh && sh.getLastRow() > 1; }).map(o => o.m);
   // Januari-September: file "Jam <nn> ..." dari file mentah
@@ -892,8 +889,7 @@ function bacaLogTarikan(folder) {
  *   driver : { all, area, lok, nama } -> [[bulan, indeks area, indeks lokasi, indeks parameter, indeks nama, jumlah]]
  *            10 Driver teratas per bulan x parameter, untuk semua area, per area, dan per lokasi (kolom AMT 1).
  */
-function hitung_(EV, AM, peta, catatan, peringatan, IL) {
-  IL = IL || [];
+function hitung_(EV, AM, peta, catatan, peringatan) {
   const ada = {}; EV.forEach(e => { ada[e[0]] = 1; });
   const bulanAda = Object.keys(ada).map(Number).sort((a, b) => a - b);
 
@@ -913,7 +909,7 @@ function hitung_(EV, AM, peta, catatan, peringatan, IL) {
     if (m >= o.m) { o.m = m; o.nama = ALIAS_LOKASI[l] || l; }
     if (a) { const x = o.area[m] || (o.area[m] = {}); x[a] = (x[a] || 0) + n; }
   };
-  EV.forEach(e => catat(e[0], e[2], e[3], e[6])); AM.forEach(r => catat(r[0], r[1], r[2], r[6])); IL.forEach(e => catat(e[0], e[2], e[3], e[4]));
+  EV.forEach(e => catat(e[0], e[2], e[3], e[6])); AM.forEach(r => catat(r[0], r[1], r[2], r[6]));
   const areaLok = l => { const o = l && info[kunciLok(l)]; if (!o) return '';
     const ms = Object.keys(o.area).map(Number); if (!ms.length) return '';
     const x = o.area[Math.max.apply(null, ms)]; return Object.keys(x).sort((a, b) => x[b] - x[a])[0]; };
@@ -933,14 +929,6 @@ function hitung_(EV, AM, peta, catatan, peringatan, IL) {
     const hk = m + '|' + e[1] + '|' + L; (H[hk] || (H[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;
   });
   if (tanpaArea) catatan.push('Data: ' + tanpaArea + ' event tanpa Area dan Lokasi yang jelas tidak dihitung.');
-  // Illegal Shutdown per bulan x tanggal x lokasi: [bulan, tanggal, indeks area, indeks lokasi, jumlah]
-  const I = {};
-  IL.forEach(e => {
-    const l = namaLok(e[3]), a = areaLok(e[3]) || e[2];
-    if (!a) return;
-    const L = li(l, AREAS.indexOf(a)), k = e[0] + '|' + e[1] + '|' + L;
-    (I[k] || (I[k] = [e[0], e[1], AREAS.indexOf(a), L, 0]))[4] += e[4];
-  });
 
   // Driver: jumlah per bulan x lokasi x parameter x nama, lalu 10 teratas per parameter
   //         untuk semua area, per area, dan per lokasi. Nama disimpan sekali di daftar `nama`.
@@ -973,7 +961,7 @@ function hitung_(EV, AM, peta, catatan, peringatan, IL) {
 
   return {
     tahun: CFG.TAHUN, areas: AREAS, bulanAda: bulanAda, params: params, lok: lok,
-    fakta: Object.keys(F).map(k => F[k]), harian: Object.keys(H).map(k => H[k]), driver: driver, ilegal: Object.keys(I).map(k => I[k]),
+    fakta: Object.keys(F).map(k => F[k]), harian: Object.keys(H).map(k => H[k]), driver: driver,
     catatan: catatan, peringatan: peringatan, updated: new Date().toISOString(),
   };
 }

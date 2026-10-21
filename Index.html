@@ -314,20 +314,6 @@ td{padding:7px 10px}
 .sh-isi .rank.wide .rrow{grid-template-columns:minmax(120px,172px) minmax(0,1fr) auto}
 }
 .peran-lokasi .sh-isi{grid-template-columns:minmax(0,1fr)}
-/* Illegal Shutdown (khusus RTC) */
-.is-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-.is-badge{flex:none;font-size:11.5px;font-weight:600;color:#8e2418;background:#fbeceb;border:1px solid #f1c9c5;border-radius:999px;padding:4px 10px}
-.is-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:var(--surface-2);border-radius:12px;overflow:hidden}
-.is-kpi>div{padding:10px 16px;border-right:1px solid var(--grid);min-width:0}.is-kpi>div:last-child{border-right:0}
-.is-kpi .k{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.is-kpi .v{font-size:20px;font-weight:700;margin-top:2px}.is-kpi .v small{font-size:12px;font-weight:500;color:var(--ink-2);margin-left:4px}
-.is-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);gap:18px;margin-top:12px}
-.is-grid h3{margin:0 0 6px;font-size:13.5px;font-weight:600;color:var(--ink-2)}
-.is-grid .rank.wide .rrow{grid-template-columns:minmax(96px,150px) minmax(0,1fr) auto;gap:1px 10px;padding:4px 6px}
-.is-grid .rank.wide .rname{font-size:12.5px}.is-grid .rank.wide .rval{font-size:13.5px}.is-grid .rank.wide .rtrack{height:9px}
-.is-grid .rank.wide .rsub{grid-column:2/4;font-size:10.5px;margin-top:0}
-@media (max-width:1100px){.is-grid{grid-template-columns:minmax(0,1fr)}.is-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.is-kpi>div:nth-child(2){border-right:0}}
-.peran-area #panelIS,.peran-lokasi #panelIS{display:none!important}
 #pdfPage table{table-layout:fixed}#pdfPage th{letter-spacing:0!important;font-size:8.5px!important;background:#f1f4f1!important;color:#5d665f!important;position:static!important;font-weight:600;border:0}#pdfPage td,#pdfPage th{white-space:normal;line-height:1.3}
 #pdfPage{position:fixed;left:-20000px;top:0;width:1123px;height:794px;overflow:hidden;background:#fff;color:#1b1f1d;font-family:Poppins,system-ui,sans-serif}
 </style>
@@ -432,11 +418,6 @@ td{padding:7px 10px}
     <div class="panel"><div class="ph"><h2 id="btopLH">Top 5 Lokasi dengan pelanggaran terbanyak</h2><p id="btopLS"></p></div><div class="rank wide" id="btopL"></div></div>
   </div>
   </div>
-  </section>
-  <!-- Illegal Shutdown: tidak masuk 3 kategori, hanya untuk akun RTC (data tidak dikirim server ke akun lain) -->
-  <section class="panel wpanel" id="panelIS" hidden>
-    <div class="ph is-h"><div><h2 id="isH">Illegal Shutdown</h2><p id="isSub"></p></div><span class="is-badge">Khusus RTC</span></div>
-    <div id="isIsi"></div>
   </section>
   <!-- grafik Event per hari/jam disembunyikan atas permintaan pengguna -->
   <section class="panel wpanel" id="panelBday" hidden><div class="ph"><h2 id="bdayH">Event per hari</h2><p id="bdaySub"></p></div>
@@ -848,55 +829,6 @@ function renderTopBulan() {
     pilih: selLok === o.i, redup: selLok >= 0 && selLok !== o.i, klik: () => setLok(o.i)})), `Tidak ada data lokasi untuk ${B}.`);
 }
 
-/* ================= ILLEGAL SHUTDOWN (khusus RTC) ================= */
-// RAW.ilegal: [[bulan, tanggal, indeks area, indeks lokasi, jumlah]]; hanya dikirim server untuk akun PUSAT (RTC)
-const IS_CAT = {key: 'IS', name: 'Illegal Shutdown', color: '#d1453b', dark: '#8e2418'};
-function renderIlegal() {
-  const sec = document.getElementById('panelIS'), isi = document.getElementById('isIsi');
-  sec.hidden = !AKUN || AKUN.peran !== 'PUSAT';
-  if (sec.hidden) return;
-  const pm = prevM(), cL = tgl ? `${tgl} ${BLN[mon]}` : BLN[mon], pL = tgl ? (tgl > 1 ? `${tgl - 1} ${BLN[mon]}` : null) : pm === null ? null : BLN[pm];
-  document.getElementById('isH').textContent = `Illegal Shutdown — ${cL} ${D.tahun}`;
-  document.getElementById('isSub').textContent = `${scope()} · tidak termasuk 3 kategori di atas${KC === 'W' && (shift || jam >= 0) ? ' · filter shift/jam tidak berlaku (data per tanggal)' : ''} · klik area / lokasi untuk memfilter`;
-  if (!RAW.ilegal) { isi.innerHTML = '<div class="emptyamt">Data Illegal Shutdown belum ada. Jalankan menu Dashboard &gt; Perbarui data dashboard sekarang, lalu muat ulang halaman.</div>'; return; }
-  const A = RAW.areas, okL = li => selLok < 0 || li === selLok, okA = ai => sel === 'ALL' || A[ai] === sel;
-  const kini = (m, d) => m === mon && (!tgl || d === tgl), lalu = (m, d) => tgl ? m === mon && d === tgl - 1 : m === pm;
-  const nh = nHari(mon), hari = Array.from({length: nh}, () => ({IS: 0, ada: false})), bln = BLN.map((_, m) => ADA.indexOf(m) >= 0 ? 0 : null);
-  const ar = {}, lk = {}; let cur = 0, prv = 0, akhir = 0;
-  RAW.ilegal.forEach(([m, d, ai, li, n]) => {
-    if (!okL(li)) return;
-    const a = A[ai], x = ar[a] || (ar[a] = {c: 0, p: 0, l: {}});
-    if (kini(m, d)) { x.c += n; x.l[li] = 1; }
-    if (lalu(m, d)) x.p += n;
-    if (!okA(ai)) return;
-    const y = lk[li] || (lk[li] = {i: li, r: a, c: 0, p: 0});
-    if (kini(m, d)) { y.c += n; cur += n; }
-    if (lalu(m, d)) { y.p += n; prv += n; }
-    if (m === mon && d >= 1 && d <= nh) { hari[d - 1].IS += n; akhir = Math.max(akhir, d); }
-    if (bln[m] !== null) bln[m] += n;
-  });
-  hari.forEach((o, i) => { o.ada = i < akhir; });
-  const ada = pL !== null, LS = Object.values(lk).filter(o => o.c > 0).sort((a, b) => b.c - a.c);
-  const puncak = hari.reduce((b, o, i) => o.IS > b.v ? {v: o.IS, d: i + 1} : b, {v: 0, d: 0});
-  const AS = A.map(a => ({a, ...(ar[a] || {c: 0, p: 0, l: {}})})).filter(o => o.c > 0).sort((a, b) => b.c - a.c);
-  isi.innerHTML = `<div class="is-kpi">
-      <div><div class="k">Total ${cL}</div><div class="v">${nf(cur)}<small>event</small></div></div>
-      <div><div class="k">Dibanding ${ada ? pL : 'sebelumnya'}</div><div class="v">${ada ? pctTxt(cur, prv) : '<span class="flat">–</span>'}<small>${ada ? nf(prv) + ' event' : 'belum ada pembanding'}</small></div></div>
-      <div><div class="k">Lokasi terdampak</div><div class="v">${nf(LS.length)}<small>lokasi</small></div></div>
-      <div><div class="k">${tgl ? 'Lokasi tertinggi' : 'Tanggal tertinggi'}</div><div class="v">${tgl ? (LS[0] ? `${LS[0].c ? nf(LS[0].c) : '–'}<small>${lokNama(LS[0].i)}</small>` : '–') : puncak.v ? `${nf(puncak.v)}<small>${puncak.d} ${BLN[mon]}</small>` : '–'}</div></div></div>
-    <div class="is-grid"><div><h3>${PERIODE === 'tahun' ? `Per bulan, ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun}` : `Per tanggal, ${BLN[mon]} ${D.tahun}`}</h3><div class="anachart" id="isChart"></div></div>
-      <div><h3>Per area</h3><div class="rank wide" id="isArea"></div></div><div><h3>Top 5 Lokasi</h3><div class="rank wide" id="isLok"></div></div></div>`;
-  const ch = document.getElementById('isChart');
-  if (PERIODE === 'tahun') drawBulanan(ch, bln, IS_CAT); else if (akhir) drawHarianKat(ch, hari, IS_CAT);
-  else ch.innerHTML = `<div class="emptyamt">Tidak ada Illegal Shutdown di ${BLN[mon]} ${D.tahun}${sel === 'ALL' ? '' : ' · ' + scope()}.</div>`;
-  topList(document.getElementById('isArea'), AS.map(o => ({nama: rn(o.a), warna: rv(o.a), v: o.c,
-    sub: `${nf(o.c)} event${ada ? ' · ' + pctTxt(o.c, o.p) + ' vs ' + pL : ''} · ${Object.keys(o.l).length} lokasi`,
-    pilih: sel === o.a, redup: sel !== 'ALL' && sel !== o.a, klik: () => setSel(o.a)})), `Tidak ada Illegal Shutdown di ${cL}.`);
-  topList(document.getElementById('isLok'), LS.slice(0, 5).map(o => ({nama: lokNama(o.i), warna: rv(o.r), v: o.c,
-    sub: `${rn(o.r)} · ${nf(o.c)} event${ada ? ' · ' + pctTxt(o.c, o.p) + ' vs ' + pL : ''}`,
-    pilih: selLok === o.i, redup: selLok >= 0 && selLok !== o.i, klik: () => setLok(o.i)})), `Tidak ada Illegal Shutdown di ${cL}.`);
-}
-
 /* ================= BULANAN ================= */
 function renderBulan() {
   const W = KC === 'W', pm = W ? KP : prevM();
@@ -992,7 +924,7 @@ function render() {
   document.getElementById('view-bulan').classList.toggle('memuat', mw && !siap);
   if (siap) { deriveWaktu(); KC = 'W'; KP = WIN.waktu.adaPrev ? 'P' : null; renderJam(); }
   else { KC = mon; KP = prevM(); renderHarian(); }
-  renderBulan(); renderTopBulan(); renderIlegal(); renderDriver(); renderRekap();
+  renderBulan(); renderTopBulan(); renderDriver(); renderRekap();
 }
 
 
