@@ -156,17 +156,18 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 @media (max-width:1000px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.g-2{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){.kpis,.infobar{grid-template-columns:minmax(0,1fr)}.infobar>div{border-right:0;border-bottom:1px solid var(--grid)}.rrow{grid-template-columns:110px minmax(0,1fr) 48px;gap:8px}.grid2{grid-template-columns:1fr}.kpi .v{font-size:28px}}
 @media (max-width:480px){.lg-logo img{height:22px}.lg-logo img+.lsep+img{height:19px}.lg-logo img.rtc{height:27px}.lg-logo{gap:8px;padding:8px 12px}}
-/* grafik Event di Setiap Lokasi */
-.evlok{display:flex;flex-direction:column;gap:3px;margin-top:6px}
-.evrow{display:grid;grid-template-columns:minmax(120px,200px) minmax(0,1fr) 64px;align-items:center;gap:12px;padding:4px 8px;border-radius:8px}
-.evrow:hover{background:var(--surface-2)}
-.evn{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.evtrack{height:16px;background:var(--surface-2);border-radius:4px;overflow:hidden}
-.evbar{display:flex;height:100%;min-width:0}.evbar i{display:block;height:100%;min-width:1px}
-.evbar i+i{box-shadow:inset 1px 0 0 rgba(255,255,255,.7)}
-.evv{text-align:right;font-weight:700;font-size:13.5px;font-variant-numeric:tabular-nums}
-.evrow.nol .evn,.evrow.nol .evv{color:var(--muted);font-weight:500}
-@media (max-width:640px){.evrow{grid-template-columns:96px minmax(0,1fr) 52px;gap:8px}}
+/* Event di Setiap Lokasi: grafik total + kartu per lokasi */
+.evsub{margin:6px 0 4px;font-size:13.5px;font-weight:600;color:var(--ink-2)}
+.evkol{overflow-x:auto}.evkol svg{display:block;width:100%;height:auto}
+.evgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;align-items:start}
+.evcard{border:1px solid var(--grid);border-radius:12px;padding:10px 12px;break-inside:avoid}
+.evh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:4px}
+.evh b{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.evh span{font-size:16px;font-weight:700}
+.evm{display:grid;grid-template-columns:96px minmax(0,1fr) 44px;gap:6px;align-items:center;font-size:11px;padding:1px 0}
+.evm span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.evm span:last-child{text-align:right;font-weight:600}
+.evt{height:9px;background:var(--surface-2);border-radius:3px;overflow:hidden}.evt i{display:block;height:100%;border-radius:3px}
+.evm.nol{color:var(--muted)}.evm.nol span:last-child{font-weight:500}
+.evcard.nol{background:var(--surface-2)}.evcard.nol .evh{color:var(--muted);margin:0}.evkosong{font-size:11.5px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -1134,17 +1135,36 @@ function gambar(L) {
 }
 // warna tetap per jenis event (urutan panel di LaporanHarian.gs)
 const WARNA_EV = ['#7a5cc7', '#0f78bf', '#c0392b', '#e8833a', '#d4a017', '#5d6d7e', '#1b1f1d', '#8e2418', '#3f8a3a', '#a0522d', '#e05c9a', '#17a2a2', '#b8ca10', '#2e86de'];
-// grafik batang bertumpuk: satu batang per lokasi/area, potongan = jenis event
+const sk = n => n >= 1e6 ? (n / 1e6).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' jt' : n >= 1e4 ? Math.round(n / 1e3) + ' rb' : n >= 1e3 ? (n / 1e3).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' rb' : nf(n);
+// Event di Setiap Lokasi: grafik batang total per lokasi + kartu kecil per lokasi (batang tiap jenis event)
 function grafikLokasi(L) {
   const n = L.panel[0] ? L.panel[0].rows.length : 0;
   if (!n) return '<div class="kosong">Tidak ada lokasi dalam cakupan.</div>';
   const J = L.panel.map((p, i) => ({p, i, c: WARNA_EV[i % WARNA_EV.length]})).filter(o => o.p.total);
   const rows = Array.from({length: n}, (_, r) => { const v = L.panel.map(p => p.rows[r].v); return {n: L.panel[0].rows[r].n, v, t: v.reduce((s, x) => s + x, 0)}; }).sort((a, b) => b.t - a.t || a.n.localeCompare(b.n));
-  const mx = Math.max(1, ...rows.map(r => r.t)), nama = x => esc(L.baris === 'Area' ? x : judul(x));
-  return `${J.length ? `<div class="legend">${J.map(o => `<span><i style="background:${o.c}"></i>${esc(o.p.grafik)}</span>`).join('')}</div>` : '<div class="kosong">Belum ada event pada periode ini.</div>'}
-    <div class="evlok">${rows.map(r => `<div class="evrow${r.t ? '' : ' nol'}"><span class="evn" title="${nama(r.n)}">${nama(r.n)}</span>
-      <span class="evtrack"><span class="evbar" style="width:${r.t / mx * 100}%">${J.filter(o => r.v[o.i]).map(o => `<i style="width:${r.v[o.i] / r.t * 100}%;background:${o.c}" title="${nama(r.n)} · ${esc(o.p.grafik)}: ${nf(r.v[o.i])}"></i>`).join('')}</span></span>
-      <span class="evv">${nf(r.t)}</span></div>`).join('')}</div>`;
+  const nama = x => esc(L.baris === 'Area' ? x : judul(x));
+  if (!J.length) return '<div class="kosong">Belum ada event pada periode ini.</div>';
+  const kartu = rows.map(r => { const m = Math.max(1, ...J.map(o => r.v[o.i]));
+    return `<div class="evcard${r.t ? '' : ' nol'}"><div class="evh"><b title="${nama(r.n)}">${nama(r.n)}</b><span>${nf(r.t)}</span></div>` + (r.t
+      ? J.map(o => `<div class="evm${r.v[o.i] ? '' : ' nol'}"><span title="${esc(o.p.tabel)}">${esc(o.p.grafik)}</span><span class="evt"><i style="width:${r.v[o.i] / m * 100}%;background:${o.c}"></i></span><span>${nf(r.v[o.i])}</span></div>`).join('')
+      : '<div class="evkosong">Tidak ada event</div>') + '</div>'; }).join('');
+  return (rows.length > 1 ? `<h3 class="evsub">Total event per ${L.baris.toLowerCase()}</h3>${kolomLokasi(rows, nama)}<h3 class="evsub">Rincian jenis event per ${L.baris.toLowerCase()}</h3>` : '') + `<div class="evgrid">${kartu}</div>`;
+}
+// grafik batang tegak: total event tiap lokasi, batang tertinggi paling gelap, garis putus-putus = rata-rata
+function kolomLokasi(rows, nama) {
+  const n = rows.length, W = Math.max(1100, n * 46), H = 330, ml = 46, mr = 70, mt = 26, mb = 96, iw = W - ml - mr, ih = H - mt - mb;
+  const m0 = Math.max(1, ...rows.map(r => r.t)) * 1.08, p = Math.pow(10, Math.floor(Math.log10(m0))), mx = Math.max(5, [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => m0 / p <= x) * p);
+  const nt = [5, 4, 3, 6].find(k => Number.isInteger(mx / k) && /^(1|2|2\.5|5)0*$/.test(String(mx / k / Math.pow(10, Math.floor(Math.log10(mx / k)))))) || 4;
+  const y = v => mt + ih - v / mx * ih, w = iw / n, bw = Math.min(34, w * .62), avg = rows.reduce((s, r) => s + r.t, 0) / n;
+  const tk = Array.from({length: nt + 1}, (_, i) => mx / nt * i);
+  return `<div class="evkol"><svg viewBox="0 0 ${W} ${H}" style="min-width:${Math.min(W, 760)}px" role="img" aria-label="Total event per lokasi">
+    ${tk.map(v => `<line x1="${ml}" x2="${W - mr}" y1="${y(v)}" y2="${y(v)}" stroke="#e6e9e6"/><text class="tick" x="${ml - 6}" y="${y(v) + 4}" text-anchor="end">${sk(v)}</text>`).join('')}
+    ${rows.map((r, i) => { const cx = ml + w * i + w / 2, top = i === 0 && r.t;
+      return (r.t ? `<rect x="${(cx - bw / 2).toFixed(1)}" y="${y(r.t).toFixed(1)}" width="${bw.toFixed(1)}" height="${(mt + ih - y(r.t)).toFixed(1)}" rx="3" fill="${top ? '#2f5a37' : '#4a7a53'}" opacity="${top ? 1 : .55}"><title>${nama(r.n)}: ${nf(r.t)} event</title></rect>
+        <text x="${cx}" y="${y(r.t) - 6}" text-anchor="middle" style="font-size:11px;font-weight:${top ? 700 : 600};fill:#1b1f1d">${sk(r.t)}</text>` : '') +
+        `<text class="tick" transform="translate(${cx + 3},${mt + ih + 12}) rotate(-40)" text-anchor="end" style="${top ? 'font-weight:700;fill:#1b1f1d' : ''}">${nama(r.n)}</text>`; }).join('')}
+    <line x1="${ml}" x2="${W - mr}" y1="${y(avg)}" y2="${y(avg)}" stroke="#1b1f1d" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <text x="${W - mr + 6}" y="${y(avg) + 4}" style="font-size:11.5px;font-weight:600;fill:#1b1f1d">rata² ${sk(avg)}</text></svg></div>`;
 }
 function tabelOffline(L) {
   if (!L.offline.length) return '';
