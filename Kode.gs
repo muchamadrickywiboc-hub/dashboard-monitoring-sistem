@@ -15,8 +15,8 @@
  *     prosesTarikan butuh layanan lanjutan "Drive API" (Apps Script > Layanan > Drive API) untuk membaca .xlsx.
  * Semua rekap (parameter, regional, lokasi, TOP 10 AMT, event per hari) dihitung di sini, tanpa rumus spreadsheet.
  *
- *  - doGet()            : web app (?laporan=harian = Laporan Harian Lampiran 3A, LaporanHarian.gs).
- *  - getDashboardData() : dipanggil dashboard; hasil di-cache 6 jam (jalankan hapusCache setelah data diubah).
+ *  - doGet()            : web app (?laporan=harian = Laporan GPS & Dashcam Daily/Monthly, LaporanHarian.gs).
+ *  - getDashboardData() : dipanggil dashboard; hasil di-cache 6 jam + salinan di file Drive (menu "Perbarui data dashboard sekarang" setelah data diubah).
  *  - pasangPemicu()     : jalankan sekali; membangun ulang cache tiap jam supaya dashboard langsung terbuka.
  */
 
@@ -27,6 +27,7 @@ const CFG = {
   BULAN_TARIKAN: 10,       // mulai bulan ini (10 = Oktober) data HANYA dari tarikan (link Tarikan Sistem); bulan sebelumnya dari file "Data <nn> ..." (summary)
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
+  JEDA_GABUNG_DETIK: 0,   // (mis. 10) alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
 };
 const REGIONS = ['SUMBAGUT', 'SUMBAGSEL', 'JABALINUS', 'KALIMANTAN', 'SULAWESI', 'MALUPA'];
 /** Area = satuan filter dashboard (kolom Area di data). */
@@ -40,8 +41,12 @@ const TIPE = {
   'OVER SPEED': 'GPS', 'HARSH TURN / CORNERING': 'GPS', 'HARSH BRAKING': 'GPS', 'HARSH ACCELERATION': 'GPS',
   'BLACK ZONE': 'GPS', 'IDLING': 'GPS', 'DRIVING > 4 HOURS': 'GPS',
   'MENGGUNAKAN TELEPON': 'CCTV', 'MEROKOK / VAPE': 'CCTV', 'MICROSLEEP': 'CCTV', 'MENGUAP': 'CCTV',
-  'DISTRACTION MENGEMUDI': 'CCTV', 'SEAT BELT': 'CCTV',
+  'DISTRACTION MENGEMUDI': 'CCTV', 'SEAT BELT': 'CCTV', 'SOS': 'GPS',
 };
+/** Parameter yang hanya tampil untuk akun RTC (PUSAT); akun Area & Lokasi tidak menerimanya sama sekali (nama parameter huruf besar). */
+const PARAM_KHUSUS_RTC = ['SOS', 'SEAT BELT'];
+/** Parameter yang tidak ditampilkan untuk akun Lokasi (Control Room). */
+const PARAM_SEMBUNYI_LOKASI = ['ILLEGAL SHUTDOWN', 'CAMERA COVERING', 'MICROSLEEP', 'DRIVING > 4 HOURS', 'DISTRACTION MENGEMUDI'];
 /** Nama event yang tampil di dashboard dan export (nama parameter huruf besar -> label). Kunci parameter tetap mengikuti sheet Pemetaan. */
 const LABEL_EVENT = {
   'OVER SPEED': 'Overspeed', 'HARSH BRAKING': 'Harsh Brake', 'HARSH ACCELERATION': 'Harsh Acceleration', 'HARSH TURN / CORNERING': 'Harsh Cornering',
@@ -54,13 +59,17 @@ const LABEL_EVENT = {
 function onOpen() {
   try {
     SpreadsheetApp.getUi().createMenu('Dashboard')
-      .addItem('Hapus cache dashboard', 'hapusCache')
+      .addItem('Perbarui data dashboard sekarang', 'hapusCache')
       .addItem('Uji baca sumber', 'UJI_BACA_SUMBER')
+      .addItem('Uji kecepatan dashboard', 'UJI_KECEPATAN')
       .addItem('Pasang pemicu otomatis', 'pasangPemicu')
       .addItem('Proses file tarikan sekarang', 'prosesTarikan')
       .addItem('Proses ulang semua file tarikan', 'prosesUlangSemuaTarikan')
+      .addItem('Baca ulang tarikan (area / bulan)…', 'menuBacaUlangArea')
       .addSeparator()
       .addItem('Buat / lengkapi akun (Pusat, Area, Lokasi)', 'buatSheetAkun')
+      .addItem('Rapikan akun ganda (lokasi sama)', 'rapikanAkunGanda')
+      .addItem('Lengkapi sheet Pemetaan (case tarikan)', 'lengkapiPemetaan')
       .addItem('Amankan password akun', 'amankanPasswordAkun')
       .addItem('Buat ulang semua password (format pendek)', 'buatUlangPasswordAkun')
       .addItem('Keluarkan semua sesi login', 'keluarkanSemuaSesi')
@@ -70,11 +79,11 @@ function onOpen() {
   } catch (e) { /* dijalankan dari luar spreadsheet */ }
 }
 
+/** Menu: membangun ulang data dashboard di sini (bukan menghapus cache), jadi pengunjung tidak ikut menunggu. */
 function hapusCache() {
-  CacheService.getScriptCache().remove('DASHB4_N');
-  CacheService.getScriptCache().remove('DASHB4');
-  CacheService.getScriptCache().remove('LGLIST');
-  try { SpreadsheetApp.getActiveSpreadsheet().toast('Cache dihapus. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Cache dihapus.'); }
+  CacheService.getScriptCache().removeAll(['LGLIST', 'DASHB4_N']);   // DASHB4 = cache JSON lama (tidak dipakai lagi)
+  panaskanCache();
+  try { SpreadsheetApp.getActiveSpreadsheet().toast('Data dashboard sudah diperbarui. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Data dashboard diperbarui.'); }
 }
 
 /** DIAGNOSA: jalankan dari editor, lihat hasilnya di View > Logs. */
@@ -97,7 +106,42 @@ function doGet(e) {
 }
 
 /** Dijalankan pemicu waktu: membangun ulang cache supaya pengunjung tidak menunggu spreadsheet dihitung. */
-function panaskanCache() { simpanCache_(JSON.stringify(bangunData_())); }
+function panaskanCache() { simpanUtama_(JSON.stringify(bangunData_())); }
+/* Data utama hanya disimpan dalam bentuk gzip+base64 (sekitar 10x lebih kecil dari JSON):
+   - di CacheService (kunci DASHB4Z). JSON mentah bisa melewati batas cache sehingga gagal tersimpan diam-diam,
+     lalu setiap pengunjung menghitung ulang semua spreadsheet (inilah yang membuat dashboard lama terbuka);
+   - di file Drive (salinan), dipakai bila cache kosong.
+   Akun Pusat menerima bentuk terkompresi apa adanya; akun Area/Lokasi dibuka dulu lalu dipotong. */
+function simpanUtama_(json) { const z = zip_(json); const ok = simpanCache_(z, 'DASHB4Z'); simpanSnapshot_(z); if (!ok) Logger.log('Cache dashboard gagal disimpan (' + Math.round(z.length / 1024) + ' KB).'); return z; }
+function zip_(s) { return Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(s, 'application/json')).getBytes()); }
+function unzip_(z) { return Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(z), 'application/x-gzip')).getDataAsString(); }
+
+const SNAP_NAMA = '_Cache Dashboard (otomatis, jangan dihapus).txt';
+const SNAP_MAKS_JAM = 3;   // salinan lebih tua dari ini dianggap basi -> dibangun ulang
+function fileSnapshot_() { const it = DriveApp.getFolderById(CFG.FOLDER_ID).getFilesByName(SNAP_NAMA); return it.hasNext() ? it.next() : null; }
+function simpanSnapshot_(z) {
+  try { const f = fileSnapshot_(); if (f) f.setContent(z); else DriveApp.getFolderById(CFG.FOLDER_ID).createFile(SNAP_NAMA, z, MimeType.PLAIN_TEXT); }
+  catch (e) { Logger.log('Salinan data tidak tersimpan: ' + e.message); }
+}
+function bacaSnapshot_() {
+  try { const f = fileSnapshot_(); if (!f || Date.now() - f.getLastUpdated().getTime() > SNAP_MAKS_JAM * 3600000) return null; return f.getBlob().getDataAsString(); }
+  catch (e) { return null; }
+}
+/** Data utama (gzip+base64): cache -> salinan Drive -> hitung ulang (hanya satu pengunjung, yang lain menunggu). */
+function dataUtamaZ_() {
+  const ada = ambilCache_('DASHB4Z');
+  if (ada) return ada;
+  const kunci = LockService.getScriptLock(); kunci.tryLock(120000);
+  try {
+    const lagi = ambilCache_('DASHB4Z');
+    if (lagi) return lagi;
+    const snap = bacaSnapshot_();
+    if (snap) { simpanCache_(snap, 'DASHB4Z'); return snap; }
+    return simpanUtama_(JSON.stringify(bangunData_()));
+  } finally { try { kunci.releaseLock(); } catch (e) { /* tidak memegang kunci */ } }
+}
+/** Data utama sebagai teks JSON. */
+function dataUtama_() { return unzip_(dataUtamaZ_()); }
 
 /** Jalankan sekali dari editor: memasang pemicu panaskanCache tiap jam. */
 function pasangPemicu() {
@@ -116,7 +160,8 @@ function simpanCache_(json, kunci, detik) {
     for (let i = 0; i * size < json.length; i++) parts[kunci + '_' + i] = json.substr(i * size, size);
     parts[kunci + '_N'] = String(Object.keys(parts).length);
     CacheService.getScriptCache().putAll(parts, detik || CFG.CACHE_DETIK);
-  } catch (e) { /* tanpa cache */ }
+    return true;
+  } catch (e) { Logger.log('Cache ' + kunci + ' gagal disimpan: ' + e.message); return false; }
 }
 function ambilCache_(kunci) {
   const cache = CacheService.getScriptCache(), n = Number(cache.get(kunci + '_N') || 0);
@@ -127,16 +172,25 @@ function ambilCache_(kunci) {
 }
 
 /** Dipanggil dashboard setelah login: data sesuai cakupan akun (Pusat = semua, Area = satu area, Lokasi = satu lokasi). */
+// Dikirim terkompresi: 'Z' + info akun (JSON, kosong untuk Area/Lokasi) + '\n' + gzip base64. Dibuka di browser (bukaData).
 function getDashboardData(token) {
   const ses = sesi_(token);
-  return potongJson_(dataUtama_(), ses, 'SC_');
+  if (ses.peran === 'PUSAT') {
+    return 'Z' + JSON.stringify({ nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }) + '\n' + dataUtamaZ_();
+  }
+  const kunci = 'SZ_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
+  let z = ambilCache_(kunci);
+  if (!z) { z = zip_(potongJson_(dataUtama_(), ses, 'SC_')); simpanCache_(z, kunci, 900); }
+  return 'Z\n' + z;
 }
-function dataUtama_() {
-  const ada = ambilCache_('DASHB4');
-  if (ada) return ada;
-  const json = JSON.stringify(bangunData_());
-  simpanCache_(json);
-  return json;
+/** DIAGNOSA kecepatan: jalankan dari editor, lihat View > Logs. */
+function UJI_KECEPATAN() {
+  let t = Date.now(); const c = ambilCache_('DASHB4Z'); Logger.log('Baca cache: ' + (Date.now() - t) + ' ms, ' + (c ? Math.round(c.length / 1024) + ' KB' : 'KOSONG'));
+  t = Date.now(); const s = bacaSnapshot_(); Logger.log('Baca salinan Drive: ' + (Date.now() - t) + ' ms, ' + (s ? Math.round(s.length / 1024) + ' KB' : 'tidak ada / basi'));
+  t = Date.now(); const d = bangunData_(); const json = JSON.stringify(d); Logger.log('Hitung ulang semua data: ' + (Date.now() - t) + ' ms, JSON ' + Math.round(json.length / 1024) + ' KB');
+  Logger.log('Ukuran per bagian (KB): ' + Object.keys(d).map(k => k + ' ' + Math.round(JSON.stringify(d[k]).length / 1024)).join(', '));
+  t = Date.now(); const z = simpanUtama_(json); Logger.log('Kompres & simpan: ' + (Date.now() - t) + ' ms, ' + Math.round(z.length / 1024) + ' KB dikirim');
+  t = Date.now(); const ok = ambilCache_('DASHB4Z'); Logger.log('Cek cache setelah disimpan: ' + (ok ? 'OK (' + (Date.now() - t) + ' ms)' : 'GAGAL'));
 }
 
 /* ============================== AKUN & LOGIN ============================== */
@@ -246,6 +300,9 @@ function sesi_(token) {
 function potongCakupan_(d, ses) {
   d.akun = { nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' };
   if (ses.peran === 'PUSAT') return d;
+  buangParam_(d, PARAM_KHUSUS_RTC, d.harianRtc);
+  if (ses.peran === 'LOKASI') buangParam_(d, PARAM_SEMBUNYI_LOKASI, d.harianLok);
+  delete d.harianRtc; delete d.harianLok;
   const ai = AREAS.indexOf(ses.area || ''), kl = ses.lok ? kunciLok(ses.lok) : '';
   const L = d.lok.map(x => ses.peran === 'AREA' ? x[1] === ai : kunciLok(x[0]) === kl && (ai < 0 || x[1] === ai));
   d.lok = d.lok.map((x, i) => L[i] ? x : ['', x[1]]);
@@ -260,8 +317,24 @@ function potongCakupan_(d, ses) {
   if (ses.peran === 'LOKASI' && !L.some(x => x)) d.peringatan = (d.peringatan || []).concat('Lokasi akun ini (' + ses.lok + ') tidak ditemukan di data. Periksa ejaan Lokasi di sheet Akun.');
   return d;
 }
+/** Parameter dalam `daftar` dibuang (params, fakta, driver) dan bagian hariannya (`kurangHarian`) dikurangkan dari total harian per kategori.
+ *  Akun Area & Lokasi: PARAM_KHUSUS_RTC; akun Lokasi juga PARAM_SEMBUNYI_LOKASI. */
+function buangParam_(d, daftar, kurangHarian) {
+  const P = d.params || [], baru = [], ganti = P.map(p => daftar.indexOf(teks(p.key).toUpperCase()) >= 0 ? -1 : baru.push(p) - 1);
+  if (kurangHarian && kurangHarian.length) {
+    const kurang = {}; kurangHarian.forEach(r => { kurang[r.slice(0, 4).join('|')] = r; });
+    d.harian = d.harian.map(h => { const r = kurang[h.slice(0, 4).join('|')]; return r ? [h[0], h[1], h[2], h[3], h[4] - r[4], h[5] - r[5], h[6] - r[6]] : h; })
+      .filter(h => h[4] || h[5] || h[6]);
+  }
+  if (baru.length === P.length) return d;
+  d.params = baru;
+  d.fakta = d.fakta.filter(f => ganti[f[3]] >= 0).map(f => [f[0], f[1], f[2], ganti[f[3]], f[4]]);
+  if (d.driver) ['all', 'area', 'lok'].forEach(k => { d.driver[k] = d.driver[k].filter(r => ganti[r[3]] >= 0).map(r => [r[0], r[1], r[2], ganti[r[3]], r[4], r[5]]); });
+  return d;
+}
 function potongJson_(json, ses, awalan) {
-  if (ses.peran === 'PUSAT') return JSON.stringify(potongCakupan_(JSON.parse(json), ses));
+  // Pusat: data utuh + info akun, tanpa parse/stringify ulang data yang besar
+  if (ses.peran === 'PUSAT') return json.replace(/\}\s*$/, ',"akun":' + JSON.stringify({ nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }) + '}');
   const kunci = awalan + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
   const ada = ambilCache_(kunci);
   if (ada) return ada;
@@ -298,6 +371,68 @@ function buatSheetAkun() {
   sh.autoResizeColumns(1, AKUN_HDR.length);
   const pesan = baru.length ? baru.length + ' akun baru ditambahkan dengan password acak. Catat/bagikan password-nya, lalu jalankan menu "Amankan password akun".' : 'Semua akun sudah ada, tidak ada yang ditambahkan.';
   try { SpreadsheetApp.getUi().alert(pesan); } catch (e) { Logger.log(pesan); }
+}
+/* ============================== LOG EXPORT ============================== */
+const LOG_EKSPOR = 'Log Export';
+const LOG_EKSPOR_HDR = ['ID_Log', 'Area', 'Lokasi', 'Jenis Laporan', 'Tanggal Data', 'Target Pelaporan', 'Realisasi Pelaporan'];
+const TARGET_LAPOR_JAM = 7;   // Daily: H+1 pukul 07.00; Monthly: tanggal 1 bulan berikutnya pukul 07.00
+/**
+ * Dipanggil halaman setelah PDF diunduh: satu baris di spreadsheet "Log Export" (folder data), terbaru di paling atas.
+ * o: { area, lokasi, jenis ('Daily' / 'Monthly' / 'Dashboard ...'), tanggalData ('yyyy-mm-dd' / 'yyyy-mm' / teks), waktuPdf (ISO) }
+ */
+function catatEkspor(token, o) {
+  const ses = sesi_(token); o = o || {};
+  const t = x => { const v = teks(x).slice(0, 200); return /^[=+\-@]/.test(v) ? "'" + v : v; };   // cegah teks dibaca sebagai rumus
+  const area = t(o.area || ses.area || ''), lokasi = t(o.lokasi || ses.lok || ''), jenis = t(o.jenis);
+  const d = teks(o.tanggalData).match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/);
+  let tgl = t(o.tanggalData), target = '', fmtTgl = '@';
+  if (d && d[3]) { tgl = new Date(+d[1], +d[2] - 1, +d[3]); fmtTgl = 'dd/MM/yyyy'; if (jenis === 'Daily') target = new Date(+d[1], +d[2] - 1, +d[3] + 1, TARGET_LAPOR_JAM); }
+  else if (d) { tgl = new Date(+d[1], +d[2] - 1, 1); fmtTgl = 'MMMM yyyy'; if (jenis === 'Monthly') target = new Date(+d[1], +d[2], 1, TARGET_LAPOR_JAM); }
+  const w = o.waktuPdf ? new Date(o.waktuPdf) : null, realisasi = w && !isNaN(w) && Math.abs(w - Date.now()) < 864e5 * 400 ? w : new Date();
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const ss = bukaAtauBuat(DriveApp.getFolderById(CFG.FOLDER_ID), LOG_EKSPOR, [[LOG_EKSPOR, LOG_EKSPOR_HDR]]);
+    let sh = ss.getSheetByName(LOG_EKSPOR);
+    if (sh.getRange(1, 1, 1, LOG_EKSPOR_HDR.length).getValues()[0].join('|') !== LOG_EKSPOR_HDR.join('|')) {   // format kolom lama -> disimpan, buat sheet baru
+      sh.setName(LOG_EKSPOR + ' (format lama)');
+      sh = ss.insertSheet(LOG_EKSPOR, 0);
+      sh.getRange(1, 1, 1, LOG_EKSPOR_HDR.length).setValues([LOG_EKSPOR_HDR]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#4a7a53');
+      sh.setFrozenRows(1);
+    }
+    const ids = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues() : [];
+    const no = ids.reduce((m, r) => Math.max(m, +(teks(r[0]).match(/(\d+)$/) || [0, 0])[1]), 0) + 1;
+    sh.insertRowAfter(1);
+    sh.getRange(2, 1, 1, 7).setValues([['LOG-' + ('00000' + no).slice(-6), area, lokasi, jenis, tgl, target, realisasi]])
+      .setFontWeight('normal').setFontColor('#000000').setBackground(null);
+    sh.getRange(2, 5).setNumberFormat(fmtTgl);
+    sh.getRange(2, 6, 1, 2).setNumberFormat('dd/MM/yyyy HH:mm:ss');
+  } finally { lock.releaseLock(); }
+  return true;
+}
+
+/**
+ * Menu: akun Lokasi yang menunjuk lokasi yang sama (ejaan lama / ALIAS_LOKASI, mis. FT PANGKAL BALAM & FT PANGKALAN BALAM)
+ * dijadikan satu. Yang dipertahankan: baris yang Lokasi-nya sudah memakai nama sekarang; kolom Lokasi & Nama disamakan.
+ */
+function rapikanAkunGanda() {
+  const sh = sheetAkun_(); if (!sh || sh.getLastRow() < 2) return;
+  const v = sh.getRange(2, 1, sh.getLastRow() - 1, AKUN_HDR.length).getValues(), grup = {};
+  v.forEach((r, i) => {
+    if (teks(r[3]).toUpperCase() !== 'LOKASI' || !teks(r[5])) return;
+    (grup[kunciLok(r[5])] = grup[kunciLok(r[5])] || []).push(i);
+  });
+  const hapus = [], pesan = [];
+  Object.keys(grup).forEach(k => {
+    const ii = grup[k], lok = teks(v[ii[0]][5]).toUpperCase(), baku = ALIAS_LOKASI[lok] || lok;
+    const simpan = ii.filter(i => teks(v[i][5]).toUpperCase() === baku)[0];
+    const pakai = simpan !== undefined ? simpan : ii[0];
+    if (teks(v[pakai][5]).toUpperCase() !== baku) { sh.getRange(pakai + 2, 6).setValue(baku); sh.getRange(pakai + 2, 3).setValue('Lokasi ' + baku); }
+    ii.filter(i => i !== pakai).forEach(i => { hapus.push(i); pesan.push(teks(v[i][0]) + ' -> ' + teks(v[pakai][0])); });
+  });
+  hapus.sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
+  CacheService.getScriptCache().remove('LGLIST');
+  const t = hapus.length ? hapus.length + ' akun ganda dihapus (dipakai akun sebelah kanan): ' + pesan.join(', ') : 'Tidak ada akun ganda.';
+  try { SpreadsheetApp.getUi().alert(t); } catch (e) { Logger.log(t); }
 }
 /** Password pendek yang mudah diingat: username tanpa titik + 2 angka acak, mis. ft.jambi -> ftjambi48. */
 function pwPendek_(u) {
@@ -423,16 +558,20 @@ function hitungJam_(J, m, d, s, h, jendela, peta) {
 }
 
 /* ============================== SHEET DATA KOSONG ============================== */
-/** Menyamakan sheet Pemetaan dan Catatan dengan KASUS_WAJIB (Distraction Mengemudi dan Seat Belt kini dihitung). */
+/** Menyamakan sheet Pemetaan dan Catatan dengan KASUS_WAJIB (Distraction Mengemudi dan Seat Belt kini dihitung) dan KASUS_TARIKAN. */
 function sinkronPemetaan_(ss) {
   const sh = ss.getSheetByName('Pemetaan');
+  let n = 0;
   if (sh && sh.getLastRow() > 1) {
     const v = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues(), ada = {};
     v.forEach((r, i) => { const c = normKasus(r[0]), w = KASUS_WAJIB[c]; if (!c) return; ada[c] = 1;
       if (w && (teks(r[1]) !== w[0] || teks(r[2]) !== w[1])) sh.getRange(i + 2, 2, 1, 2).setValues([w]); });
-    const baru = Object.keys(KASUS_WAJIB).filter(c => !ada[c]);
+    // case wajib + case dari file tarikan (KASUS_TARIKAN) yang belum ada ditambahkan di bawah; baris yang sudah ada tidak diubah
+    const baru = Object.keys(KASUS_WAJIB).filter(c => !ada[c]).map(c => [c].concat(KASUS_WAJIB[c]))
+      .concat(Object.keys(KASUS_TARIKAN).filter(c => !ada[c] && !KASUS_WAJIB[c]).map(c => [c].concat(KASUS_TARIKAN[c])));
     let akhir = v.length; while (akhir > 0 && !teks(v[akhir - 1][0])) akhir--;   // baris terakhir kolom Case (kolom Area/Lokasi bisa lebih panjang)
-    if (baru.length) sh.getRange(akhir + 2, 1, baru.length, 3).setValues(baru.map(c => [c].concat(KASUS_WAJIB[c])));
+    if (baru.length) sh.getRange(akhir + 2, 1, baru.length, 3).setValues(baru);
+    n = baru.length;
   }
   const sc = ss.getSheetByName('Catatan');
   if (sc && sc.getLastRow()) {
@@ -444,6 +583,13 @@ function sinkronPemetaan_(ss) {
       else if (/^Parameter lain:/.test(x)) sc.getRange(i + 1, 1).setValue('Tidak dihitung: CAMERA COVERING ALARM, ILLEGAL SHUTDOWN, REST AREA, VIDEO LOSS / HIGH SPEED / ABNORMAL STORAGE ALARM.');
     });
   }
+  return n;
+}
+/** Menu: menambahkan case file tarikan yang belum ada ke sheet Pemetaan (SOS, HARSH ... ALARM, DRIVER ATTENTION HAS BEEN DISTRACTED, dll.). */
+function lengkapiPemetaan() {
+  const n = sinkronPemetaan_(SpreadsheetApp.open(fileAtur_()));
+  const t = n ? n + ' case baru ditambahkan ke sheet Pemetaan.' : 'Sheet Pemetaan sudah lengkap.';
+  try { SpreadsheetApp.getUi().alert(t); } catch (e) { Logger.log(t); }
 }
 
 /**
@@ -612,6 +758,11 @@ const KASUS_TARIKAN = {
   'BLACKZONE ALARM': ['Black Zone', 'Driver Discipline'], 'IDLE REPORT': ['Idling', 'Driver Discipline'],
   'DRIVER IS USING PHONE': ['Menggunakan Telepon', 'Driver Discipline'], 'DRIVER HAS BEEN SMOKING': ['Merokok / Vape', 'Driver Discipline'],
   'DRIVER HAS BEEN YAWNING': ['Menguap', 'Fatigue Management'],
+  'HARSH CORNERING ALARM': ['Harsh Turn / Cornering', 'Driving Behaviour'], 'HARSH TURN ALARM': ['Harsh Turn / Cornering', 'Driving Behaviour'],
+  'HARSH BRAKING ALARM': ['Harsh Braking', 'Driving Behaviour'], 'HARSH BRAKE ALARM': ['Harsh Braking', 'Driving Behaviour'], 'HARSH BREAKING ALARM': ['Harsh Braking', 'Driving Behaviour'],
+  'HARSH ACCELERATION ALARM': ['Harsh Acceleration', 'Driving Behaviour'],
+  'DRIVER ATTENTION HAS BEEN DISTRACTED': ['Distraction Mengemudi', 'Driver Discipline'],
+  'SOS': ['SOS', 'Driver Discipline'], 'SOS ALARM': ['SOS', 'Driver Discipline'],   // hanya tampil di akun RTC (PARAM_KHUSUS_RTC)
 };
 /** Event yang selalu dihitung, menimpa baris lama di sheet Pemetaan ("Parameter lain" / "Tidak dihitung"). */
 const KASUS_WAJIB = {
@@ -619,11 +770,11 @@ const KASUS_WAJIB = {
   'SEAT BELT DETECTION': ['Seat Belt', 'Driver Discipline'], 'SEATBELT DETECTION': ['Seat Belt', 'Driver Discipline'],
   'DRIVER IS NOT USING SEAT-BELT': ['Seat Belt', 'Driver Discipline'],
 };
-/** Menyeragamkan teks Case: huruf besar; "Blackzone Alarm - <nama zona>" -> "BLACKZONE ALARM"; "Over Speed Alarm (62 Km/H)" -> "OVER SPEED ALARM". */
+/** Menyeragamkan teks Case: huruf besar; "Blackzone Alarm - <nama zona>" -> "BLACKZONE ALARM"; "Over Speed Alarm (62 Km/H)" -> "OVER SPEED ALARM"; "Harsh Cornering Alarm (0.08G)" -> "HARSH CORNERING ALARM". */
 function normKasus(x) {
   let s = teks(x).toUpperCase();
   if (/^BLACK ?ZONE ALARM/.test(s)) return 'BLACKZONE ALARM';
-  s = s.replace(/\s*\(\d+\s*KM\/H\)\s*$/, '');
+  s = s.replace(/\s*\(\s*[\d.,]+\s*(?:KM\/H|G)?\s*\)\s*$/, '');   // nilai ukur di belakang: (62 Km/H), (0.08G)
   return s;
 }
 
@@ -652,6 +803,10 @@ function bacaPemetaan(v) {
 const ALIAS_LOKASI = {
   'FT SIMELUE': 'FT SIMEULUE', 'IT PANGKAL BALAM': 'FT PANGKALAN BALAM', 'FT WAYAME': 'IT WAYAME',
   'FT GORONTALO': 'IT GORONTALO', 'FT KENDARI': 'IT KENDARI',
+  'FT PANGKAL BALAM': 'FT PANGKALAN BALAM', 'FT KOLONEDALE': 'FT KOLONODALE', 'FT SIANTAR': 'FT PEMATANG SIANTAR',
+  'IT IT PONTIANAK': 'IT PONTIANAK', 'PONTIANAK': 'IT PONTIANAK', 'FT PONTIANAK': 'IT PONTIANAK',
+  'SAMARINDA': 'FT SAMARINDA', 'IT SAMARINDA': 'FT SAMARINDA', 'BALIKPAPAN': 'IT BALIKPAPAN', 'BANJARMASIN': 'IT BANJARMASIN',
+  'IT BADAS': 'FT BADAS', 'FT TENAU': 'IT TENAU', 'FT DONGGALA': 'IT DONGGALA',
 };
 function kunciLok(l) { const u = teks(l).toUpperCase(); return (ALIAS_LOKASI[u] || u).replace(/[^A-Z0-9]/g, ''); }
 /** "Sumbagut 1" / "SUMBAGUT II" -> "SUMBAGUT"; nama area yang tidak dikenal -> '' (area diambil dari lokasinya). */
@@ -683,11 +838,16 @@ function prosesTarikan() {
     const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
     const logSs = bukaAtauBuat(folder, LOG_NAMA, [[LOG_NAMA, LOG_HDR]]);
     const logSh = logSs.getSheetByName(LOG_NAMA);
-    const logV = logSh.getDataRange().getValues();
+    const daftar = daftarTarikan_(), ada = {};
+    daftar.forEach(o => { ada[o.id] = 1; });
+    // baris log file yang sudah tidak ada di folder (dihapus / diganti file baru) dibuang, supaya peringatan "gagal dibaca" lama tidak muncul terus
+    let logV = logSh.getDataRange().getValues(), dibuang = 0;
+    if (daftar.length) for (let i = logV.length - 1; i >= 1; i--) if (!ada[teks(logV[i][0])]) { logSh.deleteRow(i + 1); dibuang++; }
+    logV = logSh.getDataRange().getValues();
     const sudah = {};
     logV.slice(1).forEach((r, i) => { sudah[r[0]] = { baris: i + 2, diubah: Number(r[4]) || 0, status: teks(r[7]) }; });
 
-    const antre = daftarTarikan_().filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^GAGAL/.test(sudah[o.id].status));   // baru, berubah, atau gagal sebelumnya
+    const antre = daftar.filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^GAGAL/.test(sudah[o.id].status));   // baru, berubah, atau gagal sebelumnya
     antre.sort((a, b) => a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0);
     let n = 0;
     for (const o of antre) {
@@ -701,7 +861,7 @@ function prosesTarikan() {
       n++;
     }
     Logger.log('File tarikan diproses: ' + n + ' dari ' + antre.length + ' yang menunggu.');
-    if (n) { hapusCache(); try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }
+    if (n || dibuang) { try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }   // cache lama ditimpa, tidak dikosongkan dulu
   } finally { kunci.releaseLock(); }
 }
 
@@ -742,13 +902,21 @@ function prosesSatuTarikan(folder, o) {
     const k = petaKolom(sh.getRange(1, 1, 1, nc).getValues()[0]);
     const kol = h => { if (k[h] === undefined) return null; return sh.getRange(2, k[h] + 1, nr, 1).getValues(); };
     const tb = kol('TBBM'), al = kol('ALARM STATUS'), am = kol('AMT 1'), gid = kol('ALERT GROUP ID'), wk = kol('TIME') || kol('START ALERT');
+    const pl = kol('PLATE') || kol('IMEI'), jeda = (CFG.JEDA_GABUNG_DETIK || 0) * 1000;
     if (!tb || !al) throw new Error('kolom TBBM / Alarm Status tidak ditemukan');
-    const ev = {}, evj = {}, amt = {}, amj = {}, lihat = {};
+    const ev = {}, evj = {}, amt = {}, amj = {}, lihat = {}, akhir = {};
+    // urut waktu supaya alert beruntun per nopol bisa digabung
+    const ms = wk ? wk.map(r => waktuMs(r[0])) : [], urut = [];
+    for (let i = 0; i < nr; i++) urut.push(i);
+    if (jeda && pl && wk) urut.sort((a, b) => (ms[a] || 0) - (ms[b] || 0));
     let n = 0;
-    for (let i = 0; i < nr; i++) {
+    for (const i of urut) {
       const c = normKasus(al[i][0]); if (!c) continue;
       const g = gid ? teks(gid[i][0]) : '';
       if (g) { if (lihat[g]) continue; lihat[g] = 1; }   // baris dobel (Alert Group ID sama) dihitung sekali
+      // alert yang sama dari kendaraan yang sama berulang tiap 1-10 detik (mis. Yawning) = satu kejadian
+      const kp = pl ? teks(pl[i][0]).toUpperCase() + '\u0001' + c : '', t = ms[i];
+      if (jeda && kp && t !== null && t !== undefined) { const s = akhir[kp]; akhir[kp] = t; if (s !== undefined && t - s <= jeda) continue; }
       const lok = teks(tb[i][0]).toUpperCase();
       const ke = lok + '\u0001' + c; ev[ke] = (ev[ke] || 0) + 1; n++;
       const jam = wk ? jamDari(wk[i][0]) : null;
@@ -772,6 +940,12 @@ function prosesSatuTarikan(folder, o) {
   }
 }
 
+/** Waktu (ms) dari kolom Time: nilai tanggal-jam Sheets atau teks "yyyy-mm-dd hh:mm:ss"; null bila tidak terbaca. */
+function waktuMs(x) {
+  if (x instanceof Date) return x.getTime();
+  const t = teks(x).match(/^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  return t ? new Date(+t[1], +t[2] - 1, +t[3], +t[4], +t[5], +(t[6] || 0)).getTime() : null;
+}
 /** Jam kejadian (0-23) dari kolom Time: nilai tanggal-jam Sheets atau teks "yyyy-mm-ddThh:mm:ss". */
 function jamDari(x) {
   if (x instanceof Date) return x.getHours();
@@ -796,6 +970,61 @@ function prosesUlangSemuaTarikan() {
   if (n > 0) sh.getRange(2, 5, n, 1).setValue(0);   // kolom "Diubah" = 0 -> dianggap berubah
   prosesTarikan();
 }
+
+/**
+ * Membaca ulang file tarikan (mis. setelah file di folder area diganti / diunggah ulang).
+ *   area  : nama area di Tarikan Sistem ("SUMBAGSEL"); "SUMBAGUT" mencakup Sumbagut 1 & 2; '' = semua area
+ *   bulan : 1-12, atau kosong = semua bulan tarikan
+ * 1. baris hasil dari file yang sudah tidak ada di folder (diunggah ulang dengan file baru / dihapus) dibuang,
+ *    supaya tidak terhitung dobel;
+ * 2. semua file yang cocok ditandai berubah lalu diproses ulang (sisa antrean dilanjutkan pemicu 15 menit).
+ */
+function bacaUlangTarikan(area, bulan) {
+  area = teks(area).toUpperCase(); bulan = Number(bulan) || 0;
+  const cocokArea = a => !area || teks(a).toUpperCase() === area || areaNorm(a) === area;
+  const semua = daftarTarikan_(), daftar = semua.filter(o => cocokArea(o.area) && (!bulan || +o.tgl.slice(5, 7) === bulan));
+  const label = (area || 'Semua area') + (bulan ? ' bulan ' + BULAN[bulan - 1].charAt(0) + BULAN[bulan - 1].slice(1).toLowerCase() : '');
+  if (!daftar.length) throw new Error('Tidak ada file tarikan untuk ' + label + '. Periksa nama area di spreadsheet Tarikan Sistem.');
+  const ada = {}; semua.forEach(o => { ada[o.id] = 1; });   // semua file yang masih ada di folder
+  const ulang = {}; daftar.forEach(o => { ulang[o.id] = 1; });
+  const folder = DriveApp.getFolderById(CFG.FOLDER_ID), it = folder.getFilesByType(MimeType.GOOGLE_SHEETS), kolomArea = { 'Event': 1, 'AMT': 0, 'Event Jam': 2, 'AMT Jam': 2 };
+  let buang = 0;
+  while (it.hasNext()) {
+    const f = it.next(), m = teks(f.getName()).match(/^TARIKAN\s+(\d{1,2})\b/i);
+    if (!m || (bulan && +m[1] !== bulan)) continue;
+    const ss = SpreadsheetApp.open(f);
+    Object.keys(kolomArea).forEach(n => {
+      const sh = ss.getSheetByName(n); if (!sh || sh.getLastRow() < 2) return;
+      const v = sh.getDataRange().getValues(), w = v[0].length, ka = kolomArea[n];
+      const sisa = v.slice(1).filter(r => !cocokArea(r[ka]) || ada[teks(r[w - 1])]);
+      if (sisa.length === v.length - 1) return;
+      buang += v.length - 1 - sisa.length;
+      sh.getRange(2, 1, v.length - 1, w).clearContent();
+      if (sisa.length) sh.getRange(2, 1, sisa.length, w).setValues(sisa);
+    });
+  }
+  // tandai file yang cocok sebagai berubah -> diproses ulang oleh prosesTarikan
+  const itL = folder.getFilesByName(LOG_NAMA);
+  if (itL.hasNext()) {
+    const sh = SpreadsheetApp.open(itL.next()).getSheetByName(LOG_NAMA), v = sh.getDataRange().getValues();
+    v.forEach((r, i) => { if (i && ulang[teks(r[0])]) sh.getRange(i + 1, 5).setValue(0); });
+  }
+  const pesan = label + ': ' + daftar.length + ' file ditandai untuk dibaca ulang, ' + buang + ' baris lama dari file yang sudah tidak ada dibuang. '
+    + 'Pemrosesan berjalan sekarang (maks. 4,5 menit); sisanya dilanjutkan otomatis tiap 15 menit (lihat sheet Log Tarikan).';
+  Logger.log(pesan);
+  prosesTarikan();
+  return pesan;
+}
+function bacaUlangTarikanArea(area) { return bacaUlangTarikan(area, 0); }
+function menuBacaUlangArea() {
+  const ui = SpreadsheetApp.getUi(), r = ui.prompt('Baca ulang tarikan', 'Nama area (mis. SUMBAGSEL, SUMBAGUT), atau kosongkan untuk semua area. Tambahkan nomor bulan bila perlu, mis. "SUMBAGSEL 10" atau "10":', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const s = teks(r.getResponseText()), m = s.match(/(?:^|\s)(\d{1,2})$/);
+  ui.alert(bacaUlangTarikan(m ? s.slice(0, m.index).trim() : s, m ? +m[1] : 0));
+}
+/** Jalankan dari editor. */
+function BACA_ULANG_SUMBAGSEL() { bacaUlangTarikan('SUMBAGSEL', 0); }
+function BACA_ULANG_SEMUA_OKTOBER() { bacaUlangTarikan('', 10); }
 
 function namaAmt(x) {
   const s = teks(x).replace(/\s*[\[(].*?[\])]\s*/g, ' ').replace(/^[\s.\-]+|[\s.\-]+$/g, '').toUpperCase();
@@ -870,7 +1099,9 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
 
   const lok = [], lokIdx = {};
   const li = (l, ai) => { const k = ai + '|' + l; if (lokIdx[k] === undefined) { lokIdx[k] = lok.length; lok.push([l, ai]); } return lokIdx[k]; };
-  const F = {}, H = {}, KI = { DB: 4, DD: 5, FM: 6 };
+  const F = {}, H = {}, HR = {}, HL = {}, KI = { DB: 4, DD: 5, FM: 6 };
+  const khusus = params.map(p => PARAM_KHUSUS_RTC.indexOf(p.key.toUpperCase()) >= 0);
+  const sembunyiLok = params.map(p => PARAM_SEMBUNYI_LOKASI.indexOf(p.key.toUpperCase()) >= 0);
   let tanpaArea = 0;
   EV.forEach(e => {
     const m = e[0], pi = pIdx[e[4]], n = e[6];
@@ -880,6 +1111,8 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
     const ai = AREAS.indexOf(a), L = li(l, ai);
     const fk = m + '|' + L + '|' + pi; (F[fk] || (F[fk] = [m, ai, L, pi, 0]))[4] += n;
     const hk = m + '|' + e[1] + '|' + L; (H[hk] || (H[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;
+    if (khusus[pi]) (HR[hk] || (HR[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;   // bagian khusus RTC, dikurangkan untuk akun lain
+    if (sembunyiLok[pi]) (HL[hk] || (HL[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;   // dikurangkan untuk akun Lokasi
   });
   if (tanpaArea) catatan.push('Data: ' + tanpaArea + ' event tanpa Area dan Lokasi yang jelas tidak dihitung.');
 
@@ -915,6 +1148,7 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
   return {
     tahun: CFG.TAHUN, areas: AREAS, bulanAda: bulanAda, params: params, lok: lok,
     fakta: Object.keys(F).map(k => F[k]), harian: Object.keys(H).map(k => H[k]), driver: driver,
+    harianRtc: Object.keys(HR).map(k => HR[k]), harianLok: Object.keys(HL).map(k => HL[k]),
     catatan: catatan, peringatan: peringatan, updated: new Date().toISOString(),
   };
 }
