@@ -41,8 +41,10 @@ const TIPE = {
   'OVER SPEED': 'GPS', 'HARSH TURN / CORNERING': 'GPS', 'HARSH BRAKING': 'GPS', 'HARSH ACCELERATION': 'GPS',
   'BLACK ZONE': 'GPS', 'IDLING': 'GPS', 'DRIVING > 4 HOURS': 'GPS',
   'MENGGUNAKAN TELEPON': 'CCTV', 'MEROKOK / VAPE': 'CCTV', 'MICROSLEEP': 'CCTV', 'MENGUAP': 'CCTV',
-  'DISTRACTION MENGEMUDI': 'CCTV', 'SEAT BELT': 'CCTV',
+  'DISTRACTION MENGEMUDI': 'CCTV', 'SEAT BELT': 'CCTV', 'SOS': 'GPS',
 };
+/** Parameter yang hanya tampil untuk akun RTC (PUSAT); akun Area & Lokasi tidak menerimanya sama sekali (nama parameter huruf besar). */
+const PARAM_KHUSUS_RTC = ['SOS', 'SEAT BELT'];
 /** Nama event yang tampil di dashboard dan export (nama parameter huruf besar -> label). Kunci parameter tetap mengikuti sheet Pemetaan. */
 const LABEL_EVENT = {
   'OVER SPEED': 'Overspeed', 'HARSH BRAKING': 'Harsh Brake', 'HARSH ACCELERATION': 'Harsh Acceleration', 'HARSH TURN / CORNERING': 'Harsh Cornering',
@@ -295,6 +297,7 @@ function sesi_(token) {
 function potongCakupan_(d, ses) {
   d.akun = { nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' };
   if (ses.peran === 'PUSAT') return d;
+  buangParamRtc_(d);
   const ai = AREAS.indexOf(ses.area || ''), kl = ses.lok ? kunciLok(ses.lok) : '';
   const L = d.lok.map(x => ses.peran === 'AREA' ? x[1] === ai : kunciLok(x[0]) === kl && (ai < 0 || x[1] === ai));
   d.lok = d.lok.map((x, i) => L[i] ? x : ['', x[1]]);
@@ -307,6 +310,21 @@ function potongCakupan_(d, ses) {
     d.driver = { all: ulang(atas), area: ulang(atas), lok: ulang(lok), nama: nama };
   }
   if (ses.peran === 'LOKASI' && !L.some(x => x)) d.peringatan = (d.peringatan || []).concat('Lokasi akun ini (' + ses.lok + ') tidak ditemukan di data. Periksa ejaan Lokasi di sheet Akun.');
+  return d;
+}
+/** Akun Area & Lokasi: parameter PARAM_KHUSUS_RTC dibuang (params, fakta, driver) dan dikurangkan dari total harian per kategori. */
+function buangParamRtc_(d) {
+  const P = d.params || [], baru = [], ganti = P.map(p => PARAM_KHUSUS_RTC.indexOf(teks(p.key).toUpperCase()) >= 0 ? -1 : baru.push(p) - 1);
+  if (d.harianRtc && d.harianRtc.length) {
+    const kurang = {}; d.harianRtc.forEach(r => { kurang[r.slice(0, 4).join('|')] = r; });
+    d.harian = d.harian.map(h => { const r = kurang[h.slice(0, 4).join('|')]; return r ? [h[0], h[1], h[2], h[3], h[4] - r[4], h[5] - r[5], h[6] - r[6]] : h; })
+      .filter(h => h[4] || h[5] || h[6]);
+  }
+  delete d.harianRtc;
+  if (baru.length === P.length) return d;
+  d.params = baru;
+  d.fakta = d.fakta.filter(f => ganti[f[3]] >= 0).map(f => [f[0], f[1], f[2], ganti[f[3]], f[4]]);
+  if (d.driver) ['all', 'area', 'lok'].forEach(k => { d.driver[k] = d.driver[k].filter(r => ganti[r[3]] >= 0).map(r => [r[0], r[1], r[2], ganti[r[3]], r[4], r[5]]); });
   return d;
 }
 function potongJson_(json, ses, awalan) {
@@ -728,6 +746,7 @@ const KASUS_TARIKAN = {
   'HARSH BRAKING ALARM': ['Harsh Braking', 'Driving Behaviour'], 'HARSH BRAKE ALARM': ['Harsh Braking', 'Driving Behaviour'], 'HARSH BREAKING ALARM': ['Harsh Braking', 'Driving Behaviour'],
   'HARSH ACCELERATION ALARM': ['Harsh Acceleration', 'Driving Behaviour'],
   'DRIVER ATTENTION HAS BEEN DISTRACTED': ['Distraction Mengemudi', 'Driver Discipline'],
+  'SOS': ['SOS', 'Driver Discipline'], 'SOS ALARM': ['SOS', 'Driver Discipline'],   // hanya tampil di akun RTC (PARAM_KHUSUS_RTC)
 };
 /** Event yang selalu dihitung, menimpa baris lama di sheet Pemetaan ("Parameter lain" / "Tidak dihitung"). */
 const KASUS_WAJIB = {
@@ -1064,7 +1083,8 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
 
   const lok = [], lokIdx = {};
   const li = (l, ai) => { const k = ai + '|' + l; if (lokIdx[k] === undefined) { lokIdx[k] = lok.length; lok.push([l, ai]); } return lokIdx[k]; };
-  const F = {}, H = {}, KI = { DB: 4, DD: 5, FM: 6 };
+  const F = {}, H = {}, HR = {}, KI = { DB: 4, DD: 5, FM: 6 };
+  const khusus = params.map(p => PARAM_KHUSUS_RTC.indexOf(p.key.toUpperCase()) >= 0);
   let tanpaArea = 0;
   EV.forEach(e => {
     const m = e[0], pi = pIdx[e[4]], n = e[6];
@@ -1074,6 +1094,7 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
     const ai = AREAS.indexOf(a), L = li(l, ai);
     const fk = m + '|' + L + '|' + pi; (F[fk] || (F[fk] = [m, ai, L, pi, 0]))[4] += n;
     const hk = m + '|' + e[1] + '|' + L; (H[hk] || (H[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;
+    if (khusus[pi]) (HR[hk] || (HR[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;   // bagian khusus RTC, dikurangkan untuk akun lain
   });
   if (tanpaArea) catatan.push('Data: ' + tanpaArea + ' event tanpa Area dan Lokasi yang jelas tidak dihitung.');
 
@@ -1109,6 +1130,7 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
   return {
     tahun: CFG.TAHUN, areas: AREAS, bulanAda: bulanAda, params: params, lok: lok,
     fakta: Object.keys(F).map(k => F[k]), harian: Object.keys(H).map(k => H[k]), driver: driver,
+    harianRtc: Object.keys(HR).map(k => HR[k]),
     catatan: catatan, peringatan: peringatan, updated: new Date().toISOString(),
   };
 }
