@@ -822,9 +822,10 @@ function renderTopBulan() {
   topList(document.getElementById('btopA'), REG.map(r => ({r, t: regTot(r, KC), p: KP === null ? null : regTot(r, KP)})).filter(o => o.t > 0).sort((a, b) => b.t - a.t).slice(0, 10).map(o => ({
     key: o.r, nama: rn(o.r), warna: rv(o.r), v: o.t, sub: `${nf(o.t)} event · ${pctTxt(o.t, o.p)} vs ${BP} · ${(D.regional[o.r] || {}).lokasi || 0} lokasi`,
     pilih: sel === o.r, redup: sel !== 'ALL' && sel !== o.r, klik: () => setSel(o.r)})), `Tidak ada data area untuk ${B}.`);
-  document.getElementById('btopLH').textContent = `Top 5 Lokasi dengan pelanggaran terbanyak — ${namaK(KC)}`;
+  const nTop = AKUN && AKUN.peran === 'AREA' ? 10 : 5;   // akun Area: Top 10 lokasi
+  document.getElementById('btopLH').textContent = `Top ${nTop} Lokasi dengan pelanggaran terbanyak — ${namaK(KC)}`;
   document.getElementById('btopLS').textContent = `${B} · ${sel === 'ALL' ? 'semua area' : rn(sel)} · klik untuk memfilter lokasi`;
-  topList(document.getElementById('btopL'), (D.lokasiBulan[KC] || []).filter(o => cocokReg(o.r) && o.t > 0).slice(0, 5).map(o => ({
+  topList(document.getElementById('btopL'), (D.lokasiBulan[KC] || []).filter(o => cocokReg(o.r) && o.t > 0).slice(0, nTop).map(o => ({
     key: o.i, nama: o.l, warna: rv(o.r), v: o.t, sub: `${rn(o.r)} · ${nf(o.t)} event · ${pctTxt(o.t, o.p)}${o.pm === null ? '' : ' vs ' + namaK(o.pm)}`,
     pilih: selLok === o.i, redup: selLok >= 0 && selLok !== o.i, klik: () => setLok(o.i)})), `Tidak ada data lokasi untuk ${B}.`);
 }
