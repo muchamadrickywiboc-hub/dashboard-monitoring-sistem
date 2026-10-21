@@ -858,7 +858,7 @@ function renderIlegal() {
   const pm = prevM(), cL = tgl ? `${tgl} ${BLN[mon]}` : BLN[mon], pL = tgl ? (tgl > 1 ? `${tgl - 1} ${BLN[mon]}` : null) : pm === null ? null : BLN[pm];
   document.getElementById('isH').textContent = `Illegal Shutdown — ${cL} ${D.tahun}`;
   document.getElementById('isSub').textContent = `${scope()} · tidak termasuk 3 kategori di atas${KC === 'W' && (shift || jam >= 0) ? ' · filter shift/jam tidak berlaku (data per tanggal)' : ''} · klik area / lokasi untuk memfilter`;
-  if (!RAW.ilegal) { isi.innerHTML = '<div class="emptyamt">Data Illegal Shutdown belum ada. Jalankan menu Dashboard &gt; Hapus cache dashboard, lalu muat ulang halaman.</div>'; return; }
+  if (!RAW.ilegal) { isi.innerHTML = '<div class="emptyamt">Data Illegal Shutdown belum ada. Jalankan menu Dashboard &gt; Perbarui data dashboard sekarang, lalu muat ulang halaman.</div>'; return; }
   const A = RAW.areas, okL = li => selLok < 0 || li === selLok, okA = ai => sel === 'ALL' || A[ai] === sel;
   const kini = (m, d) => m === mon && (!tgl || d === tgl), lalu = (m, d) => tgl ? m === mon && d === tgl - 1 : m === pm;
   const nh = nHari(mon), hari = Array.from({length: nh}, () => ({IS: 0, ada: false})), bln = BLN.map((_, m) => ADA.indexOf(m) >= 0 ? 0 : null);

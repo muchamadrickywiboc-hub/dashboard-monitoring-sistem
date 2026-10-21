@@ -16,7 +16,7 @@
  * Semua rekap (parameter, regional, lokasi, TOP 10 AMT, event per hari) dihitung di sini, tanpa rumus spreadsheet.
  *
  *  - doGet()            : web app (?laporan=harian = Laporan GPS & Dashcam Daily/Monthly, LaporanHarian.gs).
- *  - getDashboardData() : dipanggil dashboard; hasil di-cache 6 jam (jalankan hapusCache setelah data diubah).
+ *  - getDashboardData() : dipanggil dashboard; hasil di-cache 6 jam + salinan di file Drive (menu "Perbarui data dashboard sekarang" setelah data diubah).
  *  - pasangPemicu()     : jalankan sekali; membangun ulang cache tiap jam supaya dashboard langsung terbuka.
  */
 
@@ -54,7 +54,7 @@ const LABEL_EVENT = {
 function onOpen() {
   try {
     SpreadsheetApp.getUi().createMenu('Dashboard')
-      .addItem('Hapus cache dashboard', 'hapusCache')
+      .addItem('Perbarui data dashboard sekarang', 'hapusCache')
       .addItem('Uji baca sumber', 'UJI_BACA_SUMBER')
       .addItem('Pasang pemicu otomatis', 'pasangPemicu')
       .addItem('Proses file tarikan sekarang', 'prosesTarikan')
@@ -70,11 +70,11 @@ function onOpen() {
   } catch (e) { /* dijalankan dari luar spreadsheet */ }
 }
 
+/** Menu: membangun ulang data dashboard di sini (bukan menghapus cache), jadi pengunjung tidak ikut menunggu. */
 function hapusCache() {
-  CacheService.getScriptCache().remove('DASHB4_N');
-  CacheService.getScriptCache().remove('DASHB4');
   CacheService.getScriptCache().remove('LGLIST');
-  try { SpreadsheetApp.getActiveSpreadsheet().toast('Cache dihapus. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Cache dihapus.'); }
+  panaskanCache();
+  try { SpreadsheetApp.getActiveSpreadsheet().toast('Data dashboard sudah diperbarui. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Data dashboard diperbarui.'); }
 }
 
 /** DIAGNOSA: jalankan dari editor, lihat hasilnya di View > Logs. */
@@ -97,7 +97,21 @@ function doGet(e) {
 }
 
 /** Dijalankan pemicu waktu: membangun ulang cache supaya pengunjung tidak menunggu spreadsheet dihitung. */
-function panaskanCache() { simpanCache_(JSON.stringify(bangunData_())); }
+function panaskanCache() { const json = JSON.stringify(bangunData_()); simpanCache_(json); simpanSnapshot_(json); }
+
+/* Salinan data terakhir di file Drive: dipakai bila cache kosong (kedaluwarsa / gagal disimpan), supaya dashboard
+   tidak menunggu semua spreadsheet dihitung ulang. Diperbarui oleh panaskanCache (pemicu tiap jam & prosesTarikan). */
+const SNAP_NAMA = '_Cache Dashboard (otomatis, jangan dihapus).json';
+const SNAP_MAKS_JAM = 3;   // salinan lebih tua dari ini dianggap basi -> dibangun ulang
+function fileSnapshot_() { const it = DriveApp.getFolderById(CFG.FOLDER_ID).getFilesByName(SNAP_NAMA); return it.hasNext() ? it.next() : null; }
+function simpanSnapshot_(json) {
+  try { const f = fileSnapshot_(); if (f) f.setContent(json); else DriveApp.getFolderById(CFG.FOLDER_ID).createFile(SNAP_NAMA, json, MimeType.PLAIN_TEXT); }
+  catch (e) { Logger.log('Salinan data tidak tersimpan: ' + e.message); }
+}
+function bacaSnapshot_() {
+  try { const f = fileSnapshot_(); if (!f || Date.now() - f.getLastUpdated().getTime() > SNAP_MAKS_JAM * 3600000) return null; return f.getBlob().getDataAsString(); }
+  catch (e) { return null; }
+}
 
 /** Jalankan sekali dari editor: memasang pemicu panaskanCache tiap jam. */
 function pasangPemicu() {
@@ -134,9 +148,17 @@ function getDashboardData(token) {
 function dataUtama_() {
   const ada = ambilCache_('DASHB4');
   if (ada) return ada;
-  const json = JSON.stringify(bangunData_());
-  simpanCache_(json);
-  return json;
+  // cache kosong: satu pengunjung saja yang membangun ulang, yang lain menunggu lalu memakai hasilnya
+  const kunci = LockService.getScriptLock(); kunci.tryLock(120000);
+  try {
+    const lagi = ambilCache_('DASHB4');
+    if (lagi) return lagi;
+    const snap = bacaSnapshot_();
+    if (snap) { simpanCache_(snap); return snap; }
+    const json = JSON.stringify(bangunData_());
+    simpanCache_(json); simpanSnapshot_(json);
+    return json;
+  } finally { try { kunci.releaseLock(); } catch (e) { /* tidak memegang kunci */ } }
 }
 
 /* ============================== AKUN & LOGIN ============================== */
@@ -262,7 +284,8 @@ function potongCakupan_(d, ses) {
   return d;
 }
 function potongJson_(json, ses, awalan) {
-  if (ses.peran === 'PUSAT') return JSON.stringify(potongCakupan_(JSON.parse(json), ses));
+  // Pusat: data utuh + info akun, tanpa parse/stringify ulang data yang besar
+  if (ses.peran === 'PUSAT') return json.replace(/\}\s*$/, ',"akun":' + JSON.stringify({ nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }) + '}');
   const kunci = awalan + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
   const ada = ambilCache_(kunci);
   if (ada) return ada;
@@ -704,7 +727,7 @@ function prosesTarikan() {
       n++;
     }
     Logger.log('File tarikan diproses: ' + n + ' dari ' + antre.length + ' yang menunggu.');
-    if (n) { hapusCache(); try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }
+    if (n) { try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }   // cache lama ditimpa, tidak dikosongkan dulu
   } finally { kunci.releaseLock(); }
 }
 

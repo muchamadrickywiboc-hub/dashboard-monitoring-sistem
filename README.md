@@ -25,7 +25,7 @@ Nomor bulan diambil dari nama file. Bulan baru = tambah file `Data 11 November 2
 3. Jalankan `pasangPemicu` sekali (memberi izin, mengisi cache, dan memasang pembaruan cache tiap jam).
 4. Deploy > Manage deployments > Edit > New version.
 
-Setelah data diubah: jalankan `hapusCache` (atau tunggu pembaruan tiap jam).
+Setelah data diubah: menu Dashboard > Perbarui data dashboard sekarang (`hapusCache`), atau tunggu pembaruan tiap jam. Data terakhir juga disimpan di file `_Cache Dashboard (otomatis, jangan dihapus).json` di folder data, dipakai bila cache kosong supaya dashboard tetap cepat terbuka.
 
 ## Membangun ulang sheet ringkasan dari file mentah
 Folder `tools/` berisi skrip Python (butuh `openpyxl`) untuk membuat spreadsheet ringkasan dari file laporan mentah per bulan (kolom Case, Area, Tanggal, Lokasi, AMT 1, ...):
