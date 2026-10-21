@@ -27,7 +27,7 @@ const CFG = {
   BULAN_TARIKAN: 10,       // mulai bulan ini (10 = Oktober) data HANYA dari tarikan (link Tarikan Sistem); bulan sebelumnya dari file "Data <nn> ..." (summary)
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
-  JEDA_GABUNG_DETIK: 10,   // alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
+  JEDA_GABUNG_DETIK: 0,   // (mis. 10) alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
 };
 const REGIONS = ['SUMBAGUT', 'SUMBAGSEL', 'JABALINUS', 'KALIMANTAN', 'SULAWESI', 'MALUPA'];
 /** Area = satuan filter dashboard (kolom Area di data). */
