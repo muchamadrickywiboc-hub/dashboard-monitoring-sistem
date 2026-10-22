@@ -1165,10 +1165,11 @@ const sk = n => n >= 1e6 ? (n / 1e6).toLocaleString('id-ID', {maximumFractionDig
 function grafikLokasi(L) {
   const n = L.panel[0] ? L.panel[0].rows.length : 0;
   if (!n) return '<div class="kosong">Tidak ada lokasi dalam cakupan.</div>';
-  const J = L.panel.map((p, i) => ({p, i, c: WARNA_EV[(p.w != null ? p.w : i) % WARNA_EV.length]})).filter(o => o.p.total);
+  // semua jenis event dalam cakupan akun ditampilkan di kartu, termasuk yang 0
+  const J = L.panel.map((p, i) => ({p, i, c: WARNA_EV[(p.w != null ? p.w : i) % WARNA_EV.length]}));
   const rows = Array.from({length: n}, (_, r) => { const v = L.panel.map(p => p.rows[r].v); return {n: L.panel[0].rows[r].n, v, t: v.reduce((s, x) => s + x, 0)}; }).sort((a, b) => b.t - a.t || a.n.localeCompare(b.n));
   const nama = x => esc(L.baris === 'Area' ? x : judul(x));
-  if (!J.length) return '<div class="kosong">Belum ada event pada periode ini.</div>';
+  if (!L.panel.some(p => p.total)) return '<div class="kosong">Belum ada event pada periode ini.</div>';
   // satu lokasi: grafik batang per jenis event (urutan tetap), seperti grafik tren di dashboard
   if (n === 1) { const tot = rows[0].t;
     return kolomLokasi(L.panel.map(p => ({n: p.grafik, t: p.total})), x => esc(x), {miring: false, label: 'Jumlah event per jenis event',
