@@ -244,6 +244,7 @@ tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
 .more{align-self:flex-start;font:600 13px var(--f-ui);border:1px solid var(--forest);background:#fff;color:var(--forest);padding:7px 14px;border-radius:8px;cursor:pointer}
 .more:hover{background:var(--accent-wash)}
 .pick select optgroup{font-weight:700}
+th.urut{cursor:pointer;user-select:none;white-space:nowrap}th.urut:hover{text-decoration:underline}
 #breg tbody tr[data-r]:hover td,#blok tbody tr[data-k]:hover td{background:var(--accent-wash)}
 .nodata #view-bulan,.nodata .filters,.nodata .ctrlrow .pick{display:none!important}
 @media (max-width:640px){.boxes{grid-template-columns:minmax(0,1fr)}.boxes>div{border-right:0;border-bottom:1px solid var(--grid)}}
@@ -431,6 +432,8 @@ td{padding:7px 10px}
 <div id="tip" role="tooltip"></div>
 <script>
 let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, tgl = 0, shift = 0, jam = -1, WIN = null, WKEY = '', ERRW = '', PERIODE = 'bulan', TOKEN = '', AKUN = null, KC = 0, KP = null, showAllLok = false, showAllDelta = false;
+// urutan tabel rekap (klik judul kolom Total / pembanding / Persentase): k = t | p | n, d = -1 besar ke kecil, 1 kecil ke besar
+const URUT = {a: {k: 't', d: -1}, l: {k: 't', d: -1}};
 const rn = r => String(r || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\b(Ii|Iii|Iv)\b/g, x => x.toUpperCase());
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const B3 = BLN.map(b => b.slice(0, 3));
@@ -461,12 +464,12 @@ function rightRound(x, y, w, h, r) { r = Math.min(r, w, h/2); if (w <= 0) return
 function nTicks(m) { const ok = x => { const p = Math.pow(10, Math.floor(Math.log10(x))); const r = Math.round(x/p*100)/100; return [1,2,2.5,5,10].includes(r); }; return [4,5,3,6].find(n => ok(m/n)) || 4; }
 function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); const m = v/p; return [1,1.2,1.5,2,2.5,3,4,5,6,8,10].find(x => m <= x) * p; }
 // kunci urut kenaikan: lokasi/area baru di atas, tanpa pembanding di bawah
-// kolom Kenaikan di rekap: selisih angka + persentase, mis. "+627.031 ▲ 60,4%"
+// kolom Persentase di rekap: selisih angka + persentase, mis. "−97.307 (▼ 37,6%)"
 function naikTxt(t, y) {
   const d = t - (y || 0);
   if (y === null || y === undefined || !d) return pctTxt(t, y);
-  const kelas = d > 0 ? 'up' : 'down', tanda = d > 0 ? '+' : '\u2212';
-  return '<span class="' + kelas + '">' + tanda + nf(Math.abs(d)) + '</span> ' + pctTxt(t, y);
+  const kelas = d > 0 ? 'up' : 'down', tanda = d > 0 ? '+' : '\u2212', persen = pctTxt(t, y).replace(/<[^>]+>/g, '');
+  return '<span class="' + kelas + '">' + tanda + nf(Math.abs(d)) + ' (' + persen + ')</span>';
 }
 function pctTxt(t, y) {
   if (y === null || y === undefined) return '<span class="flat">–</span>';
@@ -860,17 +863,34 @@ function renderBulan() {
 }
 
 /* ================= REKAP PER AREA & LOKASI (ikut filter waktu) ================= */
+function nilaiUrut(k, t, p) {
+  if (k === 't') return t || 0;
+  if (k === 'p') return p === null || p === undefined ? -Infinity : p;
+  return p === null || p === undefined ? -Infinity : !p ? (t ? Infinity : 0) : t / p - 1;
+}
+function bandingUrut(u, a, b) { const x = nilaiUrut(u.k, a.t, a.p), y = nilaiUrut(u.k, b.t, b.p); return x === y ? (b.t || 0) - (a.t || 0) : (x < y ? -1 : 1) * u.d; }
+// judul kolom yang bisa diklik untuk mengurutkan
+function thUrut(tabel, k, teks) {
+  const u = URUT[tabel], aktif = u.k === k;
+  return '<th class="urut" data-t="' + tabel + '" data-k="' + k + '" title="Klik untuk mengurutkan">' + teks + (aktif ? (u.d < 0 ? ' \u25BC' : ' \u25B2') : ' \u21C5') + '</th>';
+}
+function pasangUrut(host) {
+  host.querySelectorAll('th.urut').forEach(th => th.onclick = () => { const u = URUT[th.dataset.t], k = th.dataset.k;
+    if (u.k === k) u.d = -u.d; else { u.k = k; u.d = -1; } renderRekap(); });
+}
+const KET_URUT = {t: 'total event', p: 'pembanding', n: 'persentase'};
 function renderRekap() {
   // per area
   const adaKat = REG.some(r => D.regional[r] && D.regional[r].kat[KC]);
-  document.getElementById('bregSub').textContent = `${judulK(KC)} ${KP === null ? (KC === 'W' ? 'tanpa pembanding (pilih tanggal untuk membandingkan dengan hari sebelumnya)' : 'dibanding bulan lalu') : 'dibanding ' + namaK(KP)} · urut dari total event terbanyak · klik baris untuk memfilter`;
+  document.getElementById('bregSub').textContent = `${judulK(KC)} ${KP === null ? (KC === 'W' ? 'tanpa pembanding (pilih tanggal untuk membandingkan dengan hari sebelumnya)' : 'dibanding bulan lalu') : 'dibanding ' + namaK(KP)} · urut dari ${KET_URUT[URUT.a.k]} ${URUT.a.d < 0 ? 'terbesar' : 'terkecil'} · klik judul kolom untuk mengurutkan, klik baris untuk memfilter`;
   let tot = 0, totp = 0; const tk = {DB: 0, DD: 0, FM: 0};
-  document.getElementById('breg').innerHTML = `<thead><tr><th>Regional</th>${adaKat ? CATS.map(c => `<th>${c.name}</th>`).join('') : ''}<th>${pendekK(KC)}</th><th>${KP === null ? (KC === 'W' ? 'Sebelumnya' : 'Bln lalu') : pendekK(KP)}</th><th>Kenaikan</th></tr></thead><tbody>` +
-    REG.slice().sort((a, b) => (regTot(b, KC) || 0) - (regTot(a, KC) || 0)).map(r => { const o = D.regional[r] || {total: [], kat: {}}, t = regTot(r, KC), p = KP === null ? null : regTot(r, KP), k = o.kat[KC];
+  document.getElementById('breg').innerHTML = `<thead><tr><th>Regional</th>${adaKat ? CATS.map(c => `<th>${c.name}</th>`).join('') : ''}${thUrut('a', 't', pendekK(KC))}${thUrut('a', 'p', KP === null ? (KC === 'W' ? 'Sebelumnya' : 'Bln lalu') : pendekK(KP))}${thUrut('a', 'n', 'Persentase')}</tr></thead><tbody>` +
+    REG.slice().sort((a, b) => bandingUrut(URUT.a, {t: regTot(a, KC), p: KP === null ? null : regTot(a, KP)}, {t: regTot(b, KC), p: KP === null ? null : regTot(b, KP)})).map(r => { const o = D.regional[r] || {total: [], kat: {}}, t = regTot(r, KC), p = KP === null ? null : regTot(r, KP), k = o.kat[KC];
       tot += t || 0; totp += p || 0; if (k) CATS.forEach(c => tk[c.key] += k[c.key] || 0);
       return `<tr data-r="${r}" style="cursor:pointer${sel !== 'ALL' && sel !== r ? ';opacity:.45' : ''}"><td><span class="rdot" style="background:${rv(r)}"></span>${rn(r)}</td>${adaKat ? CATS.map(c => `<td>${k ? nf(k[c.key]) : '–'}</td>`).join('') : ''}<td><b>${t === null ? '–' : nf(t)}</b></td><td>${p === null ? '–' : nf(p)}</td><td style="white-space:nowrap">${t === null ? '–' : naikTxt(t, p)}</td></tr>`; }).join('') +
     `<tr class="tot"><td>TOTAL</td>${adaKat ? CATS.map(c => `<td>${nf(tk[c.key])}</td>`).join('') : ''}<td>${nf(tot)}</td><td>${KP === null ? '–' : nf(totp)}</td><td style="white-space:nowrap">${naikTxt(tot, KP === null ? null : totp)}</td></tr></tbody>`;
   document.querySelectorAll('#breg tbody tr[data-r]').forEach(tr => tr.onclick = () => setSel(tr.dataset.r));
+  pasangUrut(document.getElementById('breg'));
 
   // lokasi bulan ini
   const LB = (D.lokasiBulan[KC] || []).filter(o => cocokReg(o.r));
@@ -878,12 +898,13 @@ function renderRekap() {
   // rekap per lokasi
   const ls = document.getElementById('blokSub'), lt = document.getElementById('blok'), lm = document.getElementById('blokMore');
   if (!lbAda) { ls.textContent = `Rincian lokasi untuk ${namaK(KC)} belum ada di sumber (tersedia: ${Object.keys(D.lokasiBulan).map(m => BLN[m]).join(', ') || '–'}).`; lt.innerHTML = ''; lm.innerHTML = ''; return; }
-  const lr = LB.slice().sort((a, b) => b.t - a.t), N = showAllLok ? lr.length : Math.min(10, lr.length);
-  ls.textContent = `${judulK(KC)} · ${lr.length} lokasi, urut dari total event terbanyak${pmL === null ? '' : ' (dibanding ' + namaK(pmL) + ')'}`;
-  lt.innerHTML = `<thead><tr><th>Lokasi</th><th>Regional</th>${CATS.map(c => `<th>${c.name}</th>`).join('')}<th>Total</th><th>${pmL === null ? (KC === 'W' ? 'Sebelumnya' : 'Bln lalu') : pendekK(pmL)}</th><th>Kenaikan</th></tr></thead><tbody>` +
+  const lr = LB.slice().sort((a, b) => bandingUrut(URUT.l, a, b)), N = showAllLok ? lr.length : Math.min(10, lr.length);
+  ls.textContent = `${judulK(KC)} · ${lr.length} lokasi, urut dari ${KET_URUT[URUT.l.k]} ${URUT.l.d < 0 ? 'terbesar' : 'terkecil'} · klik judul kolom Total / ${pmL === null ? 'pembanding' : pendekK(pmL)} / Persentase untuk mengurutkan${pmL === null ? '' : ' (dibanding ' + namaK(pmL) + ')'}`;
+  lt.innerHTML = `<thead><tr><th>Lokasi</th><th>Regional</th>${CATS.map(c => `<th>${c.name}</th>`).join('')}${thUrut('l', 't', 'Total')}${thUrut('l', 'p', pmL === null ? (KC === 'W' ? 'Sebelumnya' : 'Bln lalu') : pendekK(pmL))}${thUrut('l', 'n', 'Persentase')}</tr></thead><tbody>` +
     lr.slice(0, N).map(o => `<tr><td>${o.l}</td><td style="text-align:left"><span class="rdot" style="background:${rv(o.r)}"></span>${rn(o.r)}</td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b></td><td>${o.p === null ? '–' : nf(o.p)}</td><td style="white-space:nowrap">${naikTxt(o.t, o.p)}</td></tr>`).join('') + '</tbody>';
   lm.innerHTML = lr.length > 10 ? `<button type="button" class="more" id="btnMore">${showAllLok ? 'Tampilkan 10 teratas saja' : 'Tampilkan semua ' + lr.length + ' lokasi'}</button>` : '';
   const bm = document.getElementById('btnMore'); if (bm) bm.onclick = () => { showAllLok = !showAllLok; renderRekap(); };
+  pasangUrut(lt);
 }
 
 /* ================= TAMPILAN & MUAT DATA ================= */
