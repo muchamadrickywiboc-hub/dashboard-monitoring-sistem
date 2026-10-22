@@ -1254,10 +1254,17 @@ document.getElementById('btnKeluar').onclick = () => {
   TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null; sel = 'ALL'; selLok = -1; tgl = 0; shift = 0; jam = -1;
   tampilLogin('');
 };
+// pengukur waktu muat (ditampilkan di samping "Data s/d ..."), untuk mencari langkah yang lambat
+function waktuMuat(t0, t1, t2, t3, n) {
+  const d = ms => (ms / 1000).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' dtk', el = document.getElementById('tUpdate');
+  const rinci = `Halaman terbuka: ${d(t0)} · server + kirim data (${Math.round(n / 1024).toLocaleString('id-ID')} KB): ${d(t1 - t0)} · buka data: ${d(t2 - t1)} · tampilkan: ${d(t3 - t2)}`;
+  el.textContent += ` · dimuat ${d(t3)}`; el.title = rinci; console.log('[waktu muat] ' + rinci);
+}
 function muat(diam) {
   if (!TOKEN) { tampilLogin(''); return; }
   if (!diam || !D) { const l = document.getElementById('loading'); l.hidden = false; l.innerHTML = '<span class="spin"></span> Memuat data dashboard…'; }
-  google.script.run.withSuccessHandler(j => bukaData(j).then(start).catch(e => { if (!(diam && D)) gagal(e); })).withFailureHandler(e => { if (LGLANGKAH === 2 && !/LOGIN/.test(e && e.message ? e.message : String(e))) return lgGagalProses('Data gagal dimuat: ' + (e && e.message ? e.message : e)); if (perluLogin(e)) return; if (!(diam && D)) gagal(e); }).getDashboardData(TOKEN);
+  const t0 = performance.now();
+  google.script.run.withSuccessHandler(j => { const t1 = performance.now(); bukaData(j).then(p => { const t2 = performance.now(); start(p); if (!diam) waktuMuat(t0, t1, t2, performance.now(), j.length); }).catch(e => { if (!(diam && D)) gagal(e); }); }).withFailureHandler(e => { if (LGLANGKAH === 2 && !/LOGIN/.test(e && e.message ? e.message : String(e))) return lgGagalProses('Data gagal dimuat: ' + (e && e.message ? e.message : e)); if (perluLogin(e)) return; if (!(diam && D)) gagal(e); }).getDashboardData(TOKEN);
 }
 muat();
 setInterval(() => { if (TOKEN && D) muat(true); }, REFRESH_MS);
