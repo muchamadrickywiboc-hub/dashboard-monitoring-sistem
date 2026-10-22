@@ -516,7 +516,7 @@ function drawBulanan(host, arr, cat) {
 }
 
 // tren satu kategori per tanggal dalam bulan terpilih (periode Bulan)
-function drawHarianKat(host, hari, cat) {
+function drawHarianKat(host, hari, cat, pilih = -1) {
   const W = 640, H = 250, m = {l: 50, r: 16, t: 40, b: 28}, iw = W - m.l - m.r, ih = H - m.t - m.b;
   const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Event per tanggal ' + cat.name});
   if (!hari) { const t = svgEl('text', {x: W/2, y: H/2, 'text-anchor': 'middle', class: 'tick'}, svg); t.textContent = `Data per tanggal ${BLN[mon]} belum ada`; host.appendChild(svg); return; }
@@ -527,7 +527,7 @@ function drawHarianKat(host, hari, cat) {
   const akhir = arr.reduce((a, v, i) => v !== null ? i : a, -1);
   arr.forEach((v, i) => { const cx = m.l + slot*i + slot/2;
     // semua tanggal tampil sama (tanpa penanda tertinggi), masing-masing dengan angkanya
-    if (v) { svgEl('path', {d: topRound(cx - bw/2, y(v), bw, y(0) - y(v), 3), style: 'fill:#b5bbb7'}, svg);
+    if (v) { svgEl('path', {d: topRound(cx - bw/2, y(v), bw, y(0) - y(v), 3), style: 'fill:' + (i === pilih ? '#47504b' : '#b5bbb7')}, svg);
       const lb = svgEl('text', tegak ? {x: cx + 3.5, y: y(v) - 4, 'text-anchor': 'start', transform: 'rotate(-90 ' + (cx + 3.5) + ' ' + (y(v) - 4) + ')', style: 'fill:#1b1f1d;font-size:10px;font-weight:600;paint-order:stroke;stroke:#fff;stroke-width:3px'}
         : {x: cx, y: y(v) - 5, 'text-anchor': 'middle', style: 'fill:#1b1f1d;font-size:11px;font-weight:600;paint-order:stroke;stroke:#fff;stroke-width:3px'}, svg); lb.textContent = ax(v); }
     if (n <= 16 || i % 2 === 0) { const t = svgEl('text', {x: cx, y: H - 10, 'text-anchor': 'middle', class: 'tick'}, svg); t.textContent = String(i + 1); }
@@ -831,8 +831,11 @@ function renderBulan() {
   const HS = jam >= 0 ? [jam] : shift ? jamShift(shift) : Array.from({length: 24}, (_, i) => i);
 
   // kartu per kategori: donut, kotak, tren, tabel parameter
+  // filter tanggal saja, tapi sebagian besar event bulan ini tidak punya jam kejadian: grafik per jam kosong, jadi tampilkan event per tanggal
+  const keHari = W && !shift && jam < 0 && tgl > 0 && D.tanpaJam && D.tanpaJam.grafik > sum(HS.map(h => D.jamW[h].t)) && !!hariBulan(mon);
   const TJ = W && D.tanpaJam && D.tanpaJam.t ? ' · tanpa jam (data GPS, tidak ikut filter shift/jam): ' + CATS.filter(c => D.tanpaJam[c.key]).map(c => `${c.name} ${nf(D.tanpaJam[c.key])}`).join(', ') : '';
-  document.getElementById('trendSub').textContent = W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
+  document.getElementById('trendSub').textContent = keHari ? `${scope()} · ${labelWaktu()} · data ${BLN[mon]} tidak punya jam kejadian, jadi grafik menampilkan event per tanggal (batang gelap = tanggal ${tgl}) · garis hijau = tren`
+    : W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
     : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis hijau = tren`
     : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis hijau = tren`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
@@ -859,7 +862,8 @@ function renderBulan() {
       <div class="cattbl"><div class="tblket">${ketTabel}</div><div class="tbl"><table><thead><tr><th>Parameter</th><th>${S3(pm)}</th><th>${S3(kc)}</th><th>Kenaikan</th></tr></thead><tbody>${rows}
       <tr class="tot"><td>TOTAL</td><td>${prv === null ? '–' : nf(prv)}</td><td>${cur === null ? '–' : nf(cur)}</td><td>${pctTxt(cur || 0, prv)}</td></tr></tbody></table></div></div>`;
     te.appendChild(card);
-    if (W) drawJamKat(card.querySelector('.anachart'), HS, HS.map(h => D.jamW[h][cat.key]), KP ? HS.map(h => D.jamW[h]['p' + cat.key]) : null, cat);
+    if (keHari) drawHarianKat(card.querySelector('.anachart'), hariBulan(mon), cat, tgl - 1);
+    else if (W) drawJamKat(card.querySelector('.anachart'), HS, HS.map(h => D.jamW[h][cat.key]), KP ? HS.map(h => D.jamW[h]['p' + cat.key]) : null, cat);
     else if (PERIODE === 'tahun') drawBulanan(card.querySelector('.anachart'), arr, cat);
     else drawHarianKat(card.querySelector('.anachart'), HB, cat);
   });
