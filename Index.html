@@ -419,10 +419,10 @@ td{padding:7px 10px}
   <section class="panel wpanel" id="panelBday" hidden><div class="ph"><h2 id="bdayH">Event per hari</h2><p id="bdaySub"></p></div>
     <div class="legend" id="bdayLeg"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span><span id="bdayCmpLeg"><i style="background:none;border-top:2px dashed #1b1f1d;border-radius:0;height:0;width:16px"></i><b id="bdayCmpName"></b></span></div>
     <div class="chart" id="bday"></div></section>
-  <div class="anahead"><h2 id="drvH" style="margin:0;font-size:18px;font-weight:700">Top Pelanggaran Driver</h2><span class="hint" id="drvSub"></span></div>
-  <div id="bdrv" class="drvgrid wpanel"></div>
   <section class="panel wpanel" id="panelRegA"><div class="ph"><h2>Rekap per area</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
   <section class="panel wpanel" id="panelRegL"><div class="ph"><h2>Rekap per lokasi</h2><p id="blokSub"></p></div><div class="tbl"><table id="blok"></table></div><div id="blokMore"></div></section>
+  <div class="anahead"><h2 id="drvH" style="margin:0;font-size:18px;font-weight:700">Top Pelanggaran Driver</h2><span class="hint" id="drvSub"></span></div>
+  <div id="bdrv" class="drvgrid wpanel"></div>
 </div>
 <footer class="footer">
   <div class="redtab">www.elnusapetrofin.co.id</div>
@@ -477,6 +477,15 @@ function pctTxt(t, y) {
 }
 
 
+// garis tren (regresi linear) dari titik-titik yang berisi data; cx = posisi x tiap indeks, y = skala nilai
+function garisTren(svg, arr, cx, y, warna) {
+  const t = arr.map((v, i) => [i, v]).filter(o => o[1] !== null && o[1] !== undefined);
+  if (t.length < 2) return;
+  const n = t.length, mx = t.reduce((a, o) => a + o[0], 0) / n, my = t.reduce((a, o) => a + o[1], 0) / n;
+  const sxx = t.reduce((a, o) => a + (o[0] - mx) * (o[0] - mx), 0), b = sxx ? t.reduce((a, o) => a + (o[0] - mx) * (o[1] - my), 0) / sxx : 0;
+  const f = i => Math.max(0, my + b * (i - mx)), i0 = t[0][0], i1 = t[n - 1][0];
+  svgEl('line', {x1: cx(i0), x2: cx(i1), y1: y(f(i0)), y2: y(f(i1)), style: 'stroke:' + warna + ';stroke-width:2.5;stroke-linecap:round;opacity:.9;pointer-events:none'}, svg);
+}
 function drawBulanan(host, arr, cat) {
   const W = 640, H = 250, m = {l: 50, r: 16, t: 24, b: 28}, iw = W - m.l - m.r, ih = H - m.t - m.b, slot = iw/12, bw = Math.min(48, slot*.6);
   const isi = arr.slice(0, LAST + 1).filter(v => v !== null), avg = isi.length ? sum(isi)/isi.length : 0;
@@ -490,6 +499,7 @@ function drawBulanan(host, arr, cat) {
     const hit = svgEl('rect', {x: m.l + slot*i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
     hit.addEventListener('click', () => { if (ADA.indexOf(i) >= 0) { mon = i; render(); } });
     bindTip(hit, () => `<b>${BLN[i]} ${D.tahun}</b><br>${v === null ? 'belum ada data' : nf(v) + ' event'}${i > 0 && v !== null && arr[i-1] ? '<br>' + pctTxt(v, arr[i-1]).replace(/<[^>]+>/g, '') + ' vs ' + BLN[i-1] : ''}`); });
+  garisTren(svg, arr.slice(0, LAST + 1), i => m.l + slot*i + slot/2, y, '#c0392b');
   if (avg) { svgEl('line', {x1: m.l, x2: m.l + slot*(LAST + 1), y1: y(avg), y2: y(avg), style: 'stroke:#1b1f1d;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none'}, svg);
     const t = svgEl('text', {x: m.l + slot*(LAST + 1) + 6, y: y(avg) + 4, style: 'fill:#1b1f1d;font-size:12px;font-weight:600;pointer-events:none'}, svg); t.textContent = 'rata² ' + ax(avg); }
   host.appendChild(svg);
@@ -513,6 +523,7 @@ function drawHarianKat(host, hari, cat) {
     if (n <= 16 || i % 2 === 0) { const t = svgEl('text', {x: cx, y: H - 10, 'text-anchor': 'middle', class: 'tick'}, svg); t.textContent = String(i + 1); }
     const hit = svgEl('rect', {x: m.l + slot*i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
     bindTip(hit, () => `<b>${i + 1} ${BLN[mon]} ${D.tahun}</b><br>${cat.name}: ${v === null ? 'belum ada data' : nf(v) + ' event'}${avg && v !== null ? '<br>' + pctTxt(v, avg).replace(/<[^>]+>/g, '') + ' vs rata-rata harian' : ''}`); });
+  garisTren(svg, arr, i => m.l + slot*i + slot/2, y, '#c0392b');
   if (avg) { svgEl('line', {x1: m.l, x2: m.l + slot*(akhir + 1), y1: y(avg), y2: y(avg), style: 'stroke:#1b1f1d;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none'}, svg);
     const kanan = akhir + 1 > n*.8, t = svgEl('text', {x: kanan ? W - m.r : m.l + slot*(akhir + 1) + 6, y: y(avg) - 6, 'text-anchor': kanan ? 'end' : 'start', style: 'fill:#1b1f1d;font-size:12px;font-weight:600;pointer-events:none'}, svg); t.textContent = 'rata² ' + ax(avg) + '/hari'; }
   host.appendChild(svg);
@@ -814,8 +825,8 @@ function renderBulan() {
   // kartu per kategori: donut, kotak, tren, tabel parameter
   const TJ = W && D.tanpaJam && D.tanpaJam.t ? ' · tanpa jam (data GPS, tidak ikut filter shift/jam): ' + CATS.filter(c => D.tanpaJam[c.key]).map(c => `${c.name} ${nf(D.tanpaJam[c.key])}`).join(', ') : '';
   document.getElementById('trendSub').textContent = W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
-    : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis putus-putus = rata-rata`
-    : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis putus-putus = rata-rata per hari`;
+    : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis merah = tren, garis putus-putus = rata-rata`
+    : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis merah = tren, garis putus-putus = rata-rata per hari`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
   // keterangan tabel parameter: periode ini dibanding apa
   const pjg = k => W ? namaK(k) : `${BLN[k]} ${D.tahun}`;
