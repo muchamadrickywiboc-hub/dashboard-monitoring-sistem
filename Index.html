@@ -244,6 +244,7 @@ tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
 .more{align-self:flex-start;font:600 13px var(--f-ui);border:1px solid var(--forest);background:#fff;color:var(--forest);padding:7px 14px;border-radius:8px;cursor:pointer}
 .more:hover{background:var(--accent-wash)}
 .pick select optgroup{font-weight:700}
+th.urut{cursor:pointer;user-select:none;white-space:nowrap}th.urut:hover{text-decoration:underline}
 #breg tbody tr[data-r]:hover td,#blok tbody tr[data-k]:hover td{background:var(--accent-wash)}
 .nodata #view-bulan,.nodata .filters,.nodata .ctrlrow .pick{display:none!important}
 @media (max-width:640px){.boxes{grid-template-columns:minmax(0,1fr)}.boxes>div{border-right:0;border-bottom:1px solid var(--grid)}}
@@ -315,6 +316,7 @@ td{padding:7px 10px}
 }
 .peran-lokasi .sh-isi{grid-template-columns:minmax(0,1fr)}
 #pdfPage table{table-layout:fixed}#pdfPage th{letter-spacing:0!important;font-size:8.5px!important;background:#f1f4f1!important;color:#5d665f!important;position:static!important;font-weight:600;border:0}#pdfPage td,#pdfPage th{white-space:normal;line-height:1.3}
+#pdfPage .trentbl table{width:100%;border-collapse:collapse;font-size:10px}#pdfPage .trentbl td{padding:3px 6px;border-top:1px solid #eef1ee;text-align:right}#pdfPage .trentbl td:first-child{text-align:left;font-size:9.5px}#pdfPage .trentbl th{padding:4px 6px;text-align:right}#pdfPage .trentbl th:first-child{text-align:left}
 #pdfPage{position:fixed;left:-20000px;top:0;width:1123px;height:794px;overflow:hidden;background:#fff;color:#1b1f1d;font-family:Poppins,system-ui,sans-serif}
 </style>
 
@@ -419,10 +421,10 @@ td{padding:7px 10px}
   <section class="panel wpanel" id="panelBday" hidden><div class="ph"><h2 id="bdayH">Event per hari</h2><p id="bdaySub"></p></div>
     <div class="legend" id="bdayLeg"><span><i style="background:#0f78bf"></i>Driving Behaviour</span><span><i style="background:#e8833a"></i>Driver Discipline</span><span><i style="background:#3f8a3a"></i>Fatigue Management</span><span id="bdayCmpLeg"><i style="background:none;border-top:2px dashed #1b1f1d;border-radius:0;height:0;width:16px"></i><b id="bdayCmpName"></b></span></div>
     <div class="chart" id="bday"></div></section>
-  <div class="anahead"><h2 id="drvH" style="margin:0;font-size:18px;font-weight:700">Top Pelanggaran Driver</h2><span class="hint" id="drvSub"></span></div>
-  <div id="bdrv" class="drvgrid wpanel"></div>
   <section class="panel wpanel" id="panelRegA"><div class="ph"><h2>Rekap per area</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
   <section class="panel wpanel" id="panelRegL"><div class="ph"><h2>Rekap per lokasi</h2><p id="blokSub"></p></div><div class="tbl"><table id="blok"></table></div><div id="blokMore"></div></section>
+  <div class="anahead"><h2 id="drvH" style="margin:0;font-size:18px;font-weight:700">Top Pelanggaran Driver</h2><span class="hint" id="drvSub"></span></div>
+  <div id="bdrv" class="drvgrid wpanel"></div>
 </div>
 <footer class="footer">
   <div class="redtab">www.elnusapetrofin.co.id</div>
@@ -431,6 +433,8 @@ td{padding:7px 10px}
 <div id="tip" role="tooltip"></div>
 <script>
 let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, tgl = 0, shift = 0, jam = -1, WIN = null, WKEY = '', ERRW = '', PERIODE = 'bulan', TOKEN = '', AKUN = null, KC = 0, KP = null, showAllLok = false, showAllDelta = false;
+// urutan tabel rekap (klik judul kolom Total / pembanding / Persentase): k = t | p | n, d = -1 besar ke kecil, 1 kecil ke besar
+const URUT = {a: {k: 't', d: -1}, l: {k: 't', d: -1}};
 const rn = r => String(r || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\b(Ii|Iii|Iv)\b/g, x => x.toUpperCase());
 const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const B3 = BLN.map(b => b.slice(0, 3));
@@ -461,12 +465,12 @@ function rightRound(x, y, w, h, r) { r = Math.min(r, w, h/2); if (w <= 0) return
 function nTicks(m) { const ok = x => { const p = Math.pow(10, Math.floor(Math.log10(x))); const r = Math.round(x/p*100)/100; return [1,2,2.5,5,10].includes(r); }; return [4,5,3,6].find(n => ok(m/n)) || 4; }
 function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); const m = v/p; return [1,1.2,1.5,2,2.5,3,4,5,6,8,10].find(x => m <= x) * p; }
 // kunci urut kenaikan: lokasi/area baru di atas, tanpa pembanding di bawah
-// kolom Kenaikan di rekap: selisih angka + persentase, mis. "+627.031 ▲ 60,4%"
+// kolom Persentase di rekap: selisih angka + persentase, mis. "−97.307 (▼ 37,6%)"
 function naikTxt(t, y) {
   const d = t - (y || 0);
   if (y === null || y === undefined || !d) return pctTxt(t, y);
-  const kelas = d > 0 ? 'up' : 'down', tanda = d > 0 ? '+' : '\u2212';
-  return '<span class="' + kelas + '">' + tanda + nf(Math.abs(d)) + '</span> ' + pctTxt(t, y);
+  const kelas = d > 0 ? 'up' : 'down', tanda = d > 0 ? '+' : '\u2212', persen = pctTxt(t, y).replace(/<[^>]+>/g, '');
+  return '<span class="' + kelas + '">' + tanda + nf(Math.abs(d)) + ' (' + persen + ')</span>';
 }
 function pctTxt(t, y) {
   if (y === null || y === undefined) return '<span class="flat">–</span>';
@@ -477,6 +481,23 @@ function pctTxt(t, y) {
 }
 
 
+// garis tren: garis yang menyambung nilai tiap batang (mengikuti angkanya), dengan titik di setiap batang; cx = posisi x tiap indeks, y = skala nilai
+// gaya garis tren: 'ma3' = rata-rata bergerak 3 titik, 'ma7' = 7 titik, 'lurus' = garis lurus (regresi linear)
+let GAYA_TREN = 'ma3';
+function garisTren(svg, arr, cx, y, warna) {
+  const t = arr.map((v, i) => [i, v]).filter(o => o[1] !== null && o[1] !== undefined);
+  if (t.length < 2) return;
+  let P;
+  if (GAYA_TREN === 'lurus') {
+    const n = t.length, mx = t.reduce((s, o) => s + o[0], 0) / n, my = t.reduce((s, o) => s + o[1], 0) / n;
+    const b = t.reduce((s, o) => s + (o[0] - mx) * (o[1] - my), 0) / (t.reduce((s, o) => s + (o[0] - mx) * (o[0] - mx), 0) || 1);
+    P = [t[0], t[n - 1]].map(o => [o[0], Math.max(0, my + b * (o[0] - mx))]);
+  } else {
+    const h = GAYA_TREN === 'ma7' ? 3 : 1;
+    P = t.map((o, k) => { const w = t.slice(Math.max(0, k - h), k + h + 1); return [o[0], w.reduce((s, x) => s + x[1], 0) / w.length]; });
+  }
+  svgEl('path', {d: P.map((o, k) => (k ? 'L' : 'M') + cx(o[0]).toFixed(1) + ',' + y(o[1]).toFixed(1)).join(''), style: 'fill:none;stroke:' + warna + ';stroke-width:3;stroke-linejoin:round;stroke-linecap:round;opacity:.9;pointer-events:none'}, svg);
+}
 function drawBulanan(host, arr, cat) {
   const W = 640, H = 250, m = {l: 50, r: 16, t: 24, b: 28}, iw = W - m.l - m.r, ih = H - m.t - m.b, slot = iw/12, bw = Math.min(48, slot*.6);
   const isi = arr.slice(0, LAST + 1).filter(v => v !== null), avg = isi.length ? sum(isi)/isi.length : 0;
@@ -485,11 +506,12 @@ function drawBulanan(host, arr, cat) {
   for (let i = 0; i <= NT; i++) { const v = ymax*i/NT; svgEl('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: i ? 'gl' : 'base'}, svg); const t = svgEl('text', {x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'tick'}, svg); t.textContent = ax(v); }
   arr.forEach((v, i) => { const cx = m.l + slot*i + slot/2;
     if (v) { svgEl('path', {d: topRound(cx - bw/2, y(v), bw, y(0) - y(v), 4), style: `fill:${i === mon ? cat.dark : cat.color};opacity:${i === mon ? 1 : (i === prevM() ? .75 : .45)}`}, svg);
-      const lb = svgEl('text', {x: cx, y: y(v) - 6, 'text-anchor': 'middle', style: `fill:#1b1f1d;font-size:12px;font-weight:${i === mon ? 700 : 500}`}, svg); lb.textContent = ax(v); }
+      const lb = svgEl('text', {x: cx, y: y(v) - 6, 'text-anchor': 'middle', style: 'fill:#1b1f1d;font-size:12px;paint-order:stroke;stroke:#fff;stroke-width:3px;font-weight:' + (i === mon ? 700 : 500)}, svg); lb.textContent = ax(v); }
     const t = svgEl('text', {x: cx, y: H - 10, 'text-anchor': 'middle', class: 'tick', style: i === mon ? 'font-weight:700;fill:#1b1f1d' : ''}, svg); t.textContent = B3[i];
     const hit = svgEl('rect', {x: m.l + slot*i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
     hit.addEventListener('click', () => { if (ADA.indexOf(i) >= 0) { mon = i; render(); } });
     bindTip(hit, () => `<b>${BLN[i]} ${D.tahun}</b><br>${v === null ? 'belum ada data' : nf(v) + ' event'}${i > 0 && v !== null && arr[i-1] ? '<br>' + pctTxt(v, arr[i-1]).replace(/<[^>]+>/g, '') + ' vs ' + BLN[i-1] : ''}`); });
+  garisTren(svg, arr.slice(0, LAST + 1), i => m.l + slot*i + slot/2, y, '#c0392b');
   if (avg) { svgEl('line', {x1: m.l, x2: m.l + slot*(LAST + 1), y1: y(avg), y2: y(avg), style: 'stroke:#1b1f1d;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none'}, svg);
     const t = svgEl('text', {x: m.l + slot*(LAST + 1) + 6, y: y(avg) + 4, style: 'fill:#1b1f1d;font-size:12px;font-weight:600;pointer-events:none'}, svg); t.textContent = 'rata² ' + ax(avg); }
   host.appendChild(svg);
@@ -513,6 +535,7 @@ function drawHarianKat(host, hari, cat) {
     if (n <= 16 || i % 2 === 0) { const t = svgEl('text', {x: cx, y: H - 10, 'text-anchor': 'middle', class: 'tick'}, svg); t.textContent = String(i + 1); }
     const hit = svgEl('rect', {x: m.l + slot*i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
     bindTip(hit, () => `<b>${i + 1} ${BLN[mon]} ${D.tahun}</b><br>${cat.name}: ${v === null ? 'belum ada data' : nf(v) + ' event'}${avg && v !== null ? '<br>' + pctTxt(v, avg).replace(/<[^>]+>/g, '') + ' vs rata-rata harian' : ''}`); });
+  garisTren(svg, arr, i => m.l + slot*i + slot/2, y, '#c0392b');
   if (avg) { svgEl('line', {x1: m.l, x2: m.l + slot*(akhir + 1), y1: y(avg), y2: y(avg), style: 'stroke:#1b1f1d;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none'}, svg);
     const kanan = akhir + 1 > n*.8, t = svgEl('text', {x: kanan ? W - m.r : m.l + slot*(akhir + 1) + 6, y: y(avg) - 6, 'text-anchor': kanan ? 'end' : 'start', style: 'fill:#1b1f1d;font-size:12px;font-weight:600;pointer-events:none'}, svg); t.textContent = 'rata² ' + ax(avg) + '/hari'; }
   host.appendChild(svg);
@@ -814,8 +837,8 @@ function renderBulan() {
   // kartu per kategori: donut, kotak, tren, tabel parameter
   const TJ = W && D.tanpaJam && D.tanpaJam.t ? ' · tanpa jam (data GPS, tidak ikut filter shift/jam): ' + CATS.filter(c => D.tanpaJam[c.key]).map(c => `${c.name} ${nf(D.tanpaJam[c.key])}`).join(', ') : '';
   document.getElementById('trendSub').textContent = W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
-    : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis putus-putus = rata-rata`
-    : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis putus-putus = rata-rata per hari`;
+    : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis merah = tren, garis putus-putus = rata-rata`
+    : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis merah = tren, garis putus-putus = rata-rata per hari`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
   // keterangan tabel parameter: periode ini dibanding apa
   const pjg = k => W ? namaK(k) : `${BLN[k]} ${D.tahun}`;
@@ -849,17 +872,34 @@ function renderBulan() {
 }
 
 /* ================= REKAP PER AREA & LOKASI (ikut filter waktu) ================= */
+function nilaiUrut(k, t, p) {
+  if (k === 't') return t || 0;
+  if (k === 'p') return p === null || p === undefined ? -Infinity : p;
+  return p === null || p === undefined ? -Infinity : !p ? (t ? Infinity : 0) : t / p - 1;
+}
+function bandingUrut(u, a, b) { const x = nilaiUrut(u.k, a.t, a.p), y = nilaiUrut(u.k, b.t, b.p); return x === y ? (b.t || 0) - (a.t || 0) : (x < y ? -1 : 1) * u.d; }
+// judul kolom yang bisa diklik untuk mengurutkan
+function thUrut(tabel, k, teks) {
+  const u = URUT[tabel], aktif = u.k === k;
+  return '<th class="urut" data-t="' + tabel + '" data-k="' + k + '" title="Klik untuk mengurutkan">' + teks + (aktif ? (u.d < 0 ? ' \u25BC' : ' \u25B2') : ' \u21C5') + '</th>';
+}
+function pasangUrut(host) {
+  host.querySelectorAll('th.urut').forEach(th => th.onclick = () => { const u = URUT[th.dataset.t], k = th.dataset.k;
+    if (u.k === k) u.d = -u.d; else { u.k = k; u.d = -1; } renderRekap(); });
+}
+const KET_URUT = {t: 'total event', p: 'pembanding', n: 'persentase'};
 function renderRekap() {
   // per area
   const adaKat = REG.some(r => D.regional[r] && D.regional[r].kat[KC]);
-  document.getElementById('bregSub').textContent = `${judulK(KC)} ${KP === null ? (KC === 'W' ? 'tanpa pembanding (pilih tanggal untuk membandingkan dengan hari sebelumnya)' : 'dibanding bulan lalu') : 'dibanding ' + namaK(KP)} · urut dari total event terbanyak · klik baris untuk memfilter`;
+  document.getElementById('bregSub').textContent = `${judulK(KC)} ${KP === null ? (KC === 'W' ? 'tanpa pembanding (pilih tanggal untuk membandingkan dengan hari sebelumnya)' : 'dibanding bulan lalu') : 'dibanding ' + namaK(KP)} · urut dari ${KET_URUT[URUT.a.k]} ${URUT.a.d < 0 ? 'terbesar' : 'terkecil'} · klik judul kolom untuk mengurutkan, klik baris untuk memfilter`;
   let tot = 0, totp = 0; const tk = {DB: 0, DD: 0, FM: 0};
-  document.getElementById('breg').innerHTML = `<thead><tr><th>Regional</th>${adaKat ? CATS.map(c => `<th>${c.name}</th>`).join('') : ''}<th>${pendekK(KC)}</th><th>${KP === null ? (KC === 'W' ? 'Sebelumnya' : 'Bln lalu') : pendekK(KP)}</th><th>Kenaikan</th></tr></thead><tbody>` +
-    REG.slice().sort((a, b) => (regTot(b, KC) || 0) - (regTot(a, KC) || 0)).map(r => { const o = D.regional[r] || {total: [], kat: {}}, t = regTot(r, KC), p = KP === null ? null : regTot(r, KP), k = o.kat[KC];
+  document.getElementById('breg').innerHTML = `<thead><tr><th>Regional</th>${adaKat ? CATS.map(c => `<th>${c.name}</th>`).join('') : ''}${thUrut('a', 't', pendekK(KC))}${thUrut('a', 'p', KP === null ? (KC === 'W' ? 'Sebelumnya' : 'Bln lalu') : pendekK(KP))}${thUrut('a', 'n', 'Persentase')}</tr></thead><tbody>` +
+    REG.slice().sort((a, b) => bandingUrut(URUT.a, {t: regTot(a, KC), p: KP === null ? null : regTot(a, KP)}, {t: regTot(b, KC), p: KP === null ? null : regTot(b, KP)})).map(r => { const o = D.regional[r] || {total: [], kat: {}}, t = regTot(r, KC), p = KP === null ? null : regTot(r, KP), k = o.kat[KC];
       tot += t || 0; totp += p || 0; if (k) CATS.forEach(c => tk[c.key] += k[c.key] || 0);
       return `<tr data-r="${r}" style="cursor:pointer${sel !== 'ALL' && sel !== r ? ';opacity:.45' : ''}"><td><span class="rdot" style="background:${rv(r)}"></span>${rn(r)}</td>${adaKat ? CATS.map(c => `<td>${k ? nf(k[c.key]) : '–'}</td>`).join('') : ''}<td><b>${t === null ? '–' : nf(t)}</b></td><td>${p === null ? '–' : nf(p)}</td><td style="white-space:nowrap">${t === null ? '–' : naikTxt(t, p)}</td></tr>`; }).join('') +
     `<tr class="tot"><td>TOTAL</td>${adaKat ? CATS.map(c => `<td>${nf(tk[c.key])}</td>`).join('') : ''}<td>${nf(tot)}</td><td>${KP === null ? '–' : nf(totp)}</td><td style="white-space:nowrap">${naikTxt(tot, KP === null ? null : totp)}</td></tr></tbody>`;
   document.querySelectorAll('#breg tbody tr[data-r]').forEach(tr => tr.onclick = () => setSel(tr.dataset.r));
+  pasangUrut(document.getElementById('breg'));
 
   // lokasi bulan ini
   const LB = (D.lokasiBulan[KC] || []).filter(o => cocokReg(o.r));
@@ -867,12 +907,13 @@ function renderRekap() {
   // rekap per lokasi
   const ls = document.getElementById('blokSub'), lt = document.getElementById('blok'), lm = document.getElementById('blokMore');
   if (!lbAda) { ls.textContent = `Rincian lokasi untuk ${namaK(KC)} belum ada di sumber (tersedia: ${Object.keys(D.lokasiBulan).map(m => BLN[m]).join(', ') || '–'}).`; lt.innerHTML = ''; lm.innerHTML = ''; return; }
-  const lr = LB.slice().sort((a, b) => b.t - a.t), N = showAllLok ? lr.length : Math.min(10, lr.length);
-  ls.textContent = `${judulK(KC)} · ${lr.length} lokasi, urut dari total event terbanyak${pmL === null ? '' : ' (dibanding ' + namaK(pmL) + ')'}`;
-  lt.innerHTML = `<thead><tr><th>Lokasi</th><th>Regional</th>${CATS.map(c => `<th>${c.name}</th>`).join('')}<th>Total</th><th>${pmL === null ? (KC === 'W' ? 'Sebelumnya' : 'Bln lalu') : pendekK(pmL)}</th><th>Kenaikan</th></tr></thead><tbody>` +
+  const lr = LB.slice().sort((a, b) => bandingUrut(URUT.l, a, b)), N = showAllLok ? lr.length : Math.min(10, lr.length);
+  ls.textContent = `${judulK(KC)} · ${lr.length} lokasi, urut dari ${KET_URUT[URUT.l.k]} ${URUT.l.d < 0 ? 'terbesar' : 'terkecil'} · klik judul kolom Total / ${pmL === null ? 'pembanding' : pendekK(pmL)} / Persentase untuk mengurutkan${pmL === null ? '' : ' (dibanding ' + namaK(pmL) + ')'}`;
+  lt.innerHTML = `<thead><tr><th>Lokasi</th><th>Regional</th>${CATS.map(c => `<th>${c.name}</th>`).join('')}${thUrut('l', 't', 'Total')}${thUrut('l', 'p', pmL === null ? (KC === 'W' ? 'Sebelumnya' : 'Bln lalu') : pendekK(pmL))}${thUrut('l', 'n', 'Persentase')}</tr></thead><tbody>` +
     lr.slice(0, N).map(o => `<tr><td>${o.l}</td><td style="text-align:left"><span class="rdot" style="background:${rv(o.r)}"></span>${rn(o.r)}</td>${CATS.map(c => `<td>${nf(o[c.key])}</td>`).join('')}<td><b>${nf(o.t)}</b></td><td>${o.p === null ? '–' : nf(o.p)}</td><td style="white-space:nowrap">${naikTxt(o.t, o.p)}</td></tr>`).join('') + '</tbody>';
   lm.innerHTML = lr.length > 10 ? `<button type="button" class="more" id="btnMore">${showAllLok ? 'Tampilkan 10 teratas saja' : 'Tampilkan semua ' + lr.length + ' lokasi'}</button>` : '';
   const bm = document.getElementById('btnMore'); if (bm) bm.onclick = () => { showAllLok = !showAllLok; renderRekap(); };
+  pasangUrut(lt);
 }
 
 /* ================= TAMPILAN & MUAT DATA ================= */
@@ -960,6 +1001,51 @@ function halamanPdf() {
     <div style="display:flex;gap:10px;flex:1;min-height:0">${blok(judulGrafik, grafik, 1.35)}${blok(judulRank + ' — ' + lbl(kc), daftar(rank, '#4a7a53'))}${blok('Top ' + TOP_DRIVER + ' Driver — ' + lbl(kc), daftar(drv, '#c0392b'))}</div>
   </div>
 </div>`;
+}
+/* Halaman 2 export: grafik "Tren & parameter per kategori" seperti di dashboard (SVG disalin dengan gaya terhitung, lalu jadi gambar) */
+function svgKeGambar(svg) {
+  const c = svg.cloneNode(true), asal = svg.querySelectorAll('*'), salin = c.querySelectorAll('*');
+  asal.forEach((el, i) => { const cs = getComputedStyle(el), t = salin[i];
+    if (el.classList.contains('hit')) { t.remove(); return; }
+    ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'opacity', 'font-size', 'font-weight', 'paint-order'].forEach(k => t.style.setProperty(k, cs.getPropertyValue(k)));
+    t.style.setProperty('font-family', 'Arial, Helvetica, sans-serif'); t.removeAttribute('class'); });
+  c.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  const vb = (svg.getAttribute('viewBox') || '0 0 640 250').split(/\s+/); c.setAttribute('width', vb[2]); c.setAttribute('height', vb[3]);
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(c));
+}
+// ubah gambar SVG menjadi PNG (2x) lewat canvas, supaya ikut tergambar di PDF
+function gambarPng(im) {
+  return new Promise(ok => { const g = new Image();
+    g.onload = () => { try { const c = document.createElement('canvas'); c.width = g.naturalWidth * 2 || 1280; c.height = g.naturalHeight * 2 || 500;
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(g, 0, 0, c.width, c.height);
+      im.onload = () => ok(); im.onerror = () => ok(); im.src = c.toDataURL('image/png'); } catch (e) { ok(); } };
+    g.onerror = () => ok(); g.src = im.src; });
+}
+function halamanTren() {
+  const kartu = [...document.querySelectorAll('#btrend .ana')];
+  if (!kartu.length) return null;
+  const akun = document.getElementById('akunNama').textContent || 'RTC', W = KC === 'W';
+  const periode = W ? labelWaktu() : PERIODE === 'tahun' ? BLN[ADA[0]] + '\u2013' + BLN[LAST] + ' ' + D.tahun : BLN[mon] + ' ' + D.tahun;
+  const logo = [...document.querySelectorAll('.brandbar .tab img')].map(im => '<img src="' + im.src + '" style="height:26px;width:auto;display:block">').join('<span style="width:1px;height:24px;background:#dfe5df"></span>');
+  const warna = h => h.replace(/class="pn"/g, 'style="display:block;font-weight:500;font-size:9.5px;color:#3a423c"').replace(/class="small"/g, 'style="font-size:9px;color:#737b76"').replace(/class="tot"/g, 'style="font-weight:700;background:#f5f7f5"').replace(/class="up"/g, 'style="color:#b3261e;font-weight:700"').replace(/class="down"/g, 'style="color:#2e7d32;font-weight:700"').replace(/class="flat"/g, 'style="color:#737b76"');
+  const isi = kartu.map(k => {
+    const h = k.querySelector('h3'), nama = h.querySelector('.hname').firstChild.textContent, sub = (h.querySelector('small') || {}).textContent || '';
+    const chg = k.querySelector('.chg'), kotak = [...k.querySelectorAll('.boxes > div')].map(b => '<div style="flex:1;min-width:0;padding:6px 10px;border-right:1px solid #e3e8e3"><div style="font-size:8.5px;font-weight:600;color:#5d665f;text-transform:uppercase;letter-spacing:.05em">' + b.querySelector('.k').textContent + '</div><div style="font-size:11.5px;font-weight:700;margin-top:2px;color:' + getComputedStyle(b.querySelector('.v')).color + '">' + warna(b.querySelector('.v').innerHTML) + '</div></div>').join('');
+    const svg = k.querySelector('.anachart svg'), tb = k.querySelector('.cattbl table'), warnaKat = getComputedStyle(h.querySelector('i')).backgroundColor;
+    return '<div style="flex:1;min-width:0;border:1px solid #e3e8e3;border-radius:12px;overflow:hidden;display:flex;flex-direction:column">' +
+      '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-top:4px solid ' + warnaKat + '"><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700">' + nama + '</div><div style="font-size:10px;color:#5d665f">' + sub + '</div></div>' +
+      (chg ? '<div style="font-size:13px;background:#f3f5f3;border-radius:7px;padding:4px 8px;white-space:nowrap">' + warna(chg.innerHTML) + '</div>' : '') + '</div>' +
+      '<div style="display:flex;background:#f6f8f6;border-top:1px solid #e3e8e3;border-bottom:1px solid #e3e8e3">' + kotak + '</div>' +
+      (svg ? '<div style="padding:8px 8px 4px"><img src="' + svgKeGambar(svg) + '" style="width:100%;height:auto;display:block"></div>' : '') +
+      (tb ? '<div class="trentbl" style="padding:0 8px 8px">' + warna(tb.outerHTML) + '</div>' : '') + '</div>';
+  }).join('');
+  return '<div style="height:100%;display:flex;flex-direction:column">' +
+    '<div style="background:linear-gradient(120deg,#3f6e4b,#4a7a53 45%,#7aa64a);color:#fff;padding:14px 24px 12px;display:flex;justify-content:space-between;align-items:center;gap:20px">' +
+    '<div style="min-width:0"><div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.85">' + akun + ' \u00B7 Ringkasan Monitoring Armada</div>' +
+    '<div style="font-size:17px;font-weight:700;line-height:1.25;margin-top:2px">Tren &amp; parameter per kategori \u2014 ' + periode + '</div>' +
+    '<div style="font-size:10.5px;opacity:.92;margin-top:3px">Cakupan: ' + scope() + ' \u00B7 ' + document.getElementById('trendSub').textContent.split(' \u00B7 ').slice(1).join(' \u00B7 ') + '</div></div>' +
+    '<div style="background:#fff;border-radius:10px;padding:7px 12px;display:flex;align-items:center;gap:10px;flex:none">' + logo + '</div></div>' +
+    '<div style="flex:1;display:flex;gap:10px;padding:14px 24px 16px;align-items:flex-start">' + isi + '</div></div>';
 }
 /* Export per event (Command Center & Control Room): tabel kecil + grafik batang per event, batang Total merah */
 const URUT_EVENT = ['OVER SPEED', 'HARSH BRAKING', 'HARSH ACCELERATION', 'HARSH TURN / CORNERING', 'IDLING', 'DRIVING > 4 HOURS', 'BLACK ZONE',
@@ -1050,10 +1136,11 @@ document.getElementById('btnPdf').onclick = async () => {
   try {
     await Promise.all(PDF_LIB.map(muatSkrip));
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    const perEvent = AKUN && AKUN.peran !== 'PUSAT', hal = perEvent ? halamanEvent() : [halamanPdf()];
+    const perEvent = AKUN && AKUN.peran !== 'PUSAT', hal = perEvent ? halamanEvent() : [halamanPdf(), halamanTren()].filter(Boolean);
     const pdf = new window.jspdf.jsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
     for (let i = 0; i < hal.length; i++) {
       pg = document.createElement('div'); pg.id = 'pdfPage'; pg.innerHTML = hal[i]; document.body.appendChild(pg);
+      await Promise.all([...pg.querySelectorAll('img[src^="data:image/svg"]')].map(gambarPng));   // html2canvas tidak menggambar SVG: diubah ke PNG dulu
       const cv = await window.html2canvas(pg, {scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false});
       if (i) pdf.addPage();
       pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 297, 210);
