@@ -826,7 +826,8 @@ function tanggalTeks(x) {
 }
 
 /* ============================== TARIKAN HARIAN ============================== */
-const BATAS_MS = 4.5 * 60 * 1000;   // batas kerja satu kali jalan (Apps Script berhenti di 6 menit)
+const BATAS_MS = 3 * 60 * 1000;     // file baru tidak dimulai lewat dari ini (Apps Script berhenti di 6 menit; satu file besar bisa 2 menit lebih)
+const BATAS_CACHE_MS = 4 * 60 * 1000;   // lewat dari ini cache tidak dipanaskan di sini, diserahkan ke pemicu panaskanCache tiap jam
 const LOG_NAMA = 'Log Tarikan';
 const LOG_HDR = ['File ID', 'Nama file', 'Area', 'Tanggal', 'Diubah', 'Baris event', 'Diproses', 'Status'];
 
@@ -854,20 +855,26 @@ function prosesTarikan() {
     logV.slice(1).forEach((r, i) => { sudah[r[0]] = { baris: i + 2, diubah: Number(r[4]) || 0, status: teks(r[7]) }; });
 
     const antre = daftar.filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^GAGAL/.test(sudah[o.id].status));   // baru, berubah, atau gagal sebelumnya
-    antre.sort((a, b) => a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0);
+    // file yang pernah gagal / kehabisan waktu diproses paling akhir, supaya tidak menahan file lain
+    const gagal = o => sudah[o.id] && /^GAGAL/.test(sudah[o.id].status) ? 1 : 0;
+    antre.sort((a, b) => gagal(a) - gagal(b) || (a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0));
     let n = 0;
     for (const o of antre) {
       if (Date.now() - mulai > BATAS_MS) break;
       let status = 'OK', baris = 0;
-      try { baris = prosesSatuTarikan(folder, o); }
+      // ditandai dulu: kalau Apps Script menghentikan proses di tengah file ini, jalan berikutnya tahu file ini gagal
+      const tanda = [o.id, o.nama, o.area, o.tgl, 0, 0, new Date(), 'GAGAL: waktu habis saat diproses, dicoba lagi otomatis'];
+      if (sudah[o.id]) logSh.getRange(sudah[o.id].baris, 1, 1, tanda.length).setValues([tanda]);
+      else { logSh.appendRow(tanda); sudah[o.id] = { baris: logSh.getLastRow(), diubah: 0, status: tanda[7] }; }
+      SpreadsheetApp.flush();
+      try { baris = prosesSatuTarikan(folder, o, mulai + BATAS_MS); }
       catch (e) { status = 'GAGAL: ' + e.message; }
       const row = [o.id, o.nama, o.area, o.tgl, o.diubah, baris, new Date(), status];
-      if (sudah[o.id]) logSh.getRange(sudah[o.id].baris, 1, 1, row.length).setValues([row]);
-      else { logSh.appendRow(row); sudah[o.id] = { baris: logSh.getLastRow(), diubah: o.diubah, status: status }; }
+      logSh.getRange(sudah[o.id].baris, 1, 1, row.length).setValues([row]);
       n++;
     }
     Logger.log('File tarikan diproses: ' + n + ' dari ' + antre.length + ' yang menunggu.');
-    if (n || dibuang) { try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }   // cache lama ditimpa, tidak dikosongkan dulu
+    if ((n || dibuang) && Date.now() - mulai < BATAS_CACHE_MS) { try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }   // cache lama ditimpa, tidak dikosongkan dulu
   } finally { kunci.releaseLock(); }
 }
 
@@ -894,9 +901,9 @@ function daftarTarikan_() {
 /**
  * Mengubah file xlsx menjadi Google Sheet sementara ("_tmp_<nama>") dan mengembalikan id-nya.
  * File besar kadang membuat Drive membalas "Internal Error" padahal konversinya selesai di belakang:
- * file sementara itu dicari dan dipakai; kalau tidak ada, dicoba lagi (maksimal 3 kali).
+ * file sementara itu dicari dan dipakai; kalau tidak ada, dicoba lagi (maksimal 3 kali, selama waktu masih cukup).
  */
-function konversiXlsx_(o) {
+function konversiXlsx_(o, batas) {
   const nama = '_tmp_' + o.nama, blob = o.file.getBlob();
   let galat = null;
   for (let coba = 1; coba <= 3; coba++) {
@@ -915,6 +922,7 @@ function konversiXlsx_(o) {
       else try { f.setTrashed(true); } catch (e) {}
     }
     if (pakai) return pakai.getId();
+    if (Date.now() > batas) break;   // waktu tidak cukup untuk mencoba lagi; dilanjutkan di jalan berikutnya
   }
   throw galat;
 }
@@ -930,11 +938,11 @@ function bersihkanSementara_() {
 }
 
 /** Merangkum satu file tarikan dan menulis hasilnya (menggantikan hasil lama file yang sama). Mengembalikan jumlah baris event. */
-function prosesSatuTarikan(folder, o) {
+function prosesSatuTarikan(folder, o, batas) {
   let ssId = o.id, sementara = null;
   if (o.mime === MimeType.MICROSOFT_EXCEL) {
     if (typeof Drive === 'undefined') throw new Error('layanan Drive API belum diaktifkan di Apps Script');
-    sementara = konversiXlsx_(o);
+    sementara = konversiXlsx_(o, batas || Date.now() + BATAS_MS);
     ssId = sementara;
   }
   try {
