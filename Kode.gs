@@ -123,14 +123,18 @@ function simpanSnapshot_(z) {
   try { const f = fileSnapshot_(); if (f) f.setContent(z); else DriveApp.getFolderById(CFG.FOLDER_ID).createFile(SNAP_NAMA, z, MimeType.PLAIN_TEXT); }
   catch (e) { Logger.log('Salinan data tidak tersimpan: ' + e.message); }
 }
-function bacaSnapshot_() {
-  try { const f = fileSnapshot_(); if (!f || Date.now() - f.getLastUpdated().getTime() > SNAP_MAKS_JAM * 3600000) return null; return f.getBlob().getDataAsString(); }
+function bacaSnapshot_(bolehBasi) {
+  try { const f = fileSnapshot_(); if (!f || (!bolehBasi && Date.now() - f.getLastUpdated().getTime() > SNAP_MAKS_JAM * 3600000)) return null; return f.getBlob().getDataAsString(); }
   catch (e) { return null; }
 }
-/** Data utama (gzip+base64): cache -> salinan Drive -> hitung ulang (hanya satu pengunjung, yang lain menunggu). */
+/** Data utama (gzip+base64): cache -> salinan Drive -> hitung ulang (hanya satu pengunjung, yang lain menunggu).
+ *  Salinan Drive dipakai walau sudah lebih dari SNAP_MAKS_JAM: pengunjung tidak menunggu hitung ulang,
+ *  data dibangun ulang oleh pemicu panaskanCache / prosesTarikan. Hitung ulang di sini hanya bila salinan belum ada. */
 function dataUtamaZ_() {
   const ada = ambilCache_('DASHB4Z');
   if (ada) return ada;
+  const basi = bacaSnapshot_(true);
+  if (basi) { simpanCache_(basi, 'DASHB4Z', 900); return basi; }   // 15 menit, supaya data baru dari pemicu cepat terpakai
   const kunci = LockService.getScriptLock(); kunci.tryLock(120000);
   try {
     const lagi = ambilCache_('DASHB4Z');
@@ -838,8 +842,12 @@ const LOG_HDR = ['File ID', 'Nama file', 'Area', 'Tanggal', 'Diubah', 'Baris eve
  */
 function prosesTarikan() {
   const mulai = Date.now();
-  const kunci = LockService.getScriptLock();
-  if (!kunci.tryLock(1000)) return;
+  // tanda "sedang berjalan" di cache, bukan kunci skrip: kunci skrip yang dipegang sampai 6 menit
+  // membuat dashboard, input laporan, dan log export ikut menunggu
+  const cache = CacheService.getScriptCache(), kunci = LockService.getScriptLock();
+  if (!kunci.tryLock(5000)) return;
+  try { if (cache.get('TARIKAN_JALAN')) return; cache.put('TARIKAN_JALAN', String(mulai), 7 * 60); }
+  finally { kunci.releaseLock(); }
   try {
     try { bersihkanSementara_(); } catch (e) { /* dicoba lagi di jalan berikutnya */ }
     const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
@@ -875,7 +883,7 @@ function prosesTarikan() {
     }
     Logger.log('File tarikan diproses: ' + n + ' dari ' + antre.length + ' yang menunggu.');
     if ((n || dibuang) && Date.now() - mulai < BATAS_CACHE_MS) { try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }   // cache lama ditimpa, tidak dikosongkan dulu
-  } finally { kunci.releaseLock(); }
+  } finally { cache.remove('TARIKAN_JALAN'); }
 }
 
 /** Semua file "Tarikan_<REG>_..._<yyyy-mm-dd>" di folder yang terdaftar: [{id, nama, area, tgl, diubah, mime, file}]. */
