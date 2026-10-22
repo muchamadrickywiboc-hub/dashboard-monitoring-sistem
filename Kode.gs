@@ -840,6 +840,7 @@ function prosesTarikan() {
   const kunci = LockService.getScriptLock();
   if (!kunci.tryLock(1000)) return;
   try {
+    try { bersihkanSementara_(); } catch (e) { /* dicoba lagi di jalan berikutnya */ }
     const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
     const logSs = bukaAtauBuat(folder, LOG_NAMA, [[LOG_NAMA, LOG_HDR]]);
     const logSh = logSs.getSheetByName(LOG_NAMA);
@@ -890,14 +891,50 @@ function daftarTarikan_() {
   return out;
 }
 
+/**
+ * Mengubah file xlsx menjadi Google Sheet sementara ("_tmp_<nama>") dan mengembalikan id-nya.
+ * File besar kadang membuat Drive membalas "Internal Error" padahal konversinya selesai di belakang:
+ * file sementara itu dicari dan dipakai; kalau tidak ada, dicoba lagi (maksimal 3 kali).
+ */
+function konversiXlsx_(o) {
+  const nama = '_tmp_' + o.nama, blob = o.file.getBlob();
+  let galat = null;
+  for (let coba = 1; coba <= 3; coba++) {
+    const mulai = Date.now() - 60 * 1000;
+    try {
+      return Drive.Files.create ? Drive.Files.create({ name: nama, mimeType: MimeType.GOOGLE_SHEETS }, blob).id
+                                : Drive.Files.insert({ title: nama, mimeType: MimeType.GOOGLE_SHEETS }, blob, { convert: true }).id;
+    } catch (e) { galat = e; }
+    Utilities.sleep(5000 * coba);
+    let pakai = null;
+    const it = DriveApp.getFilesByName(nama);
+    while (it.hasNext()) {
+      const f = it.next();
+      if (f.isTrashed()) continue;
+      if (!pakai && f.getMimeType() === MimeType.GOOGLE_SHEETS && f.getDateCreated().getTime() >= mulai) pakai = f;
+      else try { f.setTrashed(true); } catch (e) {}
+    }
+    if (pakai) return pakai.getId();
+  }
+  throw galat;
+}
+
+/** Membuang Google Sheet sementara "_tmp_Tarikan_..." yang tertinggal (lebih dari 1 jam) dari konversi yang gagal. */
+function bersihkanSementara_() {
+  const batas = Date.now() - 60 * 60 * 1000;
+  const it = DriveApp.searchFiles("title contains '_tmp_Tarikan' and trashed = false");
+  while (it.hasNext()) {
+    const f = it.next();
+    if (f.getName().indexOf('_tmp_') === 0 && f.getDateCreated().getTime() < batas) try { f.setTrashed(true); } catch (e) {}
+  }
+}
+
 /** Merangkum satu file tarikan dan menulis hasilnya (menggantikan hasil lama file yang sama). Mengembalikan jumlah baris event. */
 function prosesSatuTarikan(folder, o) {
   let ssId = o.id, sementara = null;
   if (o.mime === MimeType.MICROSOFT_EXCEL) {
     if (typeof Drive === 'undefined') throw new Error('layanan Drive API belum diaktifkan di Apps Script');
-    const blob = o.file.getBlob();
-    sementara = Drive.Files.create ? Drive.Files.create({ name: '_tmp_' + o.nama, mimeType: MimeType.GOOGLE_SHEETS }, blob).id
-                                   : Drive.Files.insert({ title: '_tmp_' + o.nama, mimeType: MimeType.GOOGLE_SHEETS }, blob, { convert: true }).id;
+    sementara = konversiXlsx_(o);
     ssId = sementara;
   }
   try {
