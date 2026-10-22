@@ -512,12 +512,10 @@ function drawBulanan(host, arr, cat) {
     hit.addEventListener('click', () => { if (ADA.indexOf(i) >= 0) { mon = i; render(); } });
     bindTip(hit, () => `<b>${BLN[i]} ${D.tahun}</b><br>${v === null ? 'belum ada data' : nf(v) + ' event'}${i > 0 && v !== null && arr[i-1] ? '<br>' + pctTxt(v, arr[i-1]).replace(/<[^>]+>/g, '') + ' vs ' + BLN[i-1] : ''}`); });
   garisTren(svg, arr.slice(0, LAST + 1), i => m.l + slot*i + slot/2, y, '#1fae54');
-  if (avg) { svgEl('line', {x1: m.l, x2: m.l + slot*(LAST + 1), y1: y(avg), y2: y(avg), style: 'stroke:#1b1f1d;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none'}, svg);
-    const t = svgEl('text', {x: m.l + slot*(LAST + 1) + 6, y: y(avg) + 4, style: 'fill:#1b1f1d;font-size:12px;font-weight:600;pointer-events:none'}, svg); t.textContent = 'rata² ' + ax(avg); }
   host.appendChild(svg);
 }
 
-// tren satu kategori per tanggal dalam bulan terpilih (periode Bulan); garis putus-putus = rata-rata per hari
+// tren satu kategori per tanggal dalam bulan terpilih (periode Bulan)
 function drawHarianKat(host, hari, cat) {
   const W = 640, H = 250, m = {l: 50, r: 16, t: 40, b: 28}, iw = W - m.l - m.r, ih = H - m.t - m.b;
   const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Event per tanggal ' + cat.name});
@@ -536,8 +534,6 @@ function drawHarianKat(host, hari, cat) {
     const hit = svgEl('rect', {x: m.l + slot*i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
     bindTip(hit, () => `<b>${i + 1} ${BLN[mon]} ${D.tahun}</b><br>${cat.name}: ${v === null ? 'belum ada data' : nf(v) + ' event'}${avg && v !== null ? '<br>' + pctTxt(v, avg).replace(/<[^>]+>/g, '') + ' vs rata-rata harian' : ''}`); });
   garisTren(svg, arr, i => m.l + slot*i + slot/2, y, '#1fae54');
-  if (avg) { svgEl('line', {x1: m.l, x2: m.l + slot*(akhir + 1), y1: y(avg), y2: y(avg), style: 'stroke:#1b1f1d;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none'}, svg);
-    const kanan = akhir + 1 > n*.8, t = svgEl('text', {x: kanan ? W - m.r : m.l + slot*(akhir + 1) + 6, y: y(avg) - 6, 'text-anchor': kanan ? 'end' : 'start', style: 'fill:#1b1f1d;font-size:12px;font-weight:600;pointer-events:none'}, svg); t.textContent = 'rata² ' + ax(avg) + '/hari'; }
   host.appendChild(svg);
 }
 
@@ -837,8 +833,8 @@ function renderBulan() {
   // kartu per kategori: donut, kotak, tren, tabel parameter
   const TJ = W && D.tanpaJam && D.tanpaJam.t ? ' · tanpa jam (data GPS, tidak ikut filter shift/jam): ' + CATS.filter(c => D.tanpaJam[c.key]).map(c => `${c.name} ${nf(D.tanpaJam[c.key])}`).join(', ') : '';
   document.getElementById('trendSub').textContent = W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
-    : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis hijau = tren, garis putus-putus = rata-rata`
-    : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis hijau = tren, garis putus-putus = rata-rata per hari`;
+    : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis hijau = tren`
+    : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis hijau = tren`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
   // keterangan tabel parameter: periode ini dibanding apa
   const pjg = k => W ? namaK(k) : `${BLN[k]} ${D.tahun}`;
