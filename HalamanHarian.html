@@ -180,12 +180,6 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 .trsvg svg{display:block;width:100%;height:auto}
 .trtbl table{font-size:12px}.trtbl th{font-size:10.5px;padding:6px 8px}.trtbl td{padding:5px 8px}
 .up{color:var(--serious-ink);font-weight:600}.down{color:#2f6a37;font-weight:600}.flat{color:var(--muted)}
-.trsvg .trl{fill:none;stroke:#9aa29d;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
-.trsvg .trg.utama .trl{stroke:#1fae54;stroke-width:3}
-.trsvg .trhit{fill:none;stroke:transparent;stroke-width:10;cursor:pointer}
-.trsvg .trg:hover .trl{stroke:#0f78bf;stroke-width:3}
-.trleg{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-2)}.trleg span{display:inline-flex;align-items:center;gap:6px}
-.trleg i{display:inline-block;width:16px;height:3px;border-radius:2px}.trleg i.g1{background:#1fae54}.trleg i.g2{background:#9aa29d}
 .trket{font-size:12px;color:var(--muted)}
 .ttd{display:block;max-height:54px;max-width:180px;margin-top:6px;object-fit:contain}
 .ttdbox{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:6px}
@@ -1173,7 +1167,7 @@ function gambar(L) {
     <div class="panel"><div class="ph"><h2>Event harian</h2><p>Jumlah seluruh event per tanggal</p></div>${grafikKolom(L.perHari)}</div>
   </section>`;
   h += `<section class="panel"><div class="ph"><h2>Event di Setiap ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · ${L.panel[0] && L.panel[0].rows.length === 1 ? 'jumlah case per jenis event · batang gelap = terbanyak, garis putus-putus = rata-rata' : 'jumlah case per jenis event, diurutkan dari yang terbanyak'}</p></div>${grafikLokasi(L)}</section>`;
-  if (L.tren) h += `<section class="panel"><div class="ph"><h2>Tren &amp; Parameter per Jenis Event</h2><p>${bln ? 'Event per tanggal sepanjang ' + esc(per) : 'Event per tanggal, 1 s/d ' + esc(per)} · satu garis = satu ${L.baris.toLowerCase()}, hijau = terbanyak, arahkan kursor ke garis untuk melihat nama · tabel: ${esc(labelPer(L.periode))} dibanding ${L.tren.lalu ? esc(labelPer(L.tren.lalu)) : 'periode sebelumnya (belum ada data)'}</p></div>${trenLokasi(L)}</section>`;
+  if (L.tren) h += `<section class="panel"><div class="ph"><h2>Tren &amp; Parameter per Jenis Event</h2><p>${bln ? 'Event per tanggal sepanjang ' + esc(per) : 'Event per tanggal, 1 s/d ' + esc(per)} · batang abu-abu = event per tanggal${bln ? '' : ' (gelap = tanggal terpilih)'}, garis hijau = tren, tabel = rincian per ${L.baris.toLowerCase()} · tabel: ${esc(labelPer(L.periode))} dibanding ${L.tren.lalu ? esc(labelPer(L.tren.lalu)) : 'periode sebelumnya (belum ada data)'}</p></div>${trenLokasi(L)}</section>`;
   $('isi').innerHTML = h;
 }
 // warna tetap per jenis event (urutan panel di LaporanHarian.gs)
@@ -1207,20 +1201,19 @@ function selisih(kini, lalu) {
   const tanda = d > 0 ? '+' : '−', pct = lalu ? ' (' + (d > 0 ? '▲ ' : '▼ ') + (Math.abs(d) / lalu * 100).toLocaleString('id-ID', {maximumFractionDigits: 1}) + '%)' : ' (baru)';
   return '<span class="' + (d > 0 ? 'up' : 'down') + '">' + tanda + nf(Math.abs(d)) + pct + '</span>';
 }
-// grafik garis per jenis event: satu garis per lokasi (abu-abu), lokasi terbanyak hijau tebal; arahkan kursor untuk nama lokasi
-function grafikGarisLokasi(S, terpilih, nama) {
-  const W = 520, H = 190, ml = 36, mr = 10, mt = 14, mb = 22, iw = W - ml - mr, ih = H - mt - mb, n = S[0].h.length, w = n > 1 ? iw / (n - 1) : iw;
-  const m0 = Math.max(1, ...S.flatMap(o => o.h)) * 1.1, p = Math.pow(10, Math.floor(Math.log10(m0))), mx = Math.max(4, [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => m0 / p <= x) * p);
-  const y = v => mt + ih - v / mx * ih, cx = i => n > 1 ? ml + w * i : ml + iw / 2;
+// grafik per jenis event: batang = jumlah event per tanggal (semua lokasi), satu garis hijau = tren (rata-rata 3 hari)
+function grafikEventTren(h, terpilih) {
+  const W = 520, H = 180, ml = 36, mr = 8, mt = 14, mb = 22, iw = W - ml - mr, ih = H - mt - mb, n = h.length, w = iw / n, bw = Math.min(22, w * .66);
+  const m0 = Math.max(1, ...h) * 1.1, p = Math.pow(10, Math.floor(Math.log10(m0))), mx = Math.max(4, [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => m0 / p <= x) * p);
+  const y = v => mt + ih - v / mx * ih, cx = i => ml + w * i + w / 2;
   let g = '';
   [0, mx / 2, mx].forEach(v => { g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" stroke="#e6e9e6"/><text class="tick" x="' + (ml - 5) + '" y="' + (y(v) + 4).toFixed(1) + '" text-anchor="end">' + sk(v) + '</text>'; });
-  for (let i = 0; i < n; i++) if (n <= 16 || i % 2 === 0 || i === terpilih) g += '<text class="tick" x="' + cx(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle"' + (i === terpilih ? ' style="font-weight:700;fill:#1b1f1d"' : '') + '>' + (i + 1) + '</text>';
-  if (terpilih >= 0 && n > 1) g += '<line x1="' + cx(terpilih).toFixed(1) + '" x2="' + cx(terpilih).toFixed(1) + '" y1="' + mt + '" y2="' + (mt + ih) + '" stroke="#c9cec9" stroke-dasharray="3 3"/>';
-  const jalur = h => n > 1 ? h.map((v, i) => (i ? 'L' : 'M') + cx(i).toFixed(1) + ',' + y(v).toFixed(1)).join('') : 'M' + (cx(0) - 6) + ',' + y(h[0]).toFixed(1) + 'h12';
-  // abu-abu dulu, lokasi utama (hijau) digambar paling atas
-  S.slice().reverse().forEach((o, k) => { const utama = k === S.length - 1, d = jalur(o.h);
-    g += '<g class="trg' + (utama ? ' utama' : '') + '"><path class="trl" d="' + d + '"/><path class="kb trhit" d="' + d + '" data-tip="' + esc('<b>' + nama(o.n) + '</b><br>' + nf(o.t) + ' event') + '"/></g>'; });
-  return '<div class="trsvg"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Tren per lokasi">' + g + '</svg></div>';
+  h.forEach((v, i) => { const pilih = i === terpilih;
+    if (v) g += '<rect class="kb" data-tip="' + esc('<b>Tgl ' + (i + 1) + '</b><br>' + nf(v) + ' event') + '" x="' + (cx(i) - bw / 2).toFixed(1) + '" y="' + y(v).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (mt + ih - y(v)).toFixed(1) + '" rx="2" fill="' + (pilih ? '#47504b' : '#b5bbb7') + '"></rect>';
+    if (n <= 16 || i % 2 === 0 || pilih) g += '<text class="tick" x="' + cx(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle"' + (pilih ? ' style="font-weight:700;fill:#1b1f1d"' : '') + '>' + (i + 1) + '</text>'; });
+  if (n > 1) { const Q = h.map((v, k) => { const s = h.slice(Math.max(0, k - 1), k + 2); return [cx(k), y(s.reduce((a, b) => a + b, 0) / s.length)]; });
+    g += '<path d="' + Q.map((o, k) => (k ? 'L' : 'M') + o[0].toFixed(1) + ',' + o[1].toFixed(1)).join('') + '" fill="none" stroke="#1fae54" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>'; }
+  return '<div class="trsvg"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Event per tanggal">' + g + '</svg></div>';
 }
 // Tren & parameter per jenis event: satu kartu per jenis event, garis = lokasi, tabel = lokasi kini vs sebelumnya
 function trenLokasi(L) {
@@ -1236,9 +1229,9 @@ function trenLokasi(L) {
   const kartu = ada.map(e => {
     const d = e.a - e.b, kelas = !T.lalu || !d ? 'tetap' : d > 0 ? 'naik' : 'turun';
     const badge = !T.lalu ? '–' : !e.b ? (e.a ? 'baru' : '0%') : (d > 0 ? '▲ ' : d < 0 ? '▼ ' : '') + (Math.abs(d) / e.b * 100).toLocaleString('id-ID', {maximumFractionDigits: 1}) + '%';
-    const S = e.lok.filter(o => o.t), atas = S[0];
+    const H = Array.from({length: T.hari}, (_, i) => e.lok.reduce((t, o) => t + (o.h[i] || 0), 0));
     return '<div class="trcard"><div class="trh"><div><b>' + esc(e.p.grafik) + '</b><small>' + esc(kini) + ': ' + nf(e.a) + ' event' + (T.lalu ? ' · ' + esc(lalu) + ': ' + nf(e.b) : '') + '</small></div><span class="chg ' + kelas + '">' + badge + '</span></div>' +
-      (S.length ? grafikGarisLokasi(S, terpilih, nama) + '<div class="trleg"><span><i class="g1"></i>' + nama(atas.n) + ' (terbanyak)</span>' + (S.length > 1 ? '<span><i class="g2"></i>' + (S.length - 1) + ' ' + baris + ' lain</span>' : '') + '</div>' : '') +
+      grafikEventTren(H, terpilih) +
       '<div class="trtbl tbl"><table><thead><tr><th>' + esc(L.baris) + '</th><th>' + esc(lalu) + '</th><th>' + esc(kini) + '</th><th>Persentase</th></tr></thead><tbody>' +
         e.lok.map(o => '<tr><td>' + nama(o.n) + '</td><td>' + nf(o.b) + '</td><td>' + nf(o.a) + '</td><td>' + selisih(o.a, o.b) + '</td></tr>').join('') +
         '<tr class="tot"><td>TOTAL</td><td>' + nf(e.b) + '</td><td>' + nf(e.a) + '</td><td>' + selisih(e.a, e.b) + '</td></tr></tbody></table></div></div>';
