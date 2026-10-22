@@ -807,6 +807,11 @@ const ALIAS_LOKASI = {
   'IT IT PONTIANAK': 'IT PONTIANAK', 'PONTIANAK': 'IT PONTIANAK', 'FT PONTIANAK': 'IT PONTIANAK',
   'SAMARINDA': 'FT SAMARINDA', 'IT SAMARINDA': 'FT SAMARINDA', 'BALIKPAPAN': 'IT BALIKPAPAN', 'BANJARMASIN': 'IT BANJARMASIN',
   'IT BADAS': 'FT BADAS', 'FT TENAU': 'IT TENAU', 'FT DONGGALA': 'IT DONGGALA',
+  // tarikan memakai "TLPG ..." mulai September 2026; dashboard tetap memakai nama "LPG ..."
+  'TLPG ARUN': 'LPG ARUN', 'TLPG BATAM': 'LPG BATAM', 'TLPG DUMAI': 'LPG DUMAI', 'TLPG KARIMUN': 'LPG KARIMUN',
+  'TLPG PANGKALAN SUSU': 'LPG PANGKALAN SUSU', 'TLPG TANJUNG UBAN': 'LPG TANJUNG UBAN', 'TLPG TELUK KABUNG': 'LPG TELUK KABUNG',
+  // ganti nama mulai September 2026 (nama lama hanya ada di data Januari-September)
+  'FT LHOKSEUMAWE': 'IT LHOKSEUMAWE', 'FT JAYAPURA': 'IT JAYAPURA', 'JOBBER TANJUNG PANDAN': 'FT TANJUNG PANDAN',
 };
 function kunciLok(l) { const u = teks(l).toUpperCase(); return (ALIAS_LOKASI[u] || u).replace(/[^A-Z0-9]/g, ''); }
 /** "Sumbagut 1" / "SUMBAGUT II" -> "SUMBAGUT"; nama area yang tidak dikenal -> '' (area diambil dari lokasinya). */
