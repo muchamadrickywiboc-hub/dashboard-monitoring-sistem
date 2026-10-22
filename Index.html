@@ -465,7 +465,8 @@ function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); const m
 function naikTxt(t, y) {
   const d = t - (y || 0);
   if (y === null || y === undefined || !d) return pctTxt(t, y);
-  return `<span class="${d > 0 ? 'up' : d < 0 ? 'down' : 'flat'}">${d > 0 ? '+' : d < 0 ? '−' : ''}${nf(Math.abs(d))}</span> ${pctTxt(t, y)}`;
+  const kelas = d > 0 ? 'up' : 'down', tanda = d > 0 ? '+' : '\u2212';
+  return '<span class="' + kelas + '">' + tanda + nf(Math.abs(d)) + '</span> ' + pctTxt(t, y);
 }
 function pctTxt(t, y) {
   if (y === null || y === undefined) return '<span class="flat">–</span>';
@@ -829,7 +830,7 @@ function renderBulan() {
       return `<tr><td>${p.label.toUpperCase()}${p.kat !== p.katAsal ? ' <span class="small" style="display:inline">(dipindah)</span>' : ''}</td><td>${b === null ? '–' : nf(b)}</td><td>${a === null ? '–' : nf(a)}</td><td>${a === null ? '<span class="flat">–</span>' : pctTxt(a, b)}</td></tr>`; }).join('');
     const subTxt = `${W ? pendekK('W') : BLN[mon]} ${isFinite(pct) ? (pct > 1 ? 'lebih banyak dari' : pct < 1 ? 'lebih sedikit dari' : 'sama dengan') : 'dibanding'} ${pm === null ? (W ? 'sebelumnya' : 'bulan lalu') : W ? pendekK(pm) : BLN[pm]}`;
     const card = document.createElement('section'); card.className = 'ana';
-    card.innerHTML = `<h3><i style="background:${cat.color}"></i><span class="hname">${cat.name.toUpperCase()}<small>${subTxt}</small></span><span class="chg" title="${subTxt}">${prv === null ? '<span class="flat">–</span>' : pctTxt(cur || 0, prv)}</span></h3>
+    card.innerHTML = `<h3><i style="background:${cat.color}"></i><span class="hname">${cat.name.toUpperCase()}<small>${subTxt}</small></span><span class="chg" title="${subTxt}">${pctTxt(cur || 0, prv)}</span></h3>
       <div class="boxes"><div><div class="k">Total (${S3(kc)} / ${pm === null ? '–' : S3(pm)})</div><div class="v">${cur === null ? '–' : nf(cur)} / ${prv === null ? '–' : nf(prv)}</div></div>
       <div><div class="k">Kenaikan tertinggi</div><div class="v up">${up ? `<span class="pn">${up.l}</span>+${nf(up.d)}` : 'Tidak ada kenaikan'}</div></div>
       <div><div class="k">Penurunan tertinggi</div><div class="v down">${dn ? `<span class="pn">${dn.l}</span>−${nf(-dn.d)}` : 'Tidak ada penurunan'}</div></div></div>
