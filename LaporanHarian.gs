@@ -191,6 +191,27 @@ function lhLaporan(token, periode, area, lokasi) {
   const satu = !bulanan && c.lok && inp.length === 1 ? inp[0] : null;   // nama operator/supervisor hanya untuk laporan harian satu lokasi
   const nHari = bulanan ? new Date(CFG.TAHUN, m + 1, 0).getDate() : 1;
 
+  // tren per baris: event per tanggal (harian: tanggal 1 s/d tanggal terpilih) dan per jenis event periode sebelumnya (H-1 / bulan lalu)
+  const cariBaris = (nama, a) => { const k = perArea ? areaDari(nama, a) : kunciLok(nama); return idx[k] !== undefined ? idx[k] : -1; };
+  const nTren = bulanan ? nHari : hari, trenHari = [], Vlalu = LH_PANEL.map(() => []);
+  Object.keys(E.tanggal).filter(d => +d <= nTren).forEach(d => E.tanggal[d].forEach(r => {
+    if (!tampil[r[2]] || !masuk(r[0], r[1])) return;
+    const i = cariBaris(r[0], r[1]); if (i < 0) return;
+    (trenHari[i] || (trenHari[i] = new Array(nTren).fill(0)))[d - 1] += r[3];
+  }));
+  let lalu = '', baruLalu = [];
+  if (!bulanan && hari > 1) { lalu = teksTanggal_({ m: m, d: hari - 1 }); baruLalu = E.tanggal[hari - 1] || []; }
+  else if (m > 0) {
+    const E0 = eventBulanLH_(m - 1), hs = Object.keys(E0.tanggal).map(Number);
+    if (bulanan) { lalu = teksTanggal_({ m: m - 1, d: 1 }).slice(0, 7); hs.forEach(d => { baruLalu = baruLalu.concat(E0.tanggal[d]); }); }
+    else { const dl = new Date(CFG.TAHUN, m, 0).getDate(); lalu = teksTanggal_({ m: m - 1, d: dl }); baruLalu = E0.tanggal[dl] || []; }
+  }
+  baruLalu.forEach(r => {
+    if (!tampil[r[2]] || !masuk(r[0], r[1])) return;
+    const i = cariBaris(r[0], r[1]); if (i < 0) return;
+    Vlalu[r[2]][i] = (Vlalu[r[2]][i] || 0) + r[3];
+  });
+
   return JSON.stringify({
     mode: bulanan ? 'bulanan' : 'harian', periode: bulanan ? awal.slice(0, 7) : awal,
     area: c.area || (c.lok ? areaDari(c.lok, '') : ''),
@@ -206,6 +227,7 @@ function lhLaporan(token, periode, area, lokasi) {
     offline: offline, offlineTotal: offSemua.length,
     operator: satu ? satu.operator : '', supervisor: satu ? satu.supervisor : '', operatorTtd: satu ? ttdLH_(satu.lokasi, satu.operator) : '',
     adaEvent: adaEvent,
+    tren: { lalu: lalu, hari: nTren, rows: baris.map((n, i) => ({ n: n, h: trenHari[i] || new Array(nTren).fill(0), l: LH_PANEL.map((_, pi) => Vlalu[pi][i] || 0).filter((_, pi) => tampil[pi]) })) },
   });
 }
 /* ---- GPS & Dashcam dari spreadsheet LAPORAN KENDALA DEVICE CONTROL ROOM, sheet Justifikasi Uptime ---- */

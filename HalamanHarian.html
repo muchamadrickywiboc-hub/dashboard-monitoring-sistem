@@ -170,6 +170,17 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 .evt{height:9px;background:var(--surface-2);border-radius:3px;overflow:hidden}.evt i{display:block;height:100%;border-radius:3px}
 .evm.nol{color:var(--muted)}.evm.nol span:last-child{font-weight:500}
 .evcard.nol{background:var(--surface-2)}.evcard.nol .evh{color:var(--muted);margin:0}.evkosong{font-size:11.5px;color:var(--muted)}
+/* Tren & parameter event per lokasi */
+.trgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;align-items:start}
+.trcard{border:1px solid var(--grid);border-radius:12px;padding:12px 14px;break-inside:avoid;display:flex;flex-direction:column;gap:8px}
+.trh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.trh b{display:block;font-size:14px;font-weight:600}.trh small{font-size:11.5px;color:var(--ink-2)}
+.chg{flex:none;border-radius:8px;padding:3px 9px;font-weight:700;font-size:13px;white-space:nowrap}
+.chg.naik{background:#fbe9e7;color:var(--serious-ink)}.chg.turun{background:var(--accent-wash);color:#2f6a37}.chg.tetap{background:var(--surface-2);color:var(--muted)}
+.trsvg svg{display:block;width:100%;height:auto}
+.trtbl table{font-size:12px}.trtbl th{font-size:10.5px;padding:6px 8px}.trtbl td{padding:5px 8px}
+.up{color:var(--serious-ink);font-weight:600}.down{color:#2f6a37;font-weight:600}.flat{color:var(--muted)}
+.trket{font-size:12px;color:var(--muted)}
 .ttd{display:block;max-height:54px;max-width:180px;margin-top:6px;object-fit:contain}
 .ttdbox{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:6px}
 .ttdprev{width:200px;height:80px;border:1.5px dashed var(--grid);border-radius:12px;display:grid;place-items:center;background:#fff;overflow:hidden}
@@ -1156,6 +1167,7 @@ function gambar(L) {
     <div class="panel"><div class="ph"><h2>Event harian</h2><p>Jumlah seluruh event per tanggal</p></div>${grafikKolom(L.perHari)}</div>
   </section>`;
   h += `<section class="panel"><div class="ph"><h2>Event di Setiap ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · ${L.panel[0] && L.panel[0].rows.length === 1 ? 'jumlah case per jenis event · batang gelap = terbanyak, garis putus-putus = rata-rata' : 'jumlah case per jenis event, diurutkan dari yang terbanyak'}</p></div>${grafikLokasi(L)}</section>`;
+  if (L.tren) h += `<section class="panel"><div class="ph"><h2>Tren &amp; Parameter Event per ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Event per tanggal sepanjang ' + esc(per) : 'Event per tanggal, 1 s/d ' + esc(per)} · garis merah = tren, garis putus-putus = rata-rata · tabel: ${esc(labelPer(L.periode))} dibanding ${L.tren.lalu ? esc(labelPer(L.tren.lalu)) : 'periode sebelumnya (belum ada data)'}</p></div>${trenLokasi(L)}</section>`;
   $('isi').innerHTML = h;
 }
 // warna tetap per jenis event (urutan panel di LaporanHarian.gs)
@@ -1179,6 +1191,57 @@ function grafikLokasi(L) {
       ? J.map(o => `<div class="evm${r.v[o.i] ? '' : ' nol'}"><span title="${esc(o.p.tabel)}">${esc(o.p.grafik)}</span><span class="evt"><i style="width:${r.v[o.i] / m * 100}%;background:${o.c}"></i></span><span>${nf(r.v[o.i])}</span></div>`).join('')
       : '<div class="evkosong">Tidak ada event</div>') + '</div>'; }).join('');
   return (rows.length > 1 ? `<h3 class="evsub">Total event per ${L.baris.toLowerCase()}</h3>${kolomLokasi(rows, nama)}<h3 class="evsub">Rincian jenis event per ${L.baris.toLowerCase()}</h3>` : '') + `<div class="evgrid">${kartu}</div>`;
+}
+// label periode singkat: "1 Okt" (harian) atau "Okt" (bulanan)
+function labelPer(t) { const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(t || ''); return m ? (m[3] ? +m[3] + ' ' : '') + BLN[+m[2] - 1].slice(0, 3) : ''; }
+// selisih + persentase: "+1.234 (▲ 12,5%)"; kenaikan event = merah, penurunan = hijau
+function selisih(kini, lalu) {
+  const d = kini - lalu;
+  if (!d) return '<span class="flat">' + (kini ? '0 (0%)' : '–') + '</span>';
+  const tanda = d > 0 ? '+' : '−', pct = lalu ? ' (' + (d > 0 ? '▲ ' : '▼ ') + (Math.abs(d) / lalu * 100).toLocaleString('id-ID', {maximumFractionDigits: 1}) + '%)' : ' (baru)';
+  return '<span class="' + (d > 0 ? 'up' : 'down') + '">' + tanda + nf(Math.abs(d)) + pct + '</span>';
+}
+// garis tren: rata-rata bergerak 3 hari (garis lurus antar titik, tetap mengikuti naik-turun)
+function garisTrenTitik(P) {
+  const Q = P.map((o, k) => { const w = P.slice(Math.max(0, k - 1), k + 2); return [o[0], w.reduce((s, x) => s + x[1], 0) / w.length]; });
+  return Q.map((o, k) => (k ? 'L' : 'M') + o[0].toFixed(1) + ',' + o[1].toFixed(1)).join('');
+}
+// grafik kecil per lokasi: batang event per tanggal + garis tren melengkung + rata-rata
+function grafikTren(h, terpilih) {
+  const W = 520, H = 170, ml = 36, mr = 8, mt = 16, mb = 22, iw = W - ml - mr, ih = H - mt - mb, n = h.length, w = iw / n, bw = Math.min(22, w * .66);
+  const m0 = Math.max(1, ...h) * 1.1, p = Math.pow(10, Math.floor(Math.log10(m0))), mx = Math.max(4, [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => m0 / p <= x) * p);
+  const y = v => mt + ih - v / mx * ih, cx = i => ml + w * i + w / 2, avg = h.reduce((s, v) => s + v, 0) / n;
+  let g = '';
+  [0, mx / 2, mx].forEach(v => { g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" stroke="#e6e9e6"/><text class="tick" x="' + (ml - 5) + '" y="' + (y(v) + 4).toFixed(1) + '" text-anchor="end">' + sk(v) + '</text>'; });
+  h.forEach((v, i) => {
+    const pilih = i === terpilih;
+    if (v) g += '<rect x="' + (cx(i) - bw / 2).toFixed(1) + '" y="' + y(v).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (mt + ih - y(v)).toFixed(1) + '" rx="2" fill="' + (pilih ? '#2f5a37' : '#4a7a53') + '" opacity="' + (pilih ? 1 : .55) + '"><title>Tgl ' + (i + 1) + ': ' + nf(v) + ' event</title></rect>';
+    if (n <= 16 || i % 2 === 0 || pilih) g += '<text class="tick" x="' + cx(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle"' + (pilih ? ' style="font-weight:700;fill:#1b1f1d"' : '') + '>' + (i + 1) + '</text>';
+  });
+  if (n > 1) g += '<path d="' + garisTrenTitik(h.map((v, i) => [cx(i), y(v)])) + '" fill="none" stroke="#c0392b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>';
+  g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(avg).toFixed(1) + '" y2="' + y(avg).toFixed(1) + '" stroke="#1b1f1d" stroke-width="1.2" stroke-dasharray="5 4"/>';
+  return '<div class="trsvg"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Tren event per tanggal">' + g + '</svg></div>';
+}
+// Tren & parameter event per lokasi: satu kartu per lokasi (grafik tren + tabel jenis event kini vs sebelumnya)
+function trenLokasi(L) {
+  const T = L.tren, bln = L.mode === 'bulanan', nama = x => esc(L.baris === 'Area' ? x : judul(x));
+  const kini = labelPer(L.periode), lalu = T.lalu ? labelPer(T.lalu) : 'Sebelumnya', terpilih = bln ? -1 : T.hari - 1;
+  const rows = T.rows.map((r, i) => { const v = L.panel.map(p => p.rows[i] ? p.rows[i].v : 0); return {n: r.n, h: r.h, l: r.l, v, t: v.reduce((s, x) => s + x, 0), tl: r.l.reduce((s, x) => s + x, 0)}; });
+  const ada = rows.filter(r => r.t || r.tl || r.h.some(Boolean)).sort((a, b) => b.t - a.t || b.tl - a.tl || a.n.localeCompare(b.n));
+  if (!ada.length) return '<div class="kosong">Belum ada event pada periode ini.</div>';
+  const kartu = ada.map(r => {
+    const d = r.t - r.tl, kelas = !T.lalu || !d ? 'tetap' : d > 0 ? 'naik' : 'turun';
+    const badge = !T.lalu ? '–' : !r.tl ? (r.t ? 'baru' : '0%') : (d > 0 ? '▲ ' : d < 0 ? '▼ ' : '') + (Math.abs(d) / r.tl * 100).toLocaleString('id-ID', {maximumFractionDigits: 1}) + '%';
+    const par = L.panel.map((p, k) => ({p, a: r.v[k], b: r.l[k] || 0})).filter(o => o.a || o.b).sort((x, y) => y.a - x.a || y.b - x.b);
+    return '<div class="trcard"><div class="trh"><div><b>' + nama(r.n) + '</b><small>' + esc(kini) + ': ' + nf(r.t) + ' event' + (T.lalu ? ' · ' + esc(lalu) + ': ' + nf(r.tl) : '') + '</small></div><span class="chg ' + kelas + '">' + badge + '</span></div>' +
+      grafikTren(r.h, terpilih) +
+      (par.length ? '<div class="trtbl tbl"><table><thead><tr><th>Jenis event</th><th>' + esc(lalu) + '</th><th>' + esc(kini) + '</th><th>Persentase</th></tr></thead><tbody>' +
+        par.map(o => '<tr><td>' + esc(o.p.grafik) + '</td><td>' + nf(o.b) + '</td><td>' + nf(o.a) + '</td><td>' + selisih(o.a, o.b) + '</td></tr>').join('') +
+        '<tr class="tot"><td>TOTAL</td><td>' + nf(r.tl) + '</td><td>' + nf(r.t) + '</td><td>' + selisih(r.t, r.tl) + '</td></tr></tbody></table></div>'
+        : '<div class="trket">Tidak ada event pada ' + esc(kini) + (T.lalu ? ' maupun ' + esc(lalu) : '') + '.</div>') + '</div>';
+  }).join('');
+  const nol = rows.length - ada.length;
+  return '<div class="trgrid">' + kartu + '</div>' + (nol ? '<div class="trket">' + nol + ' ' + L.baris.toLowerCase() + ' lain tidak ada event pada periode ini.</div>' : '');
 }
 // grafik batang tegak: total event tiap lokasi, batang tertinggi paling gelap, garis putus-putus = rata-rata
 function kolomLokasi(rows, nama, o = {}) {
@@ -1287,7 +1350,7 @@ $('btnPdf').onclick = async () => {
     [...isi.children].forEach(el => batas.push(awalIsi + el.offsetTop - 10));
     // bagian panjang (grafik & kartu per lokasi) juga boleh dipotong di antara grafik / baris kartu, supaya tidak menyisakan halaman kosong
     const atasBox = box.getBoundingClientRect().top;
-    box.querySelectorAll('.evsub, .evkol, .evcard').forEach(el => batas.push(Math.round(el.getBoundingClientRect().top - atasBox) - 8));
+    box.querySelectorAll('.evsub, .evkol, .evcard, .trcard').forEach(el => batas.push(Math.round(el.getBoundingClientRect().top - atasBox) - 8));
     batas.push(box.offsetHeight);
     const potong = []; let y = 0;
     while (y < box.offsetHeight - 2) {
