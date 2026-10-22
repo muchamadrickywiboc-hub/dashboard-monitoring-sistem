@@ -483,10 +483,18 @@ function pctTxt(t, y) {
 
 // garis tren: garis yang menyambung nilai tiap batang (mengikuti angkanya), dengan titik di setiap batang; cx = posisi x tiap indeks, y = skala nilai
 function garisTren(svg, arr, cx, y, warna) {
-  const t = arr.map((v, i) => [i, v]).filter(o => o[1] !== null && o[1] !== undefined);
-  if (t.length < 2) return;
-  svgEl('path', {d: t.map((o, k) => (k ? 'L' : 'M') + cx(o[0]).toFixed(1) + ',' + y(o[1]).toFixed(1)).join(''), style: 'fill:none;stroke:' + warna + ';stroke-width:2;stroke-linejoin:round;stroke-linecap:round;pointer-events:none'}, svg);
-  t.forEach(o => svgEl('circle', {cx: cx(o[0]).toFixed(1), cy: y(o[1]).toFixed(1), r: 2.6, style: 'fill:#fff;stroke:' + warna + ';stroke-width:1.6;pointer-events:none'}, svg));
+  // Kurva halus (monoton, tidak melewati titik puncak/lembah) seperti grafik garis Excel.
+  const P = arr.map((v, i) => [i, v]).filter(o => o[1] !== null && o[1] !== undefined).map(o => [cx(o[0]), y(o[1])]);
+  if (P.length < 2) return;
+  const n = P.length, d = [], m = [];
+  for (let k = 0; k < n - 1; k++) d.push((P[k+1][1] - P[k][1]) / (P[k+1][0] - P[k][0]));
+  for (let k = 0; k < n; k++) m.push(k === 0 ? d[0] : k === n - 1 ? d[n-2] : (d[k-1] * d[k] <= 0 ? 0 : 2 / (1/d[k-1] + 1/d[k])));
+  let jalur = 'M' + P[0][0].toFixed(1) + ',' + P[0][1].toFixed(1);
+  for (let k = 0; k < n - 1; k++) {
+    const h = (P[k+1][0] - P[k][0]) / 3;
+    jalur += 'C' + (P[k][0] + h).toFixed(1) + ',' + (P[k][1] + m[k]*h).toFixed(1) + ' ' + (P[k+1][0] - h).toFixed(1) + ',' + (P[k+1][1] - m[k+1]*h).toFixed(1) + ' ' + P[k+1][0].toFixed(1) + ',' + P[k+1][1].toFixed(1);
+  }
+  svgEl('path', {d: jalur, style: 'fill:none;stroke:' + warna + ';stroke-width:3.2;stroke-linejoin:round;stroke-linecap:round;opacity:.9;pointer-events:none'}, svg);
 }
 function drawBulanan(host, arr, cat) {
   const W = 640, H = 250, m = {l: 50, r: 16, t: 24, b: 28}, iw = W - m.l - m.r, ih = H - m.t - m.b, slot = iw/12, bw = Math.min(48, slot*.6);
@@ -827,8 +835,8 @@ function renderBulan() {
   // kartu per kategori: donut, kotak, tren, tabel parameter
   const TJ = W && D.tanpaJam && D.tanpaJam.t ? ' · tanpa jam (data GPS, tidak ikut filter shift/jam): ' + CATS.filter(c => D.tanpaJam[c.key]).map(c => `${c.name} ${nf(D.tanpaJam[c.key])}`).join(', ') : '';
   document.getElementById('trendSub').textContent = W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
-    : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis merah = tren, garis putus-putus = rata-rata`
-    : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis merah = tren, garis putus-putus = rata-rata per hari`;
+    : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis merah melengkung = tren, garis putus-putus = rata-rata`
+    : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis merah melengkung = tren, garis putus-putus = rata-rata per hari`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
   // keterangan tabel parameter: periode ini dibanding apa
   const pjg = k => W ? namaK(k) : `${BLN[k]} ${D.tahun}`;
