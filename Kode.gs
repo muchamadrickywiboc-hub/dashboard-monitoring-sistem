@@ -45,7 +45,7 @@ const TIPE = {
 };
 /** Parameter yang hanya tampil untuk akun RTC (PUSAT); akun Area & Lokasi tidak menerimanya sama sekali (nama parameter huruf besar). */
 const PARAM_KHUSUS_RTC = ['SOS', 'SEAT BELT'];
-/** Parameter yang tidak ditampilkan untuk akun Lokasi (Control Room). */
+/** Parameter yang tidak ditampilkan untuk akun Area (Command Center) & Lokasi (Control Room); keduanya hanya melihat 9 event + GPS/Dashcam Offline di Laporan Harian. */
 const PARAM_SEMBUNYI_LOKASI = ['ILLEGAL SHUTDOWN', 'CAMERA COVERING', 'MICROSLEEP', 'DRIVING > 4 HOURS', 'DISTRACTION MENGEMUDI'];
 /** Nama event yang tampil di dashboard dan export (nama parameter huruf besar -> label). Kunci parameter tetap mengikuti sheet Pemetaan. */
 const LABEL_EVENT = {
@@ -182,7 +182,7 @@ function getDashboardData(token) {
   if (ses.peran === 'PUSAT') {
     return 'Z' + JSON.stringify({ nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }) + '\n' + dataUtamaZ_();
   }
-  const kunci = 'SZ_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
+  const kunci = 'SZ_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|v2|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
   let z = ambilCache_(kunci);
   if (!z) { z = zip_(potongJson_(dataUtama_(), ses, 'SC_')); simpanCache_(z, kunci, 900); }
   return 'Z\n' + z;
@@ -305,7 +305,7 @@ function potongCakupan_(d, ses) {
   d.akun = { nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' };
   if (ses.peran === 'PUSAT') return d;
   buangParam_(d, PARAM_KHUSUS_RTC, d.harianRtc);
-  if (ses.peran === 'LOKASI') buangParam_(d, PARAM_SEMBUNYI_LOKASI, d.harianLok);
+  buangParam_(d, PARAM_SEMBUNYI_LOKASI, d.harianLok);
   delete d.harianRtc; delete d.harianLok;
   const ai = AREAS.indexOf(ses.area || ''), kl = ses.lok ? kunciLok(ses.lok) : '';
   const L = d.lok.map(x => ses.peran === 'AREA' ? x[1] === ai : kunciLok(x[0]) === kl && (ai < 0 || x[1] === ai));
@@ -322,7 +322,7 @@ function potongCakupan_(d, ses) {
   return d;
 }
 /** Parameter dalam `daftar` dibuang (params, fakta, driver) dan bagian hariannya (`kurangHarian`) dikurangkan dari total harian per kategori.
- *  Akun Area & Lokasi: PARAM_KHUSUS_RTC; akun Lokasi juga PARAM_SEMBUNYI_LOKASI. */
+ *  Akun Area & Lokasi: PARAM_KHUSUS_RTC dan PARAM_SEMBUNYI_LOKASI. */
 function buangParam_(d, daftar, kurangHarian) {
   const P = d.params || [], baru = [], ganti = P.map(p => daftar.indexOf(teks(p.key).toUpperCase()) >= 0 ? -1 : baru.push(p) - 1);
   if (kurangHarian && kurangHarian.length) {
@@ -339,7 +339,7 @@ function buangParam_(d, daftar, kurangHarian) {
 function potongJson_(json, ses, awalan) {
   // Pusat: data utuh + info akun, tanpa parse/stringify ulang data yang besar
   if (ses.peran === 'PUSAT') return json.replace(/\}\s*$/, ',"akun":' + JSON.stringify({ nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }) + '}');
-  const kunci = awalan + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
+  const kunci = awalan + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|v2|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
   const ada = ambilCache_(kunci);
   if (ada) return ada;
   const out = JSON.stringify(potongCakupan_(JSON.parse(json), ses));
@@ -1170,7 +1170,7 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
     const fk = m + '|' + L + '|' + pi; (F[fk] || (F[fk] = [m, ai, L, pi, 0]))[4] += n;
     const hk = m + '|' + e[1] + '|' + L; (H[hk] || (H[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;
     if (khusus[pi]) (HR[hk] || (HR[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;   // bagian khusus RTC, dikurangkan untuk akun lain
-    if (sembunyiLok[pi]) (HL[hk] || (HL[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;   // dikurangkan untuk akun Lokasi
+    if (sembunyiLok[pi]) (HL[hk] || (HL[hk] = [m, e[1], ai, L, 0, 0, 0]))[KI[params[pi].kat]] += n;   // dikurangkan untuk akun Area & Lokasi
   });
   if (tanpaArea) catatan.push('Data: ' + tanpaArea + ' event tanpa Area dan Lokasi yang jelas tidak dihitung.');
 
