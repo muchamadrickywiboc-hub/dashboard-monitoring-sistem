@@ -1166,8 +1166,8 @@ function gambar(L) {
       <div class="legend"><span><i style="background:var(--gps)"></i>GPS</span><span><i style="background:var(--cam)"></i>Dashcam (ADAS)</span></div>${grafikGaris(L.perHari)}</div>
     <div class="panel"><div class="ph"><h2>Event harian</h2><p>Jumlah seluruh event per tanggal</p></div>${grafikKolom(L.perHari)}</div>
   </section>`;
-  h += `<section class="panel"><div class="ph"><h2>Event di Setiap ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · ${L.panel[0] && L.panel[0].rows.length === 1 ? 'jumlah case per jenis event · batang gelap = terbanyak, garis putus-putus = rata-rata' : 'jumlah case per jenis event, diurutkan dari yang terbanyak'}</p></div>${grafikLokasi(L)}</section>`;
   if (L.tren) h += `<section class="panel"><div class="ph"><h2>Tren &amp; Parameter per Jenis Event</h2><p>Jumlah event per ${L.baris.toLowerCase()} pada ${esc(per)}, diurutkan dari yang tertinggi · batang paling kanan = TOTAL</p></div>${trenLokasi(L)}</section>`;
+  h += `<section class="panel"><div class="ph"><h2>Event di Setiap ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · ${L.panel[0] && L.panel[0].rows.length === 1 ? 'jumlah case per jenis event · batang gelap = terbanyak, garis putus-putus = rata-rata' : 'jumlah case per jenis event, diurutkan dari yang terbanyak'}</p></div>${grafikLokasi(L)}</section>`;
   $('isi').innerHTML = h;
 }
 // warna tetap per jenis event (urutan panel di LaporanHarian.gs)
