@@ -97,10 +97,13 @@ function UJI_BACA_SUMBER() {
 }
 
 /* ============================== WEB APP ============================== */
+/** Ikon tab browser: logo Elnusa Petrofin (file assets/elnusa-favicon.png di repo GitHub). */
+const FAVICON_URL = 'https://raw.githubusercontent.com/muchamadrickywiboc-hub/dashboard-monitoring-sistem/main/assets/elnusa-favicon.png';
 function doGet(e) {
   if (e && e.parameter && /^harian$/i.test(e.parameter.laporan || '')) return halamanLaporanHarian_();   // Lampiran 3A, lihat LaporanHarian.gs
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Monitoring Driving Behaviour, Driver Discipline & Fatigue Management')
+    .setFaviconUrl(FAVICON_URL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
