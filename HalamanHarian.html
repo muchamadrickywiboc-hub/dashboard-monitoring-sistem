@@ -179,9 +179,6 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 .chg{flex:none;border-radius:8px;padding:3px 9px;font-weight:700;font-size:13px;white-space:nowrap}
 .chg.naik{background:#fbe9e7;color:var(--serious-ink)}.chg.turun{background:var(--accent-wash);color:#2f6a37}.chg.tetap{background:var(--surface-2);color:var(--muted)}
 .trsvg{overflow-x:auto}.trsvg svg{display:block;width:100%;height:auto}
-.trcard:not(.buka) tr.lebih,.trcard:not(.buka) tr.trmore.buka,.trcard.buka tr.trmore.tutup{display:none}
-.trmore{cursor:pointer}.trmore td{color:var(--ink-2)}.trbuka{color:var(--forest);font-weight:600;margin-left:6px}
-.trtbl table{font-size:12px}.trtbl th{font-size:10.5px;padding:6px 8px}.trtbl td{padding:5px 8px}
 .up{color:var(--serious-ink);font-weight:600}.down{color:#2f6a37;font-weight:600}.flat{color:var(--muted)}
 .trket{font-size:12px;color:var(--muted)}
 .ttd{display:block;max-height:54px;max-width:180px;margin-top:6px;object-fit:contain}
@@ -1170,7 +1167,7 @@ function gambar(L) {
     <div class="panel"><div class="ph"><h2>Event harian</h2><p>Jumlah seluruh event per tanggal</p></div>${grafikKolom(L.perHari)}</div>
   </section>`;
   h += `<section class="panel"><div class="ph"><h2>Event di Setiap ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · ${L.panel[0] && L.panel[0].rows.length === 1 ? 'jumlah case per jenis event · batang gelap = terbanyak, garis putus-putus = rata-rata' : 'jumlah case per jenis event, diurutkan dari yang terbanyak'}</p></div>${grafikLokasi(L)}</section>`;
-  if (L.tren) h += `<section class="panel"><div class="ph"><h2>Tren &amp; Parameter per Jenis Event</h2><p>Jumlah event per ${L.baris.toLowerCase()} pada ${esc(per)}, diurutkan dari yang tertinggi · batang paling kanan = TOTAL · tabel: ${esc(labelPer(L.periode))} dibanding ${L.tren.lalu ? esc(labelPer(L.tren.lalu)) : 'periode sebelumnya (belum ada data)'}</p></div>${trenLokasi(L)}</section>`;
+  if (L.tren) h += `<section class="panel"><div class="ph"><h2>Tren &amp; Parameter per Jenis Event</h2><p>Jumlah event per ${L.baris.toLowerCase()} pada ${esc(per)}, diurutkan dari yang tertinggi · batang paling kanan = TOTAL</p></div>${trenLokasi(L)}</section>`;
   $('isi').innerHTML = h;
 }
 // warna tetap per jenis event (urutan panel di LaporanHarian.gs)
@@ -1227,8 +1224,6 @@ function grafikLokasiEvent(lok, total, nama, kini, lalu) {
   g += '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (y(total) - 6).toFixed(1) + '" text-anchor="end" style="font-size:11.5px;font-weight:700;fill:#1b1f1d;paint-order:stroke;stroke:#fff;stroke-width:3px">' + nf(total) + '</text>' + namaX(x, 'TOTAL', true);
   return '<div class="trsvg"><svg viewBox="0 0 ' + W + ' ' + H + '" style="min-width:' + Math.min(W, 520) + 'px" role="img" aria-label="Event per lokasi">' + g + '</svg></div>';
 }
-const TR_MAKS = 10;   // lokasi yang tampil di tabel sebelum "lokasi lain"
-document.addEventListener('click', e => { const m = e.target.closest && e.target.closest('.trcard tr.trmore'); if (m) m.closest('.trcard').classList.toggle('buka'); });
 // Tren & parameter per jenis event: satu kartu per jenis event (grafik + tabel lokasi kini vs sebelumnya)
 function trenLokasi(L) {
   const T = L.tren, bln = L.mode === 'bulanan', nama = x => esc(L.baris === 'Area' ? x : judul(x)), baris = L.baris.toLowerCase();
@@ -1243,14 +1238,8 @@ function trenLokasi(L) {
   const kartu = ada.map(e => {
     const d = e.a - e.b, kelas = !T.lalu || !d ? 'tetap' : d > 0 ? 'naik' : 'turun';
     const badge = !T.lalu ? '–' : !e.b ? (e.a ? 'baru' : '0%') : (d > 0 ? '▲ ' : d < 0 ? '▼ ' : '') + (Math.abs(d) / e.b * 100).toLocaleString('id-ID', {maximumFractionDigits: 1}) + '%';
-    const sisa = e.lok.slice(TR_MAKS), sa = sisa.reduce((s, o) => s + o.a, 0), sb = sisa.reduce((s, o) => s + o.b, 0);
     return '<div class="trcard"><div class="trh"><div><b>' + esc(e.p.grafik) + '</b><small>' + esc(kini) + ': ' + nf(e.a) + ' event' + (T.lalu ? ' · ' + esc(lalu) + ': ' + nf(e.b) : '') + '</small></div><span class="chg ' + kelas + '">' + badge + '</span></div>' +
-      '<div class="trchart">' + grafikLokasiEvent(e.lok, e.a, nama, kini, T.lalu ? lalu : '') + '</div>' +
-      '<div class="trtbl tbl"><table><thead><tr><th>' + esc(L.baris) + '</th><th>' + esc(lalu) + '</th><th>' + esc(kini) + '</th><th>Persentase</th></tr></thead><tbody>' +
-        e.lok.map((o, i) => '<tr' + (i >= TR_MAKS ? ' class="lebih"' : '') + '><td>' + nama(o.n) + '</td><td>' + nf(o.b) + '</td><td>' + nf(o.a) + '</td><td>' + selisih(o.a, o.b) + '</td></tr>').join('') +
-        (sisa.length ? '<tr class="trmore tutup"><td>' + sisa.length + ' ' + baris + ' lain <span class="trbuka">▾ tampilkan</span></td><td>' + nf(sb) + '</td><td>' + nf(sa) + '</td><td>' + selisih(sa, sb) + '</td></tr>' +
-          '<tr class="trmore buka"><td colspan="4"><span class="trbuka">▴ sembunyikan</span></td></tr>' : '') +
-        '<tr class="tot"><td>TOTAL</td><td>' + nf(e.b) + '</td><td>' + nf(e.a) + '</td><td>' + selisih(e.a, e.b) + '</td></tr></tbody></table></div></div>';
+      '<div class="trchart">' + grafikLokasiEvent(e.lok, e.a, nama, kini, T.lalu ? lalu : '') + '</div></div>';
   }).join('');
   const nol = ev.length - ada.length;
   return '<div class="trgrid">' + kartu + '</div>' + (nol ? '<div class="trket">' + nol + ' jenis event lain tidak terjadi pada periode ini.</div>' : '');
