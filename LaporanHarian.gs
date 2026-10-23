@@ -40,7 +40,7 @@ const LH_PANEL = [
   { k: 'DS', tabel: 'Distraction Mengemudi', grafik: 'Distraction Mengemudi', kasus: ['DRIVER DISTRACTION', 'DRIVER ATTENTION HAS BEEN DISTRACTED'], param: ['DISTRACTION MENGEMUDI'] },
 ];
 
-/** Panel yang tidak ditampilkan untuk akun Lokasi (Control Room): Illegal Shutdown, Camera Covering, Fatigue, Driving > 4 hrs, Distraction Mengemudi. */
+/** Panel yang tidak ditampilkan untuk akun Area (Command Center) & Lokasi (Control Room): Illegal Shutdown, Camera Covering, Fatigue, Driving > 4 hrs, Distraction Mengemudi. */
 const LH_SEMBUNYI_LOKASI = ['IS', 'CC', 'FT', 'D4', 'DS'];
 
 function halamanLaporanHarian_() {
@@ -160,7 +160,7 @@ function lhLaporan(token, periode, area, lokasi) {
   else info.filter(o => cocokLH_(c, o.n, o.a)).forEach(o => tambah(o.n, o.a));
 
   // event
-  const V = LH_PANEL.map(() => []), evHari = {}, tampil = LH_PANEL.map(p => !(ses.peran === 'LOKASI' && LH_SEMBUNYI_LOKASI.indexOf(p.k) >= 0));
+  const V = LH_PANEL.map(() => []), evHari = {}, tampil = LH_PANEL.map(p => !(ses.peran !== 'PUSAT' && LH_SEMBUNYI_LOKASI.indexOf(p.k) >= 0));
   let adaEvent = false;
   Object.keys(E.tanggal).filter(diHari).forEach(d => E.tanggal[d].forEach(r => {
     if (!tampil[r[2]] || !masuk(r[0], r[1])) return;
