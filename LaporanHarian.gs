@@ -46,6 +46,7 @@ const LH_SEMBUNYI_LOKASI = ['IS', 'CC', 'FT', 'D4', 'DS'];
 function halamanLaporanHarian_() {
   return HtmlService.createHtmlOutputFromFile('HalamanHarian')
     .setTitle('Laporan Operasional GPS & Dashcam')
+    .setFaviconUrl(FAVICON_URL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
