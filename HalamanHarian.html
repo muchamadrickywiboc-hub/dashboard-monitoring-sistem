@@ -171,13 +171,19 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 .evm.nol{color:var(--muted)}.evm.nol span:last-child{font-weight:500}
 .evcard.nol{background:var(--surface-2)}.evcard.nol .evh{color:var(--muted);margin:0}.evkosong{font-size:11.5px;color:var(--muted)}
 /* Tren & parameter event per lokasi */
-.trgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;align-items:start}
+.trgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+@media (max-width:1250px){.trgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:760px){.trgrid{grid-template-columns:minmax(0,1fr)}}
 .trcard{border:1px solid var(--grid);border-radius:12px;padding:12px 14px;break-inside:avoid;display:flex;flex-direction:column;gap:8px}
 .trh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .trh b{display:block;font-size:14px;font-weight:600}.trh small{font-size:11.5px;color:var(--ink-2)}
 .chg{flex:none;border-radius:8px;padding:3px 9px;font-weight:700;font-size:13px;white-space:nowrap}
 .chg.naik{background:#fbe9e7;color:var(--serious-ink)}.chg.turun{background:var(--accent-wash);color:#2f6a37}.chg.tetap{background:var(--surface-2);color:var(--muted)}
 .trsvg svg{display:block;width:100%;height:auto}
+.trlok{font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:6px;flex-wrap:wrap}.trlok b{color:var(--ink)}
+.trreset{font:600 11px var(--f-ui);border:1px solid var(--grid);background:var(--surface-2);color:var(--ink-2);border-radius:999px;padding:2px 9px;cursor:pointer}
+.trtbl tr[data-li]{cursor:pointer}.trtbl tr.aktif td{background:var(--accent-wash);font-weight:600}
+.trcard:not(.buka) tr.lebih,.trcard:not(.buka) tr.trmore.buka,.trcard.buka tr.trmore.tutup{display:none}
+.trmore{cursor:pointer}.trmore td{color:var(--ink-2)}.trbuka{color:var(--forest);font-weight:600;margin-left:6px}
 .trtbl table{font-size:12px}.trtbl th{font-size:10.5px;padding:6px 8px}.trtbl td{padding:5px 8px}
 .up{color:var(--serious-ink);font-weight:600}.down{color:#2f6a37;font-weight:600}.flat{color:var(--muted)}
 .trket{font-size:12px;color:var(--muted)}
@@ -1201,21 +1207,41 @@ function selisih(kini, lalu) {
   const tanda = d > 0 ? '+' : '−', pct = lalu ? ' (' + (d > 0 ? '▲ ' : '▼ ') + (Math.abs(d) / lalu * 100).toLocaleString('id-ID', {maximumFractionDigits: 1}) + '%)' : ' (baru)';
   return '<span class="' + (d > 0 ? 'up' : 'down') + '">' + tanda + nf(Math.abs(d)) + pct + '</span>';
 }
-// grafik per jenis event: batang = jumlah event per tanggal (semua lokasi), satu garis hijau = tren (rata-rata 3 hari)
+// grafik per jenis event: batang = jumlah event per tanggal, satu garis hijau = tren (rata-rata 3 hari).
+// Harian: garis berhenti sebelum tanggal terpilih; tanggal terpilih = batang gelap + angkanya.
 function grafikEventTren(h, terpilih) {
-  const W = 520, H = 180, ml = 36, mr = 8, mt = 14, mb = 22, iw = W - ml - mr, ih = H - mt - mb, n = h.length, w = iw / n, bw = Math.min(22, w * .66);
-  const m0 = Math.max(1, ...h) * 1.1, p = Math.pow(10, Math.floor(Math.log10(m0))), mx = Math.max(4, [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => m0 / p <= x) * p);
+  const W = 560, H = 250, ml = 40, mr = 10, mt = 26, mb = 24, iw = W - ml - mr, ih = H - mt - mb, n = h.length, w = iw / n, bw = Math.min(26, w * .66);
+  const m0 = Math.max(1, ...h) * 1.12, p = Math.pow(10, Math.floor(Math.log10(m0))), mx = Math.max(4, [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => m0 / p <= x) * p);
   const y = v => mt + ih - v / mx * ih, cx = i => ml + w * i + w / 2;
   let g = '';
-  [0, mx / 2, mx].forEach(v => { g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" stroke="#e6e9e6"/><text class="tick" x="' + (ml - 5) + '" y="' + (y(v) + 4).toFixed(1) + '" text-anchor="end">' + sk(v) + '</text>'; });
+  const nt = [4, 5, 2].find(k => Number.isInteger(mx / k)) || 2;
+  Array.from({length: nt + 1}, (_, k) => mx / nt * k).forEach(v => { g += '<line x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" stroke="#e6e9e6"/><text class="tick" x="' + (ml - 6) + '" y="' + (y(v) + 4).toFixed(1) + '" text-anchor="end">' + sk(v) + '</text>'; });
   h.forEach((v, i) => { const pilih = i === terpilih;
     if (v) g += '<rect class="kb" data-tip="' + esc('<b>Tgl ' + (i + 1) + '</b><br>' + nf(v) + ' event') + '" x="' + (cx(i) - bw / 2).toFixed(1) + '" y="' + y(v).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (mt + ih - y(v)).toFixed(1) + '" rx="2" fill="' + (pilih ? '#47504b' : '#b5bbb7') + '"></rect>';
+    if (pilih) g += '<text x="' + cx(i).toFixed(1) + '" y="' + (y(v) - 6).toFixed(1) + '" text-anchor="' + (i > n - 3 ? 'end' : 'middle') + '" style="font-size:12px;font-weight:700;fill:#1b1f1d;paint-order:stroke;stroke:#fff;stroke-width:3px">' + nf(v) + '</text>';
     if (n <= 16 || i % 2 === 0 || pilih) g += '<text class="tick" x="' + cx(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle"' + (pilih ? ' style="font-weight:700;fill:#1b1f1d"' : '') + '>' + (i + 1) + '</text>'; });
-  if (n > 1) { const Q = h.map((v, k) => { const s = h.slice(Math.max(0, k - 1), k + 2); return [cx(k), y(s.reduce((a, b) => a + b, 0) / s.length)]; });
-    g += '<path d="' + Q.map((o, k) => (k ? 'L' : 'M') + o[0].toFixed(1) + ',' + o[1].toFixed(1)).join('') + '" fill="none" stroke="#1fae54" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>'; }
+  const t = terpilih >= 0 ? h.slice(0, terpilih) : h;
+  if (t.length > 1) { const Q = t.map((v, k) => { const s = t.slice(Math.max(0, k - 1), k + 2); return [cx(k), y(s.reduce((a, b) => a + b, 0) / s.length)]; });
+    g += '<path d="' + Q.map((o, k) => (k ? 'L' : 'M') + o[0].toFixed(1) + ',' + o[1].toFixed(1)).join('') + '" fill="none" stroke="#1fae54" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" style="pointer-events:none"/>'; }
   return '<div class="trsvg"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Event per tanggal">' + g + '</svg></div>';
 }
-// Tren & parameter per jenis event: satu kartu per jenis event, garis = lokasi, tabel = lokasi kini vs sebelumnya
+// data kartu tren (untuk klik lokasi di tabel): TRK[c] = {e, terpilih, nama}
+let TRK = [];
+const TR_MAKS = 10;   // lokasi yang tampil di tabel sebelum "lokasi lain"
+function isiGrafikTren(c, li) {
+  const K = TRK[c], card = document.querySelector('.trcard[data-c="' + c + '"]'); if (!K || !card) return;
+  const o = li >= 0 ? K.e.lok[li] : null, H = o ? o.h : Array.from({length: K.hari}, (_, i) => K.e.lok.reduce((t, x) => t + (x.h[i] || 0), 0));
+  card.querySelector('.trlok').innerHTML = o ? 'Grafik: <b>' + K.nama(o.n) + '</b> <button type="button" class="trreset" data-c="' + c + '">× semua ' + K.baris + '</button>' : 'Grafik: <b>semua ' + K.baris + '</b> · klik nama ' + K.baris + ' di tabel untuk melihat grafiknya';
+  card.querySelector('.trchart').innerHTML = grafikEventTren(H, K.terpilih);
+  card.querySelectorAll('tr[data-li]').forEach(tr => tr.classList.toggle('aktif', +tr.dataset.li === li));
+}
+document.addEventListener('click', e => {
+  const r = e.target.closest && e.target.closest('.trcard tr[data-li]'), x = e.target.closest && e.target.closest('.trreset'), m = e.target.closest && e.target.closest('.trcard tr.trmore');
+  if (r) { const c = +r.closest('.trcard').dataset.c; isiGrafikTren(c, r.classList.contains('aktif') ? -1 : +r.dataset.li); }
+  else if (x) isiGrafikTren(+x.dataset.c, -1);
+  else if (m) m.closest('.trcard').classList.toggle('buka');
+});
+// Tren & parameter per jenis event: satu kartu per jenis event (grafik + tabel lokasi kini vs sebelumnya)
 function trenLokasi(L) {
   const T = L.tren, bln = L.mode === 'bulanan', nama = x => esc(L.baris === 'Area' ? x : judul(x)), baris = L.baris.toLowerCase();
   const kini = labelPer(L.periode), lalu = T.lalu ? labelPer(T.lalu) : 'Sebelumnya', terpilih = bln ? -1 : T.hari - 1;
@@ -1225,15 +1251,20 @@ function trenLokasi(L) {
     return {p, lok, a: lok.reduce((s, o) => s + o.a, 0), b: lok.reduce((s, o) => s + o.b, 0)};
   });
   const ada = ev.filter(e => e.lok.length).sort((x, y) => y.a - x.a || y.b - x.b);
+  TRK = ada.map(e => ({e, terpilih, hari: T.hari, nama, baris}));
   if (!ada.length) return '<div class="kosong">Belum ada event pada periode ini.</div>';
-  const kartu = ada.map(e => {
+  const kartu = ada.map((e, c) => {
     const d = e.a - e.b, kelas = !T.lalu || !d ? 'tetap' : d > 0 ? 'naik' : 'turun';
     const badge = !T.lalu ? '–' : !e.b ? (e.a ? 'baru' : '0%') : (d > 0 ? '▲ ' : d < 0 ? '▼ ' : '') + (Math.abs(d) / e.b * 100).toLocaleString('id-ID', {maximumFractionDigits: 1}) + '%';
     const H = Array.from({length: T.hari}, (_, i) => e.lok.reduce((t, o) => t + (o.h[i] || 0), 0));
-    return '<div class="trcard"><div class="trh"><div><b>' + esc(e.p.grafik) + '</b><small>' + esc(kini) + ': ' + nf(e.a) + ' event' + (T.lalu ? ' · ' + esc(lalu) + ': ' + nf(e.b) : '') + '</small></div><span class="chg ' + kelas + '">' + badge + '</span></div>' +
-      grafikEventTren(H, terpilih) +
+    const sisa = e.lok.slice(TR_MAKS), sa = sisa.reduce((s, o) => s + o.a, 0), sb = sisa.reduce((s, o) => s + o.b, 0);
+    return '<div class="trcard" data-c="' + c + '"><div class="trh"><div><b>' + esc(e.p.grafik) + '</b><small>' + esc(kini) + ': ' + nf(e.a) + ' event' + (T.lalu ? ' · ' + esc(lalu) + ': ' + nf(e.b) : '') + '</small></div><span class="chg ' + kelas + '">' + badge + '</span></div>' +
+      '<div class="trlok">Grafik: <b>semua ' + baris + '</b>' + (e.lok.length > 1 ? ' · klik nama ' + baris + ' di tabel untuk melihat grafiknya' : '') + '</div>' +
+      '<div class="trchart">' + grafikEventTren(H, terpilih) + '</div>' +
       '<div class="trtbl tbl"><table><thead><tr><th>' + esc(L.baris) + '</th><th>' + esc(lalu) + '</th><th>' + esc(kini) + '</th><th>Persentase</th></tr></thead><tbody>' +
-        e.lok.map(o => '<tr><td>' + nama(o.n) + '</td><td>' + nf(o.b) + '</td><td>' + nf(o.a) + '</td><td>' + selisih(o.a, o.b) + '</td></tr>').join('') +
+        e.lok.map((o, i) => '<tr data-li="' + i + '"' + (i >= TR_MAKS ? ' class="lebih"' : '') + ' title="Klik untuk melihat grafik ' + nama(o.n) + '"><td>' + nama(o.n) + '</td><td>' + nf(o.b) + '</td><td>' + nf(o.a) + '</td><td>' + selisih(o.a, o.b) + '</td></tr>').join('') +
+        (sisa.length ? '<tr class="trmore tutup"><td>' + sisa.length + ' ' + baris + ' lain <span class="trbuka">▾ tampilkan</span></td><td>' + nf(sb) + '</td><td>' + nf(sa) + '</td><td>' + selisih(sa, sb) + '</td></tr>' +
+          '<tr class="trmore buka"><td colspan="4"><span class="trbuka">▴ sembunyikan</span></td></tr>' : '') +
         '<tr class="tot"><td>TOTAL</td><td>' + nf(e.b) + '</td><td>' + nf(e.a) + '</td><td>' + selisih(e.a, e.b) + '</td></tr></tbody></table></div></div>';
   }).join('');
   const nol = ev.length - ada.length;
