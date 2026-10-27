@@ -863,6 +863,7 @@ function prosesTarikan() {
     const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
     const logSs = bukaAtauBuat(folder, LOG_NAMA, [[LOG_NAMA, LOG_HDR]]);
     const logSh = logSs.getSheetByName(LOG_NAMA);
+    try { imporTarikan_(folder, logSh, mulai); } catch (e) { Logger.log('Impor tarikan gagal: ' + e.message); }
     const daftar = daftarTarikan_(), ada = {};
     daftar.forEach(o => { ada[o.id] = 1; });
     // baris log file yang sudah tidak ada di folder (dihapus / diganti file baru) dibuang, supaya peringatan "gagal dibaca" lama tidak muncul terus
@@ -974,6 +975,18 @@ function tanggalNama_(nama) {
   return t ? t[3] + '-' + ('0' + (BULAN.indexOf(t[2]) + 1)).slice(-2) + '-' + ('0' + t[1]).slice(-2) : null;
 }
 
+const HDR_TARIKAN = {
+  'Event': ['Tanggal', 'Area', 'Lokasi', 'Case', 'Jumlah', 'Sumber'], 'AMT': ['Area', 'Lokasi', 'Nama AMT', 'Case', 'Jumlah', 'Sumber'],
+  'Event Jam': ['Tanggal', 'Jam', 'Area', 'Lokasi', 'Case', 'Jumlah', 'Sumber'], 'AMT Jam': ['Tanggal', 'Jam', 'Area', 'Lokasi', 'Nama AMT', 'Case', 'Jumlah', 'Sumber'],
+};
+/** Google Sheet "Tarikan <nn> <Bulan> <tahun>" (bulan 1-12) di folder data; dibuat bila belum ada. */
+function bukaTarikan_(folder, m) {
+  const ss = bukaAtauBuat(folder, 'Tarikan ' + ('0' + m).slice(-2) + ' ' + BULAN[m - 1].charAt(0) + BULAN[m - 1].slice(1).toLowerCase() + ' ' + CFG.TAHUN,
+    [['Event', HDR_TARIKAN['Event']], ['AMT', HDR_TARIKAN['AMT']]]);
+  ss.getSheetByName('Event').getRange('A:A').setNumberFormat('@');   // tanggal disimpan sebagai teks yyyy-mm-dd
+  return ss;
+}
+
 /** Merangkum satu file tarikan dan menulis hasilnya (menggantikan hasil lama file yang sama). Mengembalikan jumlah baris event. */
 function prosesSatuTarikan(folder, o, batas) {
   let ssId = o.id, sementara = null;
@@ -1011,20 +1024,80 @@ function prosesSatuTarikan(folder, o, batas) {
       const nama = am ? namaAmt(am[i][0]) : '';
       if (nama) { const ka = lok + '\u0001' + nama + '\u0001' + c; amt[ka] = (amt[ka] || 0) + 1; if (jam !== null) { const kj = jam + '\u0001' + ka; amj[kj] = (amj[kj] || 0) + 1; } }
     }
-    const m = +o.tgl.slice(5, 7);
-    const ss = bukaAtauBuat(folder, 'Tarikan ' + ('0' + m).slice(-2) + ' ' + BULAN[m - 1].charAt(0) + BULAN[m - 1].slice(1).toLowerCase() + ' ' + CFG.TAHUN,
-      [['Event', ['Tanggal', 'Area', 'Lokasi', 'Case', 'Jumlah', 'Sumber']], ['AMT', ['Area', 'Lokasi', 'Nama AMT', 'Case', 'Jumlah', 'Sumber']]]);
-    ss.getSheetByName('Event').getRange('A:A').setNumberFormat('@');   // tanggal disimpan sebagai teks yyyy-mm-dd
+    const ss = bukaTarikan_(folder, +o.tgl.slice(5, 7));
     gantiBaris(ss.getSheetByName('Event'), o.id, Object.keys(ev).map(x => { const p = x.split('\u0001'); return [o.tgl, o.area, p[0], p[1], ev[x], o.id]; }));
-    gantiBaris(sheetAtauBuat(ss, 'Event Jam', ['Tanggal', 'Jam', 'Area', 'Lokasi', 'Case', 'Jumlah', 'Sumber']), o.id,
+    gantiBaris(sheetAtauBuat(ss, 'Event Jam', HDR_TARIKAN['Event Jam']), o.id,
       Object.keys(evj).map(x => { const p = x.split('\u0001'); return [o.tgl, +p[0], o.area, p[1], p[2], evj[x], o.id]; }));
-    gantiBaris(sheetAtauBuat(ss, 'AMT Jam', ['Tanggal', 'Jam', 'Area', 'Lokasi', 'Nama AMT', 'Case', 'Jumlah', 'Sumber']), o.id,
+    gantiBaris(sheetAtauBuat(ss, 'AMT Jam', HDR_TARIKAN['AMT Jam']), o.id,
       Object.keys(amj).map(x => { const p = x.split('\u0001'); return [o.tgl, +p[0], o.area, p[1], p[2], p[3], amj[x], o.id]; }));
     gantiBaris(ss.getSheetByName('AMT'), o.id, Object.keys(amt).map(x => { const p = x.split('\u0001'); return [o.area, p[0], p[1], p[2], amt[x], o.id]; }));
     return n;
   } finally {
     if (sementara) try { DriveApp.getFileById(sementara).setTrashed(true); } catch (e) { /* abaikan */ }
   }
+}
+
+/**
+ * File "Impor Tarikan ..." (.xlsx atau Google Sheet) di folder data: rangkuman file harian yang sudah dihitung di luar Apps Script
+ * (tools/impor_tarikan.js, dengan prosesSatuTarikan yang sama), supaya banyak file tidak perlu menunggu pemicu 15 menit satu per satu.
+ * Sheet Event / AMT / Event Jam / AMT Jam (format sama dengan file Tarikan) + Log (File ID, Nama file, Area, Tanggal, Diubah, Baris event).
+ * Hasilnya menggantikan baris file yang sama di "Tarikan <nn> ...", Log Tarikan ditandai OK supaya file itu tidak diproses lagi,
+ * lalu file impor dipindah ke subfolder "xlsx asli" dengan awalan "Sudah diimpor - ".
+ */
+function imporTarikan_(folder, logSh, mulai) {
+  const it = folder.getFiles(), daftar = [];
+  while (it.hasNext()) { const f = it.next(); if (/^IMPOR TARIKAN/i.test(teks(f.getName())) && !f.isTrashed()) daftar.push(f); }
+  const arsip = () => folder.getFoldersByName('xlsx asli').hasNext() ? folder.getFoldersByName('xlsx asli').next() : folder.createFolder('xlsx asli');
+  let n = 0;
+  for (const f of daftar) {
+    if (Date.now() - mulai > BATAS_MS) break;
+    let sementara = null;
+    try {
+      if (f.getMimeType() === MimeType.MICROSOFT_EXCEL) {
+        if (typeof Drive === 'undefined') throw new Error('layanan Drive API belum diaktifkan di Apps Script');
+        sementara = konversiXlsx_({ nama: f.getName(), file: f }, mulai + BATAS_MS);
+      } else if (f.getMimeType() !== MimeType.GOOGLE_SHEETS) continue;
+      const src = SpreadsheetApp.openById(sementara || f.getId());
+      const tglTeks = x => x instanceof Date ? Utilities.formatDate(x, Session.getScriptTimeZone(), 'yyyy-MM-dd') : teks(x);
+      const log = (nilaiSheet(src, 'Log') || []).slice(1).filter(r => teks(r[0]));
+      if (!log.length) throw new Error('sheet Log kosong');
+      const ids = {}; log.forEach(r => { ids[teks(r[0])] = 1; });
+      const bulan = {}; log.forEach(r => { bulan[+tglTeks(r[3]).slice(5, 7)] = 1; });
+      Object.keys(bulan).forEach(m => {
+        const ss = bukaTarikan_(folder, +m);
+        Object.keys(HDR_TARIKAN).forEach(nama => {
+          const hdr = HDR_TARIKAN[nama], w = hdr.length, adaTgl = hdr[0] === 'Tanggal';
+          const baru = (nilaiSheet(src, nama) || []).slice(1).filter(r => teks(r[w - 1]) && (!adaTgl || +tglTeks(r[0]).slice(5, 7) === +m))
+            .map(r => { const x = r.slice(0, w); if (adaTgl) x[0] = tglTeks(x[0]); x[w - 1] = teks(x[w - 1]); return x; });
+          const sh = sheetAtauBuat(ss, nama, hdr), v = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, w).getValues() : [];
+          const sisa = v.filter(r => !ids[teks(r[w - 1])]);
+          if (sisa.length < v.length) {   // sebagian file sudah pernah diproses: tulis ulang tanpa baris lamanya
+            sh.getRange(2, 1, v.length, w).clearContent();
+            if (sisa.length) sh.getRange(2, 1, sisa.length, w).setValues(sisa);
+          }
+          if (baru.length) sh.getRange(sisa.length + 2, 1, baru.length, w).setValues(baru);
+        });
+      });
+      // Log Tarikan: baris file yang sama diganti, file baru ditambahkan
+      const lv = logSh.getDataRange().getValues(), baris = {};
+      lv.forEach((r, i) => { if (i) baris[teks(r[0])] = i; });
+      const tambah = [];
+      log.forEach(r => {
+        const row = [teks(r[0]), teks(r[1]), teks(r[2]), tglTeks(r[3]), Number(r[4]) || 0, Number(r[5]) || 0, new Date(), 'OK (impor)'];
+        if (baris[row[0]] !== undefined) lv[baris[row[0]]] = row; else tambah.push(row);
+      });
+      const semua = lv.slice(1).map(r => r.slice(0, LOG_HDR.length)).concat(tambah);
+      if (semua.length) logSh.getRange(2, 1, semua.length, LOG_HDR.length).setValues(semua);
+      f.setName('Sudah diimpor - ' + f.getName()); f.moveTo(arsip());
+      n += log.length;
+      Logger.log('Impor tarikan: ' + f.getName() + ', ' + log.length + ' file harian.');
+    } catch (e) {
+      Logger.log('Impor tarikan ' + f.getName() + ' gagal: ' + e.message);
+    } finally {
+      if (sementara) try { DriveApp.getFileById(sementara).setTrashed(true); } catch (e) { /* abaikan */ }
+    }
+  }
+  return n;
 }
 
 /** Waktu (ms) dari kolom Time: nilai tanggal-jam Sheets atau teks "yyyy-mm-dd hh:mm:ss"; null bila tidak terbaca. */
