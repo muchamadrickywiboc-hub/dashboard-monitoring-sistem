@@ -893,13 +893,16 @@ function prosesTarikan() {
 }
 
 /**
- * Semua file harian bertanggal >= MULAI_TARIKAN di folder yang terdaftar (termasuk subfolder satu tingkat, mis. per area):
- * "Tarikan_<REG>_..._<yyyy-mm-dd>.xlsx" atau "FU RTC 20 Oktober 2026.xlsx". Hasil: [{id, nama, area, tgl, diubah, mime, file}].
+ * Semua file harian bertanggal >= MULAI_TARIKAN di folder yang terdaftar, termasuk subfolder sampai dua tingkat
+ * (mis. "1. TARIKAN EVENT SISTEM RTC" > "10. OKTOBER 2026" > "1. Sumbagut 1" > "20 Oktober 2026.xlsx").
+ * Nama file memuat tanggal: "Tarikan_<REG>_..._<yyyy-mm-dd>.xlsx" atau "20 Oktober 2026.xlsx".
+ * Area = nama subfolder bila berupa nama area ("1. Sumbagut 1"), selain itu kolom Area di Tarikan Sistem.
+ * Hasil: [{id, nama, area, tgl, diubah, mime, file}].
  */
 function daftarTarikan_() {
   const v = SpreadsheetApp.openById(CFG.TARIKAN_ID).getSheets()[0].getDataRange().getValues();
   const out = [], lihat = {};
-  const baca = (folder, area, dalam) => {
+  const baca = (folder, area, dalam) => {   // dalam = sisa tingkat subfolder yang dibaca
     const it = folder.getFiles();
     while (it.hasNext()) {
       const f = it.next(), nama = f.getName(), tgl = tanggalNama_(nama);
@@ -909,13 +912,13 @@ function daftarTarikan_() {
       lihat[f.getId()] = 1;
       out.push({ id: f.getId(), nama: nama, area: area.toUpperCase(), tgl: tgl, diubah: f.getLastUpdated().getTime(), mime: mime, file: f });
     }
-    if (dalam) { const sub = folder.getFolders(); while (sub.hasNext()) baca(sub.next(), area, false); }
+    if (dalam) { const sub = folder.getFolders(); while (sub.hasNext()) { const f = sub.next(), nm = teks(f.getName()).replace(/^\d+\s*[.)]\s*/, '').toUpperCase(); baca(f, areaNorm(nm) ? nm : area, dalam - 1); } }
   };
   v.forEach(r => {
     const area = teks(r[0]), link = teks(r[1]);
     const id = (link.match(/folders\/([-\w]{20,})/) || link.match(/[?&]id=([-\w]{20,})/) || [])[1];
     if (!area || !id || /^AREA$/i.test(area)) return;
-    baca(DriveApp.getFolderById(id), area, true);
+    baca(DriveApp.getFolderById(id), area, 2);
   });
   return out;
 }
