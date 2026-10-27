@@ -79,7 +79,7 @@ function petaPanel_(peta) {
  * Disimpan di cache 15 menit.
  */
 function eventBulanLH_(m) {
-  const kunci = 'LH2_' + m, ada = ambilCache_(kunci);
+  const kunci = 'LH2_' + versiData_() + '_' + m, ada = ambilCache_(kunci);
   if (ada) return JSON.parse(ada);
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
   let atur = null; const pilih = {};   // DATA / TARIKAN -> file (yang terakhir diubah bila ganda): Data untuk tanggal sebelum MULAI_TARIKAN, Tarikan sesudahnya

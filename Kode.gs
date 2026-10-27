@@ -84,9 +84,14 @@ function onOpen() {
 /** Menu: membangun ulang data dashboard di sini (bukan menghapus cache), jadi pengunjung tidak ikut menunggu. */
 function hapusCache() {
   CacheService.getScriptCache().removeAll(['LGLIST', 'DASHB4_N']);   // DASHB4 = cache JSON lama (tidak dipakai lagi)
+  gantiVersiData_();
   panaskanCache();
   try { SpreadsheetApp.getActiveSpreadsheet().toast('Data dashboard sudah diperbarui. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Data dashboard diperbarui.'); }
 }
+
+/** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
+function versiData_() { return PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0'; }
+function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
 /** DIAGNOSA: jalankan dari editor, lihat hasilnya di View > Logs. */
 function UJI_BACA_SUMBER() {
@@ -483,11 +488,11 @@ const diShift = (j, s) => SHIFT[s][0] < SHIFT[s][1] ? j >= SHIFT[s][0] && j < SH
  */
 function getDataWaktu(token, m, d, s, h) {
   const ses = sesi_(token);
-  return potongJson_(dataWaktu_(m, d, s, h), ses, 'SW_' + [m, d, s, h].join('_') + '_');
+  return potongJson_(dataWaktu_(m, d, s, h), ses, 'SW_' + versiData_() + '_' + [m, d, s, h].join('_') + '_');
 }
 function dataWaktu_(m, d, s, h) {
   m = +m; d = +d || 0; s = +s || 0; h = (h === undefined || h === null || h === '') ? -1 : +h;
-  const kunci = 'WKT1_' + [m, d, s, h].join('_');
+  const kunci = 'WKT1_' + versiData_() + '_' + [m, d, s, h].join('_');
   const ada = ambilCache_(kunci);
   if (ada) return ada;
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
@@ -761,10 +766,11 @@ function konversiXlsx(folder, peringatan) {
 /** Pemetaan bawaan untuk teks "Alarm Status" di file tarikan; baris di sheet Pemetaan menimpa ini. */
 const KASUS_TARIKAN = {
   'OVERSPEED INSTANT': ['Over Speed', 'Driving Behaviour'], 'OVER SPEED ALARM': ['Over Speed', 'Driving Behaviour'],
-  'OVER DRIVING (4 HOURS)': ['Driving > 4 Hours', 'Driving Behaviour'],
+  'OVER DRIVING (4 HOURS)': ['Driving > 4 Hours', 'Driving Behaviour'], 'OVERDRIVING ALARM': ['Driving > 4 Hours', 'Driving Behaviour'],
   'BLACKZONE ALARM': ['Black Zone', 'Driver Discipline'], 'IDLE REPORT': ['Idling', 'Driver Discipline'],
   'DRIVER IS USING PHONE': ['Menggunakan Telepon', 'Driver Discipline'], 'DRIVER HAS BEEN SMOKING': ['Merokok / Vape', 'Driver Discipline'],
   'DRIVER HAS BEEN YAWNING': ['Menguap', 'Fatigue Management'],
+  'MICRO SLEEP': ['Microsleep', 'Fatigue Management'], 'MICROSLEEP': ['Microsleep', 'Fatigue Management'], 'DRIVER FATIGUE': ['Microsleep', 'Fatigue Management'],
   'HARSH CORNERING ALARM': ['Harsh Turn / Cornering', 'Driving Behaviour'], 'HARSH TURN ALARM': ['Harsh Turn / Cornering', 'Driving Behaviour'],
   'HARSH BRAKING ALARM': ['Harsh Braking', 'Driving Behaviour'], 'HARSH BRAKE ALARM': ['Harsh Braking', 'Driving Behaviour'], 'HARSH BREAKING ALARM': ['Harsh Braking', 'Driving Behaviour'],
   'HARSH ACCELERATION ALARM': ['Harsh Acceleration', 'Driving Behaviour'],
@@ -866,7 +872,8 @@ function prosesTarikan() {
     const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
     const logSs = bukaAtauBuat(folder, LOG_NAMA, [[LOG_NAMA, LOG_HDR]]);
     const logSh = logSs.getSheetByName(LOG_NAMA);
-    try { imporTarikan_(folder, logSh, mulai); } catch (e) { Logger.log('Impor tarikan gagal: ' + e.message); }
+    let diimpor = 0;
+    try { diimpor = imporTarikan_(folder, logSh, mulai); } catch (e) { Logger.log('Impor tarikan gagal: ' + e.message); }
     const daftar = daftarTarikan_(), ada = {};
     daftar.forEach(o => { ada[o.id] = 1; });
     // baris log file yang sudah tidak ada di folder (dihapus / diganti file baru) dibuang, supaya peringatan "gagal dibaca" lama tidak muncul terus
@@ -896,7 +903,8 @@ function prosesTarikan() {
       n++;
     }
     Logger.log('File tarikan diproses: ' + n + ' dari ' + antre.length + ' yang menunggu.');
-    if ((n || dibuang) && Date.now() - mulai < BATAS_CACHE_MS) { try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }   // cache lama ditimpa, tidak dikosongkan dulu
+    if (n || dibuang || diimpor) gantiVersiData_();
+    if ((n || dibuang || diimpor) && Date.now() - mulai < BATAS_CACHE_MS) { try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }   // cache lama ditimpa, tidak dikosongkan dulu
   } finally { cache.remove('TARIKAN_JALAN'); }
 }
 
