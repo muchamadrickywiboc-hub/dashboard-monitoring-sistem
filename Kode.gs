@@ -495,7 +495,7 @@ function dataWaktu_(m, d, s, h) {
   const it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
   while (it.hasNext()) {
     const f = it.next(), n = teks(f.getName()), t = n.match(/^TARIKAN\s+(\d{1,2})\b/i);
-    if (/^PENGATURAN/i.test(n)) atur = f; else if (t && +t[1] === m + 1) file = f;
+    if (/^PENGATURAN/i.test(n)) atur = f; else if (t && +t[1] === m + 1) file = terbaru_(file, f);
   }
   const kosongW = (pesan) => JSON.stringify(Object.assign(kosong([pesan]), { waktu: { m: m, d: d, s: s, h: h, adaPrev: false } }));
   if (m < BULAN_MULAI_TARIKAN) file = null;
@@ -536,8 +536,9 @@ function dataWaktu_(m, d, s, h) {
  */
 function fileJam_(folder, m) {
   const it = folder.getFiles();
-  while (it.hasNext()) { const f = it.next(), t = teks(f.getName()).match(/^JAM\s+(\d{1,2})\b/i); if (t && +t[1] === m + 1) return f; }
-  return null;
+  let hasil = null;
+  while (it.hasNext()) { const f = it.next(), t = teks(f.getName()).match(/^JAM\s+(\d{1,2})\b/i); if (t && +t[1] === m + 1) hasil = terbaru_(hasil, f); }
+  return hasil;
 }
 function bacaJam_(f) {
   const b = f.getBlob().setContentType('application/x-gzip');
@@ -681,7 +682,7 @@ function bangunData_() {
     const f = it.next(), n = teks(f.getName());
     if (/^PENGATURAN/i.test(n)) { atur = f; continue; }
     const t = n.match(/^(DATA|TARIKAN)\s+(\d{1,2})\b/i);
-    if (t && +t[2] >= 1 && +t[2] <= 12) (t[1].toUpperCase() === 'TARIKAN' ? tarikan : lama)[+t[2] - 1] = f;
+    if (t && +t[2] >= 1 && +t[2] <= 12) { const o = t[1].toUpperCase() === 'TARIKAN' ? tarikan : lama, m = +t[2] - 1; o[m] = terbaru_(o[m], f); }   // file ganda: pakai yang terakhir diubah
   }
   // sebelum MULAI_TARIKAN: file Data (summary); mulai MULAI_TARIKAN: hanya file Tarikan dari link Tarikan Sistem
   const dataBulan = [];
@@ -821,6 +822,8 @@ const ALIAS_LOKASI = {
 };
 function kunciLok(l) { const u = teks(l).toUpperCase(); return (ALIAS_LOKASI[u] || u).replace(/[^A-Z0-9]/g, ''); }
 /** "Sumbagut 1" / "SUMBAGUT II" -> "SUMBAGUT"; nama area yang tidak dikenal -> '' (area diambil dari lokasinya). */
+/** Dari dua file bernama sama (mis. "Data 10 ..." lama dan baru), yang terakhir diubah. */
+function terbaru_(a, b) { return !a || b.getLastUpdated().getTime() > a.getLastUpdated().getTime() ? b : a; }
 function areaNorm(x) {
   const s = teks(x).toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim().replace(/^SUMBAGUT\s*(1|2|I|II)$/, 'SUMBAGUT');
   return AREAS.indexOf(s) >= 0 ? s : '';

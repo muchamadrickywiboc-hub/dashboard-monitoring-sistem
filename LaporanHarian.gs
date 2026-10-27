@@ -82,13 +82,14 @@ function eventBulanLH_(m) {
   const kunci = 'LH2_' + m, ada = ambilCache_(kunci);
   if (ada) return JSON.parse(ada);
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
-  let atur = null; const files = [];   // [file, dari tarikan?]: Data untuk tanggal sebelum MULAI_TARIKAN, Tarikan sesudahnya
+  let atur = null; const pilih = {};   // DATA / TARIKAN -> file (yang terakhir diubah bila ganda): Data untuk tanggal sebelum MULAI_TARIKAN, Tarikan sesudahnya
   const it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
   while (it.hasNext()) {
     const f = it.next(), n = teks(f.getName()), t = n.match(/^(DATA|TARIKAN)\s+(\d{1,2})\b/i);
     if (/^PENGATURAN/i.test(n)) atur = f;
-    else if (t && +t[2] === m + 1) { const tar = t[1].toUpperCase() === 'TARIKAN'; if (tar ? m >= BULAN_MULAI_TARIKAN : m <= BULAN_MULAI_TARIKAN) files.push([f, tar]); }
+    else if (t && +t[2] === m + 1) { const tar = t[1].toUpperCase() === 'TARIKAN'; if (tar ? m >= BULAN_MULAI_TARIKAN : m <= BULAN_MULAI_TARIKAN) pilih[tar ? 'T' : 'D'] = terbaru_(pilih[tar ? 'T' : 'D'], f); }
   }
+  const files = ['D', 'T'].filter(k => pilih[k]).map(k => [pilih[k], k === 'T']);
   const out = { sumber: files.map(x => x[0].getName()).join(' + '), tanggal: {}, lokArea: {} };
   if (atur && files.length) {
     const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(atur), 'Pemetaan') || []), pp = petaPanel_(peta);
