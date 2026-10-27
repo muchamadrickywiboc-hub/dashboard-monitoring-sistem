@@ -3,8 +3,8 @@
  *
  * Halaman kedua di web app yang sama: <url web app>?laporan=harian (lihat doGet di Kode.gs).
  * Memakai akun, sheet Pemetaan, dan folder data yang sama dengan dashboard bulanan (tidak perlu unggah dua kali):
- *   - Event per tanggal & lokasi dibaca dari sheet "Event" file "Tarikan <nn> ..." (mulai CFG.BULAN_TARIKAN)
- *     atau "Data <nn> ..." (bulan sebelumnya).
+ *   - Event per tanggal & lokasi dibaca dari sheet "Event" file "Tarikan <nn> ..." (mulai tanggal CFG.MULAI_TARIKAN)
+ *     atau "Data <nn> ..." (tanggal sebelumnya; satu bulan boleh memakai keduanya).
  *   - GPS & Dashcam (ADAS) dibaca dari sheet "Justifikasi Uptime" spreadsheet "LAPORAN KENDALA DEVICE CONTROL ROOM" (LH.KENDALA_ID):
  *     setiap Nopol yang tercatat pada satu tanggal = 100%, yang Status-nya Offline = offline.
  *     Bulanan: jumlah Nopol tercatat dan offline dijumlahkan untuk semua tanggal di bulan itu.
@@ -81,26 +81,27 @@ function petaPanel_(peta) {
 function eventBulanLH_(m) {
   const kunci = 'LH2_' + m, ada = ambilCache_(kunci);
   if (ada) return JSON.parse(ada);
-  const folder = DriveApp.getFolderById(CFG.FOLDER_ID), cari = m + 1 >= CFG.BULAN_TARIKAN ? 'TARIKAN' : 'DATA';
-  let atur = null, file = null;
+  const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
+  let atur = null; const files = [];   // [file, dari tarikan?]: Data untuk tanggal sebelum MULAI_TARIKAN, Tarikan sesudahnya
   const it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
   while (it.hasNext()) {
     const f = it.next(), n = teks(f.getName()), t = n.match(/^(DATA|TARIKAN)\s+(\d{1,2})\b/i);
-    if (/^PENGATURAN/i.test(n)) atur = f; else if (t && t[1].toUpperCase() === cari && +t[2] === m + 1) file = f;
+    if (/^PENGATURAN/i.test(n)) atur = f;
+    else if (t && +t[2] === m + 1) { const tar = t[1].toUpperCase() === 'TARIKAN'; if (tar ? m >= BULAN_MULAI_TARIKAN : m <= BULAN_MULAI_TARIKAN) files.push([f, tar]); }
   }
-  const out = { sumber: file ? file.getName() : '', tanggal: {}, lokArea: {} };
-  if (atur && file) {
+  const out = { sumber: files.map(x => x[0].getName()).join(' + '), tanggal: {}, lokArea: {} };
+  if (atur && files.length) {
     const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(atur), 'Pemetaan') || []), pp = petaPanel_(peta);
     const T = {};
-    (nilaiSheet(SpreadsheetApp.open(file), 'Event') || []).slice(1).forEach(r => {
+    files.forEach(([file, tar]) => (nilaiSheet(SpreadsheetApp.open(file), 'Event') || []).slice(1).forEach(r => {
       // baris tanpa Lokasi tetap dihitung di total area (sama seperti dashboard: baris "(TANPA LOKASI)")
       const tg = tanggalTeks(r[0]), pi = pp[normKasus(r[3])], n = angka(r[4]) || 0, l = teks(r[2]).toUpperCase() || '(TANPA LOKASI)';
-      if (!tg || tg.m !== m || pi === undefined || !n) return;
+      if (!tg || tg.m !== m || dariTarikan_(tg) !== tar || pi === undefined || !n) return;
       const lok = ALIAS_LOKASI[l] || l, area = areaNorm(r[1]) || peta.lokasi[lok] || '';
       if (area) out.lokArea[lok] = area;
       const k = tg.d + '|' + lok + '|' + pi;
       (T[k] || (T[k] = [tg.d, lok, area, pi, 0]))[4] += n;
-    });
+    }));
     Object.keys(T).forEach(k => { const x = T[k]; (out.tanggal[x[0]] = out.tanggal[x[0]] || []).push(x.slice(1)); });
   }
   simpanCache_(JSON.stringify(out), kunci, LH.CACHE_DETIK);
@@ -123,7 +124,7 @@ function tanggalAkhirLH_() {
   for (let m = 11; m >= 0; m--) {
     const t = Object.keys(eventBulanLH_(m).tanggal).map(Number);
     if (t.length) return CFG.TAHUN + '-' + ('0' + (m + 1)).slice(-2) + '-' + ('0' + Math.max.apply(null, t)).slice(-2);
-    if (m + 1 < CFG.BULAN_TARIKAN - 1) break;   // cukup periksa beberapa bulan terakhir
+    if (m < BULAN_MULAI_TARIKAN - 1) break;   // cukup periksa beberapa bulan terakhir
   }
   return '';
 }

@@ -11,7 +11,8 @@
  *     File .xlsx yang diunggah tanpa konversi diubah otomatis ke Google Sheet bila layanan lanjutan Drive aktif.
  *   - "Tarikan 10 Oktober 2026", ... : dibuat otomatis oleh prosesTarikan() dari file harian
  *     "Tarikan_<REGIONAL>_GPS_CCTV_<yyyy-mm-dd>.xlsx" di folder-folder yang terdaftar di spreadsheet CFG.TARIKAN_ID.
- *     Format sama dengan file Data (+ kolom Sumber). Mulai CFG.BULAN_TARIKAN hanya file Tarikan yang dipakai; bulan sebelumnya memakai file Data.
+ *     Format sama dengan file Data (+ kolom Sumber). Mulai tanggal CFG.MULAI_TARIKAN hanya file Tarikan yang dipakai; tanggal sebelumnya memakai file Data
+ *     (satu bulan boleh punya keduanya, mis. Oktober: tanggal 1-19 dari "Data 10 ...", tanggal 20 dst dari "Tarikan 10 ...").
  *     prosesTarikan butuh layanan lanjutan "Drive API" (Apps Script > Layanan > Drive API) untuk membaca .xlsx.
  * Semua rekap (parameter, regional, lokasi, TOP 10 AMT, event per hari) dihitung di sini, tanpa rumus spreadsheet.
  *
@@ -24,7 +25,7 @@
 const CFG = {
   FOLDER_ID: '1nUJtRTcKwJua4Am9EdiFXoQxcTALgt9e',   // folder Drive "3. Data Dashboard"
   TARIKAN_ID: '11akfRibrQLixrBicdNXazEWX-TGmgfYu4zdYYNaOEy8',   // spreadsheet "Tarikan Sistem": kolom Area | linkgdrive (folder tarikan harian per regional)
-  BULAN_TARIKAN: 10,       // mulai bulan ini (10 = Oktober) data HANYA dari tarikan (link Tarikan Sistem); bulan sebelumnya dari file "Data <nn> ..." (summary)
+  MULAI_TARIKAN: '2026-10-20',   // mulai tanggal ini data HANYA dari tarikan (link Tarikan Sistem); tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..." 
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
   JEDA_GABUNG_DETIK: 0,   // (mis. 10) alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
@@ -496,7 +497,8 @@ function dataWaktu_(m, d, s, h) {
     if (/^PENGATURAN/i.test(n)) atur = f; else if (t && +t[1] === m + 1) file = f;
   }
   const kosongW = (pesan) => JSON.stringify(Object.assign(kosong([pesan]), { waktu: { m: m, d: d, s: s, h: h, adaPrev: false } }));
-  const fJam = file ? null : fileJam_(folder, m);
+  if (m < BULAN_MULAI_TARIKAN) file = null;
+  const fJam = m <= BULAN_MULAI_TARIKAN ? fileJam_(folder, m) : null;   // bulan MULAI_TARIKAN: file Jam untuk tanggal sebelum MULAI_TARIKAN
   if (!atur || (!file && !fJam)) return kosongW('Data jam ' + BULAN[m] + ' belum ada.');
   const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(atur), 'Pemetaan') || []);
   const okJam = j => (h < 0 || j === h) && (!s || diShift(j, s));
@@ -504,28 +506,24 @@ function dataWaktu_(m, d, s, h) {
   const jendela = (tg, j) => { if (!tg || tg.m !== m || !okJam(j)) return -1; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? tg.d - 1 : tg.d;
     if (!d) return t >= 1 ? 0 : -1; if (t === d) return 0; return t === d - 1 ? 1 : -1; };
   const EV = [], AM = [];
-  if (fJam) {
-    const hasilJ = hitungJam_(bacaJam_(fJam), m, d, s, h, jendela, peta);
-    hasilJ.waktu = { m: m, d: d, s: s, h: h, adaPrev: d > 1 };
-    const jsonJ = JSON.stringify(hasilJ);
-    simpanCache_(jsonJ, kunci, 3600);   // file jam Januari-September tidak berubah
-    return jsonJ;
+  if (fJam) kumpulJam_(bacaJam_(fJam), m, d, s, h, (tg, j) => dariTarikan_(tg) ? -1 : jendela(tg, j), peta, EV, AM);
+  if (file) {
+    const ss = SpreadsheetApp.open(file), jt = (tg, j) => tg && dariTarikan_(tg) ? jendela(tg, j) : -1;
+    (nilaiSheet(ss, 'Event Jam') || []).slice(1).forEach(r => {
+      const j = +r[1], w = jt(tanggalTeks(r[0]), j), c = peta.kasus[normKasus(r[4])], n = angka(r[5]) || 0;
+      if (w < 0 || !c || !n) return;
+      EV.push([w, j + 1, areaNorm(r[2]), teks(r[3]).toUpperCase(), c.p, c.k, n]);
+    });
+    (nilaiSheet(ss, 'AMT Jam') || []).slice(1).forEach(r => {
+      const j = +r[1], w = jt(tanggalTeks(r[0]), j), c = peta.kasus[normKasus(r[5])], n = angka(r[6]) || 0, nama = teks(r[4]).toUpperCase();
+      if (w < 0 || !c || !n || !nama) return;
+      AM.push([w, areaNorm(r[2]), teks(r[3]).toUpperCase(), nama, c.p, c.k, n]);
+    });
   }
-  const ss = SpreadsheetApp.open(file);
-  (nilaiSheet(ss, 'Event Jam') || []).slice(1).forEach(r => {
-    const j = +r[1], w = jendela(tanggalTeks(r[0]), j), c = peta.kasus[normKasus(r[4])], n = angka(r[5]) || 0;
-    if (w < 0 || !c || !n) return;
-    EV.push([w, j + 1, areaNorm(r[2]), teks(r[3]).toUpperCase(), c.p, c.k, n]);
-  });
-  (nilaiSheet(ss, 'AMT Jam') || []).slice(1).forEach(r => {
-    const j = +r[1], w = jendela(tanggalTeks(r[0]), j), c = peta.kasus[normKasus(r[5])], n = angka(r[6]) || 0, nama = teks(r[4]).toUpperCase();
-    if (w < 0 || !c || !n || !nama) return;
-    AM.push([w, areaNorm(r[2]), teks(r[3]).toUpperCase(), nama, c.p, c.k, n]);
-  });
   const hasil = hitung_(EV, AM, peta, [], []);
   hasil.waktu = { m: m, d: d, s: s, h: h, adaPrev: d > 1 };
   const json = JSON.stringify(hasil);
-  simpanCache_(json, kunci, 900);   // 15 menit, mengikuti pemicu prosesTarikan
+  simpanCache_(json, kunci, file ? 900 : 3600);   // tarikan: 15 menit, mengikuti pemicu prosesTarikan; file jam tidak berubah
   return json;
 }
 
@@ -544,8 +542,8 @@ function bacaJam_(f) {
   const b = f.getBlob().setContentType('application/x-gzip');
   return JSON.parse(Utilities.ungzip(b).getDataAsString('UTF-8'));
 }
-function hitungJam_(J, m, d, s, h, jendela, peta) {
-  const EV = [], AM = [], tanpa = !s && h < 0;   // hanya filter tanggal: event tanpa jam tetap dihitung
+function kumpulJam_(J, m, d, s, h, jendela, peta, EV, AM) {
+  const tanpa = !s && h < 0;   // hanya filter tanggal: event tanpa jam tetap dihitung
   const kasus = J.kasus.map(k => peta.kasus[normKasus(k)] || null), area = J.area.map(areaNorm);
   // w: 0 = jendela terpilih, 1 = pembanding, 2 = event tanpa jam di tanggal terpilih (tidak bisa disaring per jam)
   const baris = (str, tg, fn) => { if (!str) return; str.split(';').forEach(x => { const v = x.split(','); fn(v, tg); }); };
@@ -561,7 +559,6 @@ function hitungJam_(J, m, d, s, h, jendela, peta) {
   };
   if (d) [d - 1, d, d + 1].forEach(t => { const blok = J.d[t]; if (blok) ambil(blok, () => ({ m: m, d: t })); });
   else ambil(J.b, jr => ({ m: m, d: jr >= 24 && jr < 99 ? 1 : 2 }));
-  return hitung_(EV, AM, peta, [], []);
 }
 
 /* ============================== SHEET DATA KOSONG ============================== */
@@ -618,7 +615,6 @@ function buatSheetDataKosong() {
   // jam kejadian dari file Jam (Januari-September); bulan tarikan memakai kolom Time
   const JAM = {};
   d.bulanAda.forEach(m => {
-    if (m + 1 >= CFG.BULAN_TARIKAN) return;
     const f = fileJam_(folder, m); if (!f) return;
     const J = bacaJam_(f), kat = J.kasus.map(k => (peta.kasus[normKasus(k)] || {}).k), area = J.area.map(areaNorm);
     Object.keys(J.d).forEach(t => (J.d[t].e || '').split(';').forEach(x => { if (!x) return; const v = x.split(','), k = kat[+v[3]], n = +v[4];
@@ -636,7 +632,7 @@ function buatSheetDataKosong() {
       const kosong = []; for (let t = 1; t <= batas; t++) if (!x[t]) kosong.push(t);
       const v = hari.map(t => x[t]).sort((p, q) => p - q), med = v.length ? v[Math.floor(v.length / 2)] : 0;
       const rendah = hari.filter(t => med && x[t] < 0.35 * med).sort((p, q) => p - q);
-      const j = JAM[m + '|' + ai], tarikan = m + 1 >= CFG.BULAN_TARIKAN;
+      const j = JAM[m + '|' + ai], tarikan = !j && m >= BULAN_MULAI_TARIKAN;
       const ket = [];
       if (!hari.length) ket.push('Tidak ada data sama sekali untuk regional ini di bulan ' + NB(BULAN[m]) + '.');
       else {
@@ -686,11 +682,11 @@ function bangunData_() {
     const t = n.match(/^(DATA|TARIKAN)\s+(\d{1,2})\b/i);
     if (t && +t[2] >= 1 && +t[2] <= 12) (t[1].toUpperCase() === 'TARIKAN' ? tarikan : lama)[+t[2] - 1] = f;
   }
-  // sebelum BULAN_TARIKAN: file Data (summary); mulai BULAN_TARIKAN: hanya file Tarikan dari link Tarikan Sistem
+  // sebelum MULAI_TARIKAN: file Data (summary); mulai MULAI_TARIKAN: hanya file Tarikan dari link Tarikan Sistem
   const dataBulan = [];
   for (let m = 0; m < 12; m++) {
-    const f = m + 1 >= CFG.BULAN_TARIKAN ? tarikan[m] : lama[m];
-    if (f) dataBulan.push({ m: m, f: f });
+    if (lama[m] && m <= BULAN_MULAI_TARIKAN) dataBulan.push({ m: m, f: lama[m], tarikan: false });
+    if (tarikan[m] && m >= BULAN_MULAI_TARIKAN) dataBulan.push({ m: m, f: tarikan[m], tarikan: true });
   }
   if (!atur) { peringatan.push('File "Pengaturan Dashboard" tidak ditemukan di folder data.'); return kosong(peringatan); }
   const ssA = SpreadsheetApp.open(atur);
@@ -700,17 +696,18 @@ function bangunData_() {
   const EV = [], AM = [];   // EV: [bulan, tanggal, regional, lokasi, parameter, kategori, jumlah]; AM: [bulan, regional, lokasi, nama, parameter, kategori, jumlah]
   const belum = {};
   dataBulan.sort((a, b) => a.m - b.m).forEach(o => {
-    const ss = SpreadsheetApp.open(o.f);
+    const ss = SpreadsheetApp.open(o.f), sumberOk = {};   // file Tarikan: hanya sumber (file harian) bertanggal >= MULAI_TARIKAN
     (nilaiSheet(ss, 'Event') || []).slice(1).forEach(r => {
       const kc = normKasus(r[3]), c = peta.kasus[kc], n = angka(r[4]) || 0;
       if (!kc || !n) return;
-      if (!c) { belum[kc] = 1; return; }
       const tg = tanggalTeks(r[0]);
-      if (!tg || tg.m !== o.m) return;
+      if (!tg || tg.m !== o.m || dariTarikan_(tg) !== o.tarikan) return;
+      if (o.tarikan) sumberOk[teks(r[5])] = 1;
+      if (!c) { belum[kc] = 1; return; }
       const lok = teks(r[2]).toUpperCase();
       EV.push([o.m, tg.d, areaNorm(r[1]), lok, c.p, c.k, n]);
     });
-    (nilaiSheet(ss, 'AMT') || []).slice(1).forEach(r => {
+    (nilaiSheet(ss, 'AMT') || []).slice(1).filter(r => !o.tarikan || sumberOk[teks(r[5])]).forEach(r => {
       const c = peta.kasus[normKasus(r[3])], n = angka(r[4]) || 0, nama = teks(r[2]).toUpperCase();
       if (!c || !n || !nama) return;
       const lok = teks(r[1]).toUpperCase();
@@ -719,12 +716,12 @@ function bangunData_() {
   });
   if (Object.keys(belum).length) peringatan.push('Case belum ada di Pemetaan (tidak dihitung): ' + Object.keys(belum).slice(0, 15).join(', '));
   if (!dataBulan.length) peringatan.push('Belum ada file "Data <nomor bulan> ..." atau "Tarikan <nomor bulan> ..." (Google Sheet) di folder data.');
-  else if (!tarikan[CFG.BULAN_TARIKAN - 1]) peringatan.push('Data ' + BULAN[CFG.BULAN_TARIKAN - 1].charAt(0) + BULAN[CFG.BULAN_TARIKAN - 1].slice(1).toLowerCase() + ' dan seterusnya menunggu file tarikan selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang.');
+  else if (!tarikan[BULAN_MULAI_TARIKAN]) peringatan.push('Data mulai ' + (+CFG.MULAI_TARIKAN.slice(8, 10)) + ' ' + BULAN[BULAN_MULAI_TARIKAN].charAt(0) + BULAN[BULAN_MULAI_TARIKAN].slice(1).toLowerCase() + ' dan seterusnya menunggu file tarikan selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang.');
   const log = bacaLogTarikan(folder);
   if (log.gagal.length) peringatan.push('File tarikan gagal dibaca: ' + log.gagal.slice(0, 5).join('; '));
   const hasil = hitung_(EV, AM, peta, catatan, peringatan);
   // bulan yang punya jam kejadian (sheet "Event Jam" di file Tarikan) -> filter Tanggal / Shift / Jam aktif
-  hasil.jamAda = dataBulan.filter(o => o.f === tarikan[o.m]).filter(o => { const sh = SpreadsheetApp.open(o.f).getSheetByName('Event Jam'); return sh && sh.getLastRow() > 1; }).map(o => o.m);
+  hasil.jamAda = dataBulan.filter(o => o.tarikan).filter(o => { const sh = SpreadsheetApp.open(o.f).getSheetByName('Event Jam'); return sh && sh.getLastRow() > 1; }).map(o => o.m);
   // Januari-September: file "Jam <nn> ..." dari file mentah
   const itJ = folder.getFiles();
   while (itJ.hasNext()) { const t = teks(itJ.next().getName()).match(/^JAM\s+(\d{1,2})\b/i); if (t && hasil.jamAda.indexOf(+t[1] - 1) < 0 && dataBulan.some(o => o.m === +t[1] - 1)) hasil.jamAda.push(+t[1] - 1); }
@@ -831,6 +828,12 @@ function tanggalTeks(x) {
   const t = teks(x).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   return t ? { m: +t[2] - 1, d: +t[3] } : null;
 }
+/** true bila tanggal {m, d} diambil dari file Tarikan (mulai CFG.MULAI_TARIKAN), false bila dari file Data / Jam. */
+function dariTarikan_(tg) {
+  const m0 = +CFG.MULAI_TARIKAN.slice(5, 7) - 1, d0 = +CFG.MULAI_TARIKAN.slice(8, 10);
+  return tg.m > m0 || (tg.m === m0 && tg.d >= d0);
+}
+const BULAN_MULAI_TARIKAN = +CFG.MULAI_TARIKAN.slice(5, 7) - 1;   // 0-11
 
 /* ============================== TARIKAN HARIAN ============================== */
 const BATAS_MS = 3 * 60 * 1000;     // file baru tidak dimulai lewat dari ini (Apps Script berhenti di 6 menit; satu file besar bisa 2 menit lebih)
@@ -889,22 +892,30 @@ function prosesTarikan() {
   } finally { cache.remove('TARIKAN_JALAN'); }
 }
 
-/** Semua file "Tarikan_<REG>_..._<yyyy-mm-dd>" di folder yang terdaftar: [{id, nama, area, tgl, diubah, mime, file}]. */
+/**
+ * Semua file harian bertanggal >= MULAI_TARIKAN di folder yang terdaftar (termasuk subfolder satu tingkat, mis. per area):
+ * "Tarikan_<REG>_..._<yyyy-mm-dd>.xlsx" atau "FU RTC 20 Oktober 2026.xlsx". Hasil: [{id, nama, area, tgl, diubah, mime, file}].
+ */
 function daftarTarikan_() {
   const v = SpreadsheetApp.openById(CFG.TARIKAN_ID).getSheets()[0].getDataRange().getValues();
-  const out = [];
+  const out = [], lihat = {};
+  const baca = (folder, area, dalam) => {
+    const it = folder.getFiles();
+    while (it.hasNext()) {
+      const f = it.next(), nama = f.getName(), tgl = tanggalNama_(nama);
+      if (!tgl || lihat[f.getId()] || +tgl.slice(0, 4) !== CFG.TAHUN || tgl < CFG.MULAI_TARIKAN) continue;
+      const mime = f.getMimeType();
+      if (mime !== MimeType.MICROSOFT_EXCEL && mime !== MimeType.GOOGLE_SHEETS) continue;
+      lihat[f.getId()] = 1;
+      out.push({ id: f.getId(), nama: nama, area: area.toUpperCase(), tgl: tgl, diubah: f.getLastUpdated().getTime(), mime: mime, file: f });
+    }
+    if (dalam) { const sub = folder.getFolders(); while (sub.hasNext()) baca(sub.next(), area, false); }
+  };
   v.forEach(r => {
     const area = teks(r[0]), link = teks(r[1]);
     const id = (link.match(/folders\/([-\w]{20,})/) || link.match(/[?&]id=([-\w]{20,})/) || [])[1];
     if (!area || !id || /^AREA$/i.test(area)) return;
-    const it = DriveApp.getFolderById(id).getFiles();
-    while (it.hasNext()) {
-      const f = it.next(), nama = f.getName(), t = nama.match(/(\d{4})-(\d{2})-(\d{2})/);
-      if (!/TARIKAN/i.test(nama) || !t || +t[1] !== CFG.TAHUN || +t[2] < CFG.BULAN_TARIKAN) continue;
-      const mime = f.getMimeType();
-      if (mime !== MimeType.MICROSOFT_EXCEL && mime !== MimeType.GOOGLE_SHEETS) continue;
-      out.push({ id: f.getId(), nama: nama, area: area.toUpperCase(), tgl: t[1] + '-' + t[2] + '-' + t[3], diubah: f.getLastUpdated().getTime(), mime: mime, file: f });
-    }
+    baca(DriveApp.getFolderById(id), area, true);
   });
   return out;
 }
@@ -948,6 +959,14 @@ function bersihkanSementara_() {
   }
 }
 
+/** Tanggal (yyyy-mm-dd) dari nama file: "..._2026-10-20.xlsx" atau "FU RTC 20 Oktober 2026.xlsx". */
+function tanggalNama_(nama) {
+  let t = nama.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (t) return t[1] + '-' + t[2] + '-' + t[3];
+  t = nama.toUpperCase().match(/(\d{1,2})\s*(JANUARI|FEBRUARI|MARET|APRIL|MEI|JUNI|JULI|AGUSTUS|SEPTEMBER|OKTOBER|NOVEMBER|DESEMBER)\s*(\d{4})/);
+  return t ? t[3] + '-' + ('0' + (BULAN.indexOf(t[2]) + 1)).slice(-2) + '-' + ('0' + t[1]).slice(-2) : null;
+}
+
 /** Merangkum satu file tarikan dan menulis hasilnya (menggantikan hasil lama file yang sama). Mengembalikan jumlah baris event. */
 function prosesSatuTarikan(folder, o, batas) {
   let ssId = o.id, sementara = null;
@@ -962,7 +981,7 @@ function prosesSatuTarikan(folder, o, batas) {
     if (nr < 1) return 0;
     const k = petaKolom(sh.getRange(1, 1, 1, nc).getValues()[0]);
     const kol = h => { if (k[h] === undefined) return null; return sh.getRange(2, k[h] + 1, nr, 1).getValues(); };
-    const tb = kol('TBBM'), al = kol('ALARM STATUS'), am = kol('AMT 1'), gid = kol('ALERT GROUP ID'), wk = kol('TIME') || kol('START ALERT');
+    const tb = kol('TBBM'), al = kol('ALARM STATUS'), am = kol('AMT 1'), gid = kol('ALERT GROUP ID') || kol('UNIQ CODE'), wk = kol('TIME') || kol('START ALERT');
     const pl = kol('PLATE') || kol('IMEI'), jeda = (CFG.JEDA_GABUNG_DETIK || 0) * 1000;
     if (!tb || !al) throw new Error('kolom TBBM / Alarm Status tidak ditemukan');
     const ev = {}, evj = {}, amt = {}, amj = {}, lihat = {}, akhir = {};

@@ -76,7 +76,7 @@ for p in FILES:
                     for i, k in enumerate(h):
                         if k and k not in hdr: hdr[k] = i
                     g = lambda k: hdr.get(k)
-                    ic, ia, itg, il, i1 = g('CASE'), g('AREA'), g('TANGGAL'), g('LOKASI'), g('AMT 1')
+                    ic, ia, itg, il, i1 = g('CASE'), g('AREA'), g('TANGGAL'), g('LOKASI'), (g('AMT 1') if g('AMT 1') is not None else g('AMT I'))
                     inp = g('NO.POL') if g('NO.POL') is not None else g('NOPOL')
                     ila, ilo = g('LAT'), g('LONG')
                     itm = [g(k) for k in TIMECOLS if g(k) is not None]
