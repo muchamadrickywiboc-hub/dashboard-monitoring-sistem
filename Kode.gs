@@ -719,6 +719,7 @@ function bangunData_() {
   if (!dataBulan.length) peringatan.push('Belum ada file "Data <nomor bulan> ..." atau "Tarikan <nomor bulan> ..." (Google Sheet) di folder data.');
   else if (!tarikan[BULAN_MULAI_TARIKAN]) peringatan.push('Data mulai ' + (+CFG.MULAI_TARIKAN.slice(8, 10)) + ' ' + BULAN[BULAN_MULAI_TARIKAN].charAt(0) + BULAN[BULAN_MULAI_TARIKAN].slice(1).toLowerCase() + ' dan seterusnya menunggu file tarikan selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang.');
   const log = bacaLogTarikan(folder);
+  if (log.proses) peringatan.push('Data sedang dalam proses update secara otomatis.');
   if (log.gagal.length) peringatan.push('File tarikan gagal dibaca: ' + log.gagal.slice(0, 5).join('; '));
   const hasil = hitung_(EV, AM, peta, catatan, peringatan);
   // bulan yang punya jam kejadian (sheet "Event Jam" di file Tarikan) -> filter Tanggal / Shift / Jam aktif
@@ -1142,10 +1143,11 @@ function bukaAtauBuat(folder, nama, sheets) {
 
 /** Ringkasan Log Tarikan untuk peringatan di dashboard. */
 function bacaLogTarikan(folder) {
-  const it = folder.getFilesByName(LOG_NAMA), out = { gagal: [] };
+  const it = folder.getFilesByName(LOG_NAMA), out = { gagal: [], proses: 0 };   // proses = file yang kehabisan waktu dan dicoba lagi otomatis
   if (!it.hasNext()) return out;
   const v = nilaiSheet(SpreadsheetApp.open(it.next()), LOG_NAMA) || [];
-  v.slice(1).forEach(r => { if (/^GAGAL/.test(teks(r[7]))) out.gagal.push(teks(r[1]) + ' (' + teks(r[7]).slice(7, 80) + ')'); });
+  v.slice(1).forEach(r => { const st = teks(r[7]); if (!/^GAGAL/.test(st)) return;
+    if (/waktu habis/i.test(st)) out.proses++; else out.gagal.push(teks(r[1]) + ' (' + st.slice(7, 80) + ')'); });
   return out;
 }
 
