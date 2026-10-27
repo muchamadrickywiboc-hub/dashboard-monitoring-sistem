@@ -25,7 +25,8 @@
 const CFG = {
   FOLDER_ID: '1nUJtRTcKwJua4Am9EdiFXoQxcTALgt9e',   // folder Drive "3. Data Dashboard"
   TARIKAN_ID: '11akfRibrQLixrBicdNXazEWX-TGmgfYu4zdYYNaOEy8',   // spreadsheet "Tarikan Sistem": kolom Area | linkgdrive (folder tarikan harian per regional)
-  MULAI_TARIKAN: '2026-10-20',   // mulai tanggal ini data HANYA dari tarikan (link Tarikan Sistem); tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..." 
+  MULAI_TARIKAN: '2026-10-19',   // mulai tanggal ini data HANYA dari tarikan (link Tarikan Sistem); tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..." 
+  MULAI_TARIKAN_AREA: { SUMBAGUT: '2026-10-01' },   // area yang mulai lebih awal dari tarikan (Sumbagut 1 & 2 tanggal 1-18 dari file tarikan di folder area-nya)
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
   JEDA_GABUNG_DETIK: 0,   // (mis. 10) alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
@@ -506,16 +507,16 @@ function dataWaktu_(m, d, s, h) {
   const jendela = (tg, j) => { if (!tg || tg.m !== m || !okJam(j)) return -1; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? tg.d - 1 : tg.d;
     if (!d) return t >= 1 ? 0 : -1; if (t === d) return 0; return t === d - 1 ? 1 : -1; };
   const EV = [], AM = [];
-  if (fJam) kumpulJam_(bacaJam_(fJam), m, d, s, h, (tg, j) => dariTarikan_(tg) ? -1 : jendela(tg, j), peta, EV, AM);
+  if (fJam) kumpulJam_(bacaJam_(fJam), m, d, s, h, (tg, j, a) => tg && dariTarikan_(tg, a) ? -1 : jendela(tg, j), peta, EV, AM);
   if (file) {
-    const ss = SpreadsheetApp.open(file), jt = (tg, j) => tg && dariTarikan_(tg) ? jendela(tg, j) : -1;
+    const ss = SpreadsheetApp.open(file), jt = (tg, j, a) => tg && dariTarikan_(tg, a) ? jendela(tg, j) : -1;
     (nilaiSheet(ss, 'Event Jam') || []).slice(1).forEach(r => {
-      const j = +r[1], w = jt(tanggalTeks(r[0]), j), c = peta.kasus[normKasus(r[4])], n = angka(r[5]) || 0;
+      const j = +r[1], w = jt(tanggalTeks(r[0]), j, r[2]), c = peta.kasus[normKasus(r[4])], n = angka(r[5]) || 0;
       if (w < 0 || !c || !n) return;
       EV.push([w, j + 1, areaNorm(r[2]), teks(r[3]).toUpperCase(), c.p, c.k, n]);
     });
     (nilaiSheet(ss, 'AMT Jam') || []).slice(1).forEach(r => {
-      const j = +r[1], w = jt(tanggalTeks(r[0]), j), c = peta.kasus[normKasus(r[5])], n = angka(r[6]) || 0, nama = teks(r[4]).toUpperCase();
+      const j = +r[1], w = jt(tanggalTeks(r[0]), j, r[2]), c = peta.kasus[normKasus(r[5])], n = angka(r[6]) || 0, nama = teks(r[4]).toUpperCase();
       if (w < 0 || !c || !n || !nama) return;
       AM.push([w, areaNorm(r[2]), teks(r[3]).toUpperCase(), nama, c.p, c.k, n]);
     });
@@ -547,14 +548,14 @@ function kumpulJam_(J, m, d, s, h, jendela, peta, EV, AM) {
   const kasus = J.kasus.map(k => peta.kasus[normKasus(k)] || null), area = J.area.map(areaNorm);
   // w: 0 = jendela terpilih, 1 = pembanding, 2 = event tanpa jam di tanggal terpilih (tidak bisa disaring per jam)
   const baris = (str, tg, fn) => { if (!str) return; str.split(';').forEach(x => { const v = x.split(','); fn(v, tg); }); };
-  const pakai = (j, tg) => {
+  const pakai = (j, tg, a) => {
     if (j === 99) { if (!tg || tg.m !== m) return -1; const w = !d ? 0 : tg.d === d ? 0 : tg.d === d - 1 ? 1 : -1; return w < 0 ? -1 : tanpa ? w : (w === 0 ? 2 : -1); }
-    return jendela(tg, j);
+    return jendela(tg, j, a);
   };
   const ambil = (blok, tgOf) => {
-    baris(blok.e, null, v => { const c = kasus[+v[3]], n = +v[4]; if (!c || !n) return; const jr = +v[0], tg = tgOf(jr), j = jr >= 24 && jr < 99 ? jr - 24 : jr, w = pakai(j, tg);
+    baris(blok.e, null, v => { const c = kasus[+v[3]], n = +v[4]; if (!c || !n) return; const jr = +v[0], tg = tgOf(jr), j = jr >= 24 && jr < 99 ? jr - 24 : jr, w = pakai(j, tg, area[+v[1]]);
       if (w >= 0) EV.push([w, j === 99 ? 0 : j + 1, area[+v[1]], J.lok[+v[2]], c.p, c.k, n]); });
-    baris(blok.a, null, v => { const c = kasus[+v[4]], n = +v[5]; if (!c || !n) return; const jr = +v[0], tg = tgOf(jr), j = jr >= 24 && jr < 99 ? jr - 24 : jr, w = pakai(j, tg);
+    baris(blok.a, null, v => { const c = kasus[+v[4]], n = +v[5]; if (!c || !n) return; const jr = +v[0], tg = tgOf(jr), j = jr >= 24 && jr < 99 ? jr - 24 : jr, w = pakai(j, tg, area[+v[1]]);
       if (w >= 0) AM.push([w, area[+v[1]], J.lok[+v[2]], J.nama[+v[3]], c.p, c.k, n]); });
   };
   if (d) [d - 1, d, d + 1].forEach(t => { const blok = J.d[t]; if (blok) ambil(blok, () => ({ m: m, d: t })); });
@@ -701,7 +702,7 @@ function bangunData_() {
       const kc = normKasus(r[3]), c = peta.kasus[kc], n = angka(r[4]) || 0;
       if (!kc || !n) return;
       const tg = tanggalTeks(r[0]);
-      if (!tg || tg.m !== o.m || dariTarikan_(tg) !== o.tarikan) return;
+      if (!tg || tg.m !== o.m || dariTarikan_(tg, r[1]) !== o.tarikan) return;
       if (o.tarikan) sumberOk[teks(r[5])] = 1;
       if (!c) { belum[kc] = 1; return; }
       const lok = teks(r[2]).toUpperCase();
@@ -828,12 +829,14 @@ function tanggalTeks(x) {
   const t = teks(x).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   return t ? { m: +t[2] - 1, d: +t[3] } : null;
 }
-/** true bila tanggal {m, d} diambil dari file Tarikan (mulai CFG.MULAI_TARIKAN), false bila dari file Data / Jam. */
-function dariTarikan_(tg) {
-  const m0 = +CFG.MULAI_TARIKAN.slice(5, 7) - 1, d0 = +CFG.MULAI_TARIKAN.slice(8, 10);
+/** Tanggal mulai tarikan (yyyy-mm-dd) untuk satu area: CFG.MULAI_TARIKAN_AREA bila ada, selain itu CFG.MULAI_TARIKAN. */
+function mulaiTarikan_(area) { return (CFG.MULAI_TARIKAN_AREA || {})[areaNorm(area)] || CFG.MULAI_TARIKAN; }
+/** true bila tanggal {m, d} area itu diambil dari file Tarikan (mulai mulaiTarikan_), false bila dari file Data / Jam. */
+function dariTarikan_(tg, area) {
+  const mt = mulaiTarikan_(area), m0 = +mt.slice(5, 7) - 1, d0 = +mt.slice(8, 10);
   return tg.m > m0 || (tg.m === m0 && tg.d >= d0);
 }
-const BULAN_MULAI_TARIKAN = +CFG.MULAI_TARIKAN.slice(5, 7) - 1;   // 0-11
+const BULAN_MULAI_TARIKAN = Math.min.apply(null, [CFG.MULAI_TARIKAN].concat(Object.values(CFG.MULAI_TARIKAN_AREA || {})).map(t => +t.slice(5, 7) - 1));   // 0-11
 
 /* ============================== TARIKAN HARIAN ============================== */
 const BATAS_MS = 3 * 60 * 1000;     // file baru tidak dimulai lewat dari ini (Apps Script berhenti di 6 menit; satu file besar bisa 2 menit lebih)
@@ -893,7 +896,7 @@ function prosesTarikan() {
 }
 
 /**
- * Semua file harian bertanggal >= MULAI_TARIKAN di folder yang terdaftar, termasuk subfolder sampai dua tingkat
+ * Semua file harian bertanggal >= mulai tarikan areanya (MULAI_TARIKAN / MULAI_TARIKAN_AREA) di folder yang terdaftar, termasuk subfolder sampai dua tingkat
  * (mis. "1. TARIKAN EVENT SISTEM RTC" > "10. OKTOBER 2026" > "1. Sumbagut 1" > "20 Oktober 2026.xlsx").
  * Nama file memuat tanggal: "Tarikan_<REG>_..._<yyyy-mm-dd>.xlsx" atau "20 Oktober 2026.xlsx".
  * Area = nama subfolder bila berupa nama area ("1. Sumbagut 1"), selain itu kolom Area di Tarikan Sistem.
@@ -906,7 +909,7 @@ function daftarTarikan_() {
     const it = folder.getFiles();
     while (it.hasNext()) {
       const f = it.next(), nama = f.getName(), tgl = tanggalNama_(nama);
-      if (!tgl || lihat[f.getId()] || +tgl.slice(0, 4) !== CFG.TAHUN || tgl < CFG.MULAI_TARIKAN) continue;
+      if (!tgl || lihat[f.getId()] || +tgl.slice(0, 4) !== CFG.TAHUN || tgl < mulaiTarikan_(area)) continue;
       const mime = f.getMimeType();
       if (mime !== MimeType.MICROSOFT_EXCEL && mime !== MimeType.GOOGLE_SHEETS) continue;
       lihat[f.getId()] = 1;
@@ -1108,6 +1111,7 @@ function menuBacaUlangArea() {
 /** Jalankan dari editor. */
 function BACA_ULANG_SUMBAGSEL() { bacaUlangTarikan('SUMBAGSEL', 0); }
 function BACA_ULANG_SEMUA_OKTOBER() { bacaUlangTarikan('', 10); }
+function BACA_ULANG_SUMBAGUT_OKTOBER() { bacaUlangTarikan('SUMBAGUT', 10); }
 
 function namaAmt(x) {
   const s = teks(x).replace(/\s*[\[(].*?[\])]\s*/g, ' ').replace(/^[\s.\-]+|[\s.\-]+$/g, '').toUpperCase();

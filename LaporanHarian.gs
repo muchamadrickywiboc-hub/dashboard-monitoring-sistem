@@ -96,7 +96,7 @@ function eventBulanLH_(m) {
     files.forEach(([file, tar]) => (nilaiSheet(SpreadsheetApp.open(file), 'Event') || []).slice(1).forEach(r => {
       // baris tanpa Lokasi tetap dihitung di total area (sama seperti dashboard: baris "(TANPA LOKASI)")
       const tg = tanggalTeks(r[0]), pi = pp[normKasus(r[3])], n = angka(r[4]) || 0, l = teks(r[2]).toUpperCase() || '(TANPA LOKASI)';
-      if (!tg || tg.m !== m || dariTarikan_(tg) !== tar || pi === undefined || !n) return;
+      if (!tg || tg.m !== m || dariTarikan_(tg, r[1]) !== tar || pi === undefined || !n) return;
       const lok = ALIAS_LOKASI[l] || l, area = areaNorm(r[1]) || peta.lokasi[lok] || '';
       if (area) out.lokArea[lok] = area;
       const k = tg.d + '|' + lok + '|' + pi;
