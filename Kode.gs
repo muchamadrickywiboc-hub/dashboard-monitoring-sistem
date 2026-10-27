@@ -25,8 +25,10 @@
 const CFG = {
   FOLDER_ID: '1nUJtRTcKwJua4Am9EdiFXoQxcTALgt9e',   // folder Drive "3. Data Dashboard"
   TARIKAN_ID: '11akfRibrQLixrBicdNXazEWX-TGmgfYu4zdYYNaOEy8',   // spreadsheet "Tarikan Sistem": kolom Area | linkgdrive (folder tarikan harian per regional)
-  MULAI_TARIKAN: '2026-10-19',   // mulai tanggal ini data HANYA dari tarikan (link Tarikan Sistem); tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..." 
-  MULAI_TARIKAN_AREA: { SUMBAGUT: '2026-10-01' },   // area yang mulai lebih awal dari tarikan (Sumbagut 1 & 2 tanggal 1-18 dari file tarikan di folder area-nya)
+  MULAI_TARIKAN: '2026-10-27',   // mulai tanggal ini data HANYA dari tarikan (link Tarikan Sistem); tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..." 
+  // area yang mulai dari tarikan pada tanggal lain: Sumbagut 1 & 2 seluruh Oktober (file Data tidak memuat Sumbagut);
+  // Sulawesi mulai 26 karena file regional Oktober tidak memuat tanggal 26
+  MULAI_TARIKAN_AREA: { SUMBAGUT: '2026-10-01', SULAWESI: '2026-10-26' },
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
   JEDA_GABUNG_DETIK: 0,   // (mis. 10) alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
@@ -496,37 +498,24 @@ function dataWaktu_(m, d, s, h) {
   const kunci = 'WKT1_' + versiData_() + '_' + [m, d, s, h].join('_');
   const ada = ambilCache_(kunci);
   if (ada) return ada;
-  const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
-  let atur = null, file = null;
-  const it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
-  while (it.hasNext()) {
-    const f = it.next(), n = teks(f.getName()), t = n.match(/^TARIKAN\s+(\d{1,2})\b/i);
-    if (/^PENGATURAN/i.test(n)) atur = f; else if (t && +t[1] === m + 1) file = terbaru_(file, f);
-  }
+  const folder = DriveApp.getFolderById(CFG.FOLDER_ID), S = sumberBulan_(folder), src = S.perBulan[m] || [];
   const kosongW = (pesan) => JSON.stringify(Object.assign(kosong([pesan]), { waktu: { m: m, d: d, s: s, h: h, adaPrev: false } }));
-  if (m < BULAN_MULAI_TARIKAN) file = null;
-  const fJam = m <= BULAN_MULAI_TARIKAN ? fileJam_(folder, m) : null;   // bulan MULAI_TARIKAN: file Jam untuk tanggal sebelum MULAI_TARIKAN
-  if (!atur || (!file && !fJam)) return kosongW('Data jam ' + BULAN[m] + ' belum ada.');
-  const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(atur), 'Pemetaan') || []);
+  if (!S.atur || !src.length) return kosongW('Data jam ' + BULAN[m] + ' belum ada.');
+  const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(S.atur), 'Pemetaan') || []);
+  const J = jamBulan_(folder, m, src, peta);   // Sum_Jam & Sum_AMT_Jam di file Summary bulan itu
+  if (!J.EJ.length) return kosongW('Data jam ' + BULAN[m] + ' belum ada.');
   const okJam = j => (h < 0 || j === h) && (!s || diShift(j, s));
   // shift yang melewati tengah malam (Shift 3) ikut tanggal mulainya: jam 00.00-07.00 dihitung ke tanggal sebelumnya
-  const jendela = (tg, j) => { if (!tg || tg.m !== m || !okJam(j)) return -1; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? tg.d - 1 : tg.d;
+  const jendela = (t0, j) => { if (!okJam(j)) return -1; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? t0 - 1 : t0;
     if (!d) return t >= 1 ? 0 : -1; if (t === d) return 0; return t === d - 1 ? 1 : -1; };
+  // w: 0 = jendela terpilih, 1 = pembanding, 2 = event tanpa jam di tanggal terpilih (tidak bisa disaring per jam)
+  const tanpa = !s && h < 0;   // hanya filter tanggal: event tanpa jam tetap dihitung
+  const w = (t0, j) => { if (j >= 0) return jendela(t0, j); const x = !d ? 0 : t0 === d ? 0 : t0 === d - 1 ? 1 : -1; return x < 0 ? -1 : tanpa ? x : (x === 0 ? 2 : -1); };
+  const kat = {}; peta.urut.forEach(o => { kat[o.p] = o.k; });
   const EV = [], AM = [];
-  if (fJam) kumpulJam_(bacaJam_(fJam), m, d, s, h, (tg, j, a) => tg && dariTarikan_(tg, a) ? -1 : jendela(tg, j), peta, EV, AM);
-  if (file) {
-    const ss = SpreadsheetApp.open(file), jt = (tg, j, a) => tg && dariTarikan_(tg, a) ? jendela(tg, j) : -1;
-    (nilaiSheet(ss, 'Event Jam') || []).slice(1).forEach(r => {
-      const j = +r[1], w = jt(tanggalTeks(r[0]), j, r[2]), c = peta.kasus[normKasus(r[4])], n = angka(r[5]) || 0;
-      if (w < 0 || !c || !n) return;
-      EV.push([w, j + 1, areaNorm(r[2]), teks(r[3]).toUpperCase(), c.p, c.k, n]);
-    });
-    (nilaiSheet(ss, 'AMT Jam') || []).slice(1).forEach(r => {
-      const j = +r[1], w = jt(tanggalTeks(r[0]), j, r[2]), c = peta.kasus[normKasus(r[5])], n = angka(r[6]) || 0, nama = teks(r[4]).toUpperCase();
-      if (w < 0 || !c || !n || !nama) return;
-      AM.push([w, areaNorm(r[2]), teks(r[3]).toUpperCase(), nama, c.p, c.k, n]);
-    });
-  }
+  J.EJ.forEach(e => { const x = w(e[0], e[1]); if (x >= 0) EV.push([x, e[1] < 0 ? 0 : e[1] + 1, e[2], e[3], e[4], kat[e[4]], e[5]]); });
+  J.AJ.forEach(r => { const x = w(r[0], r[1]); if (x >= 0) AM.push([x, r[2], r[3], r[4], r[5], kat[r[5]], r[6]]); });
+  const file = src.some(o => o.tarikan);
   const hasil = hitung_(EV, AM, peta, [], []);
   hasil.waktu = { m: m, d: d, s: s, h: h, adaPrev: d > 1 };
   const json = JSON.stringify(hasil);
@@ -550,25 +539,6 @@ function bacaJam_(f) {
   const b = f.getBlob().setContentType('application/x-gzip');
   return JSON.parse(Utilities.ungzip(b).getDataAsString('UTF-8'));
 }
-function kumpulJam_(J, m, d, s, h, jendela, peta, EV, AM) {
-  const tanpa = !s && h < 0;   // hanya filter tanggal: event tanpa jam tetap dihitung
-  const kasus = J.kasus.map(k => peta.kasus[normKasus(k)] || null), area = J.area.map(areaNorm);
-  // w: 0 = jendela terpilih, 1 = pembanding, 2 = event tanpa jam di tanggal terpilih (tidak bisa disaring per jam)
-  const baris = (str, tg, fn) => { if (!str) return; str.split(';').forEach(x => { const v = x.split(','); fn(v, tg); }); };
-  const pakai = (j, tg, a) => {
-    if (j === 99) { if (!tg || tg.m !== m) return -1; const w = !d ? 0 : tg.d === d ? 0 : tg.d === d - 1 ? 1 : -1; return w < 0 ? -1 : tanpa ? w : (w === 0 ? 2 : -1); }
-    return jendela(tg, j, a);
-  };
-  const ambil = (blok, tgOf) => {
-    baris(blok.e, null, v => { const c = kasus[+v[3]], n = +v[4]; if (!c || !n) return; const jr = +v[0], tg = tgOf(jr), j = jr >= 24 && jr < 99 ? jr - 24 : jr, w = pakai(j, tg, area[+v[1]]);
-      if (w >= 0) EV.push([w, j === 99 ? 0 : j + 1, area[+v[1]], J.lok[+v[2]], c.p, c.k, n]); });
-    baris(blok.a, null, v => { const c = kasus[+v[4]], n = +v[5]; if (!c || !n) return; const jr = +v[0], tg = tgOf(jr), j = jr >= 24 && jr < 99 ? jr - 24 : jr, w = pakai(j, tg, area[+v[1]]);
-      if (w >= 0) AM.push([w, area[+v[1]], J.lok[+v[2]], J.nama[+v[3]], c.p, c.k, n]); });
-  };
-  if (d) [d - 1, d, d + 1].forEach(t => { const blok = J.d[t]; if (blok) ambil(blok, () => ({ m: m, d: t })); });
-  else ambil(J.b, jr => ({ m: m, d: jr >= 24 && jr < 99 ? 1 : 2 }));
-}
-
 /* ============================== SHEET DATA KOSONG ============================== */
 /** Menyamakan sheet Pemetaan dan Catatan dengan KASUS_WAJIB (Distraction Mengemudi dan Seat Belt kini dihitung) dan KASUS_TARIKAN. */
 function sinkronPemetaan_(ss) {
@@ -689,11 +659,14 @@ function bangunData_() {
   const catatan = (nilaiSheet(ssA, 'Catatan') || []).map(r => teks(r[0])).filter(s => s);
 
   const EV = [], AM = [];   // EV: [bulan, tanggal, regional, lokasi, parameter, kategori, jumlah]; AM: [bulan, regional, lokasi, nama, parameter, kategori, jumlah]
-  const belum = {}, kat = {};
+  const belum = {}, kat = {}, jamAda = [], batasTulis = Date.now() + 3 * 60 * 1000;   // summary yang belum sempat ditulis dilanjutkan di jalan berikutnya
+  let ditulis = 0;
   peta.urut.forEach(o => { kat[o.p] = o.k; });
-  // per bulan dari file "Summary <nn> ..." (dibuat ulang dari file Data / Tarikan bila sumbernya berubah)
+  // per bulan dari file "Summary <nn> ..." (ditulis ulang dari file Data / Jam / Tarikan bila sumbernya berubah)
   Object.keys(S.perBulan).map(Number).sort((a, b) => a - b).forEach(m => {
-    const x = dataBulan_(folder, m, S.perBulan[m], peta, belum, true);
+    const x = dataBulan_(folder, m, S.perBulan[m], peta, belum, batasTulis);
+    if (x.jam) jamAda.push(m);
+    if (x.ditulis) ditulis++;
     // Summary juga memuat parameter khusus Laporan Harian (Camera Covering, Illegal Shutdown): tidak dihitung di dashboard
     x.EV.forEach(e => { if (kat[e[3]] && kat[e[3]] !== 'LAIN') EV.push([m, e[0], e[1], e[2], e[3], kat[e[3]], e[4]]); });
     x.AM.forEach(r => { if (kat[r[3]] && kat[r[3]] !== 'LAIN') AM.push([m, r[0], r[1], r[2], r[3], kat[r[3]], r[4]]); });
@@ -705,12 +678,8 @@ function bangunData_() {
   if (log.proses) peringatan.push('Data sedang dalam proses update secara otomatis.');
   if (log.gagal.length) peringatan.push('File tarikan gagal dibaca: ' + log.gagal.slice(0, 5).join('; '));
   const hasil = hitung_(EV, AM, peta, catatan, peringatan);
-  // bulan yang punya jam kejadian (sheet "Event Jam" di file Tarikan) -> filter Tanggal / Shift / Jam aktif
-  hasil.jamAda = dataBulan.filter(o => o.tarikan).filter(o => { const sh = SpreadsheetApp.open(o.f).getSheetByName('Event Jam'); return sh && sh.getLastRow() > 1; }).map(o => o.m);
-  // Januari-September: file "Jam <nn> ..." dari file mentah
-  const itJ = folder.getFiles();
-  while (itJ.hasNext()) { const t = teks(itJ.next().getName()).match(/^JAM\s+(\d{1,2})\b/i); if (t && hasil.jamAda.indexOf(+t[1] - 1) < 0 && dataBulan.some(o => o.m === +t[1] - 1)) hasil.jamAda.push(+t[1] - 1); }
-  hasil.jamAda.sort((a, b) => a - b);
+  hasil.jamAda = jamAda;   // bulan yang punya jam kejadian -> filter Tanggal / Shift / Jam aktif
+  if (ditulis) gantiVersiData_();   // cache filter waktu & Laporan Harian ikut summary baru
   return hasil;
 }
 
@@ -725,13 +694,15 @@ function nilaiSheet(ss, nama) {
 
 /* ============================== SUMMARY BULANAN ============================== */
 /**
- * Satu Google Sheet per bulan di subfolder "Summary Bulanan": "Summary 10 Oktober 2026".
+ * Satu Google Sheet per bulan di subfolder "Summary Bulanan": "Summary 10 Oktober 2026". Bahan baca utama dashboard:
  *   Sum_Bulanan : Jumlah Event per parameter dan per lokasi (rumus dari Sum_Harian).
- *   Sum_Harian  : Tanggal | Area | Lokasi | satu kolom per parameter  <- dibaca dashboard & Laporan Harian
- *   Sum_AMT     : Area | Lokasi | Nama AMT | satu kolom per parameter <- dibaca untuk Top Driver
+ *   Sum_Harian  : Tanggal | Area | Lokasi | satu kolom per parameter           <- angka bulanan, per tanggal, per lokasi; Laporan Harian
+ *   Sum_AMT     : Area | Lokasi | Nama AMT | satu kolom per parameter          <- Top Driver
+ *   Sum_Jam     : Tanggal | Jam | Area | Lokasi | satu kolom per parameter     <- filter Tanggal / Shift / Jam (Jam kosong = event tanpa jam)
+ *   Sum_AMT_Jam : Tanggal | Area | Lokasi | Rincian (jam, NAMA, PARAMETER=jumlah ... dipisah tab; satu baris per AMT per jam) <- Top Driver saat filter waktu
  *   Info        : sumber dan tanda sumber.
- * Dibuat ulang otomatis setiap file sumber bulan itu (Data / Tarikan) atau sheet Pemetaan berubah.
- * Koreksi manual di Sum_Harian / Sum_AMT dipakai dashboard sampai summary dibuat ulang.
+ * Diisi otomatis dari file sumber (Data / Jam / Tarikan) dan ditulis ulang setiap file sumber bulan itu atau sheet Pemetaan berubah.
+ * Koreksi manual di Summary dipakai dashboard sampai summary ditulis ulang.
  */
 const SUM_FOLDER = 'Summary Bulanan';
 const SUM_TANDA = 'Tanda sumber (jangan diubah)';
@@ -763,29 +734,81 @@ function sumberBulan_(folder) {
   return { atur: atur, tarikan: tarikan, dataBulan: dataBulan, perBulan: perBulan };
 }
 
+/** File Summary bulan m beserta tanda sumber sekarang; segar = tandanya cocok (isinya boleh dipakai). */
+function cariSummary_(folder, m, src, peta, buat) {
+  const o = { tanda: tandaSumber_(src, peta), sf: folderSummary_(folder, buat), f: null, ss: null, info: {}, segar: false };
+  if (o.sf) { const it = o.sf.getFilesByName(namaBulan_('Summary', m)); while (it.hasNext()) { const x = it.next(); if (x.getMimeType() === MimeType.GOOGLE_SHEETS) o.f = terbaru_(o.f, x); } }
+  if (o.f) {
+    o.ss = SpreadsheetApp.open(o.f);
+    (nilaiSheet(o.ss, 'Info') || []).forEach(r => { o.info[teks(r[0])] = r[1]; });
+    o.segar = teks(o.info[SUM_TANDA]) === o.tanda;
+  }
+  return o;
+}
+
 /**
  * Event & AMT satu bulan: dari file Summary bila tandanya cocok dengan sumber sekarang, selain itu dari file sumber
- * (lalu Summary ditulis ulang bila tulis = true). EV: [tanggal, area, lokasi, parameter, jumlah]; AM: [area, lokasi, nama, parameter, jumlah].
+ * (lalu Summary ditulis ulang bila waktu < tulis, batas waktu dalam ms). EV: [tanggal, area, lokasi, parameter, jumlah];
+ * AM: [area, lokasi, nama, parameter, jumlah]; jam: bulan ini punya data jam; ditulis: summary baru ditulis.
  */
 function dataBulan_(folder, m, src, peta, belum, tulis) {
-  const tanda = tandaSumber_(src, peta), nama = namaBulan_('Summary', m), sf = folderSummary_(folder, tulis);
-  let f = null;
-  if (sf) { const it = sf.getFilesByName(nama); while (it.hasNext()) { const x = it.next(); if (x.getMimeType() === MimeType.GOOGLE_SHEETS) f = terbaru_(f, x); } }
-  if (f) {
-    const ss = SpreadsheetApp.open(f), info = nilaiSheet(ss, 'Info') || [];
-    if (info.some(r => teks(r[0]) === SUM_TANDA && teks(r[1]) === tanda)) { const x = bacaSummary_(ss, peta); if (x) return x; }
-  }
+  const S = cariSummary_(folder, m, src, peta, !!tulis);
+  if (S.segar) { const x = bacaSummary_(S.ss, peta); if (x) { x.jam = angka(S.info['Baris jam']) > 0; return x; } }
   const x = bacaSumberBulan_(src, peta, belum);
-  if (tulis) {
+  if (tulis && Date.now() < tulis) {
     const cache = CacheService.getScriptCache(), kunci = 'SUM_TULIS_' + m;   // dua proses tidak menulis summary yang sama bersamaan
     if (!cache.get(kunci)) {
-      cache.put(kunci, '1', 300);
-      try { tulisSummary_(f ? SpreadsheetApp.open(f) : null, sf, m, x, peta, src, tanda); }
-      catch (e) { Logger.log('Summary ' + nama + ' gagal ditulis: ' + e.message); }
+      cache.put(kunci, '1', 600);
+      try { const j = bacaJamSumber_(folder, m, src, peta); tulisSummary_(S.ss, S.sf, m, x, j, peta, src, S.tanda); x.jam = j.EJ.length > 0; x.ditulis = true; }
+      catch (e) { Logger.log('Summary ' + namaBulan_('Summary', m) + ' gagal ditulis: ' + e.message); }
       finally { cache.remove(kunci); }
     }
   }
+  if (x.jam === undefined) x.jam = adaJamSumber_(folder, m, src);
   return x;
+}
+
+/** Data per jam satu bulan untuk filter waktu: dari Summary bila segar, selain itu dari file sumber. EJ / AJ: lihat bacaJamSumber_. */
+function jamBulan_(folder, m, src, peta) {
+  const S = cariSummary_(folder, m, src, peta, false);
+  return (S.segar && bacaJamSummary_(S.ss, peta)) || bacaJamSumber_(folder, m, src, peta);
+}
+
+/** true bila sumber bulan ini punya jam kejadian: file "Jam <nn> ..." (tanggal sebelum mulai tarikan) atau sheet Event Jam di file Tarikan. */
+function adaJamSumber_(folder, m, src) {
+  if (m <= BULAN_MULAI_TARIKAN && fileJam_(folder, m)) return true;
+  return src.some(o => { if (!o.tarikan) return false; const sh = SpreadsheetApp.open(o.f).getSheetByName('Event Jam'); return sh && sh.getLastRow() > 1; });
+}
+
+/**
+ * Event & AMT per tanggal x jam satu bulan dari file sumber: "Jam <nn> ....json.gz" untuk tanggal sebelum mulai tarikan, sheet Event Jam / AMT Jam
+ * file Tarikan sesudahnya. EJ: [tanggal, jam (-1 = tanpa jam), area, lokasi, parameter, jumlah]; AJ: [tanggal, jam, area, lokasi, nama, parameter, jumlah].
+ */
+function bacaJamSumber_(folder, m, src, peta) {
+  const EJ = [], AJ = [], kasus = c => { const x = peta.kasus[normKasus(c)]; return x && x.k !== 'LAIN' ? x.p : null; };
+  const fJam = m <= BULAN_MULAI_TARIKAN ? fileJam_(folder, m) : null;
+  if (fJam) {
+    const J = bacaJam_(fJam), ks = J.kasus.map(kasus), area = J.area.map(areaNorm);
+    Object.keys(J.d).forEach(t => {
+      const tg = { m: m, d: +t }, blok = J.d[t], jam = x => +x === 99 ? -1 : +x;
+      (blok.e ? blok.e.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[3]], n = +v[4], a = area[+v[1]];
+        if (p && n && !dariTarikan_(tg, a)) EJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], p, n]); });
+      (blok.a ? blok.a.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[4]], n = +v[5], a = area[+v[1]];
+        if (p && n && !dariTarikan_(tg, a)) AJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], J.nama[+v[3]], p, n]); });
+    });
+  }
+  src.filter(o => o.tarikan).forEach(o => {
+    const ss = SpreadsheetApp.open(o.f);
+    (nilaiSheet(ss, 'Event Jam') || []).slice(1).forEach(r => {
+      const tg = tanggalTeks(r[0]), p = kasus(r[4]), n = angka(r[5]) || 0;
+      if (tg && tg.m === m && p && n && dariTarikan_(tg, r[2])) EJ.push([tg.d, +r[1], areaNorm(r[2]), teks(r[3]).toUpperCase(), p, n]);
+    });
+    (nilaiSheet(ss, 'AMT Jam') || []).slice(1).forEach(r => {
+      const tg = tanggalTeks(r[0]), p = kasus(r[5]), n = angka(r[6]) || 0, nama = teks(r[4]).toUpperCase();
+      if (tg && tg.m === m && p && n && nama && dariTarikan_(tg, r[2])) AJ.push([tg.d, +r[1], areaNorm(r[2]), teks(r[3]).toUpperCase(), nama, p, n]);
+    });
+  });
+  return { EJ: EJ, AJ: AJ };
 }
 
 /** Baris Event & AMT satu bulan langsung dari file Data / Tarikan (aturan tanggal mulai tarikan per area seperti biasa). */
@@ -824,42 +847,65 @@ function kasusLH_(peta) {
   return o;
 }
 
-/** Isi Sum_Harian & Sum_AMT; null bila sheet-nya tidak ada. Kolom parameter yang tidak ada di Pemetaan dibaca dengan namanya sendiri. */
+/** Judul kolom Summary -> kunci parameter (sheet Pemetaan); judul yang tidak dikenal dipakai sebagai nama parameternya sendiri. */
+function paramJudul_(peta) {
+  const kunci = {}; peta.urut.forEach(o => { kunci[o.p.toUpperCase()] = o.p; });
+  return h => { const u = teks(h).toUpperCase(); if (!u) return null; const s = SUM_KOLOM.filter(x => x[0] === u)[0], P = s ? s[1] : u; return kunci[P] || P; };
+}
+const lokSum_ = x => { const l = teks(x).toUpperCase(); return l === SUM_TANPA_LOKASI ? '' : l; };
+
+/** Isi Sum_Harian & Sum_AMT; null bila sheet-nya tidak ada. */
 function bacaSummary_(ss, peta) {
   const H = nilaiSheet(ss, 'Sum_Harian'), A = nilaiSheet(ss, 'Sum_AMT');
   if (!H || !A || !H.length || !A.length) return null;
-  const kunci = {}; peta.urut.forEach(o => { kunci[o.p.toUpperCase()] = o.p; });
-  const kol = (hdr, dari) => hdr.map((h, j) => {
-    const u = teks(h).toUpperCase(); if (j < dari || !u) return null;
-    const s = SUM_KOLOM.filter(x => x[0] === u)[0], P = s ? s[1] : u;
-    return kunci[P] || P;
-  });
-  const lok = x => { const l = teks(x).toUpperCase(); return l === SUM_TANPA_LOKASI ? '' : l; };
+  const pj = paramJudul_(peta), kol = (hdr, dari) => hdr.map((h, j) => j < dari ? null : pj(h));
   const EV = [], AM = [], kh = kol(H[0], 3), ka = kol(A[0], 3);
   H.slice(1).forEach(r => {
     const tg = tanggalTeks(r[0]); if (!tg) return;
-    for (let j = 3; j < r.length; j++) { const n = kh[j] && angka(r[j]); if (n) EV.push([tg.d, areaNorm(r[1]), lok(r[2]), kh[j], n]); }
+    for (let j = 3; j < r.length; j++) { const n = kh[j] && angka(r[j]); if (n) EV.push([tg.d, areaNorm(r[1]), lokSum_(r[2]), kh[j], n]); }
   });
   A.slice(1).forEach(r => {
     const nama = teks(r[2]).toUpperCase(); if (!nama) return;
-    for (let j = 3; j < r.length; j++) { const n = ka[j] && angka(r[j]); if (n) AM.push([areaNorm(r[0]), lok(r[1]), nama, ka[j], n]); }
+    for (let j = 3; j < r.length; j++) { const n = ka[j] && angka(r[j]); if (n) AM.push([areaNorm(r[0]), lokSum_(r[1]), nama, ka[j], n]); }
   });
   return { EV: EV, AM: AM };
 }
 
-/** Menulis (ulang) file Summary satu bulan. */
-function tulisSummary_(ss, sf, m, x, peta, src, tanda) {
+/** Isi Sum_Jam & Sum_AMT_Jam (format bacaJamSumber_); null bila sheet-nya tidak ada. */
+function bacaJamSummary_(ss, peta) {
+  const H = nilaiSheet(ss, 'Sum_Jam'), A = nilaiSheet(ss, 'Sum_AMT_Jam');
+  if (!H || !A || !H.length || !A.length) return null;
+  const pj = paramJudul_(peta), kh = H[0].map((h, j) => j < 4 ? null : pj(h)), EJ = [], AJ = [];
+  const jam = x => teks(x) === '' || teks(x) === '-' ? -1 : +x;
+  H.slice(1).forEach(r => {
+    const tg = tanggalTeks(r[0]); if (!tg) return;
+    for (let j = 4; j < r.length; j++) { const n = kh[j] && angka(r[j]); if (n) EJ.push([tg.d, jam(r[1]), areaNorm(r[2]), lokSum_(r[3]), kh[j], n]); }
+  });
+  A.slice(1).forEach(r => {
+    const tg = tanggalTeks(r[0]); if (!tg) return;
+    const a = areaNorm(r[1]), l = lokSum_(r[2]);
+    teks(r[3]) && String(r[3]).split('\n').forEach(baris => {
+      const v = baris.split('\t'); if (v.length < 3) return;
+      const nama = teks(v[1]).toUpperCase(); if (!nama) return;
+      for (let i = 2; i < v.length; i++) { const k = v[i].lastIndexOf('='), p = k > 0 && pj(v[i].slice(0, k)), n = k > 0 && angka(v[i].slice(k + 1)); if (p && n) AJ.push([tg.d, jam(v[0]), a, l, nama, p, n]); }
+    });
+  });
+  return { EJ: EJ, AJ: AJ };
+}
+
+/** Menulis (ulang) file Summary satu bulan. x: hasil bacaSumberBulan_, j: hasil bacaJamSumber_. */
+function tulisSummary_(ss, sf, m, x, j, peta, src, tanda) {
   if (!ss) { ss = SpreadsheetApp.create(namaBulan_('Summary', m)); DriveApp.getFileById(ss.getId()).moveTo(sf); }
   // kolom parameter: urutan SUM_KOLOM, lalu parameter lain yang ada datanya (urutan sheet Pemetaan)
   const urutP = {}; peta.urut.forEach((o, i) => { urutP[o.p.toUpperCase()] = i; });
-  const ada = {}; x.EV.forEach(e => { ada[e[3].toUpperCase()] = 1; }); x.AM.forEach(r => { ada[r[3].toUpperCase()] = 1; });
+  const ada = {}; [[x.EV, 3], [x.AM, 3], [j.EJ, 4], [j.AJ, 5]].forEach(([L, i]) => L.forEach(r => { ada[r[i].toUpperCase()] = 1; }));
   const kol = SUM_KOLOM.concat(Object.keys(ada).filter(P => !SUM_KOLOM.some(s => s[1] === P)).sort((a, b) => (a in urutP ? urutP[a] : 999) - (b in urutP ? urutP[b] : 999) || (a < b ? -1 : 1)).map(P => [P, P]));
   const ci = {}; kol.forEach((k, i) => { ci[k[1]] = i; });
   const pivot = (rows, nk) => {   // nk kolom kunci, lalu parameter & jumlah
     const T = {};
     rows.forEach(r => {
-      const k = r.slice(0, nk).join('\u0001'), t = T[k] || (T[k] = r.slice(0, nk).concat(kol.map(() => ''))), j = nk + ci[r[nk].toUpperCase()];
-      t[j] = (t[j] || 0) + r[nk + 1];
+      const k = r.slice(0, nk).join('\u0001'), t = T[k] || (T[k] = r.slice(0, nk).concat(kol.map(() => ''))), i = nk + ci[r[nk].toUpperCase()];
+      t[i] = (t[i] || 0) + r[nk + 1];
     });
     return Object.keys(T).map(k => T[k]);
   };
@@ -870,49 +916,76 @@ function tulisSummary_(ss, sf, m, x, peta, src, tanda) {
     .sort((a, b) => banding(a[0], b[0]) || ai(a[1]) - ai(b[1]) || banding(a[2], b[2]));
   const amt = pivot(x.AM.map(r => [r[0], r[1] || SUM_TANPA_LOKASI, r[2], r[3], r[4]]), 3)
     .sort((a, b) => ai(a[0]) - ai(b[0]) || banding(a[1], b[1]) || banding(a[2], b[2]));
-  const judul = kol.map(k => k[0]), lebar = 3 + kol.length;
+  const jamK = h => h < 0 ? '' : h;
+  const perJam = pivot(j.EJ.map(e => [tgl(e[0]), jamK(e[1]), e[2], e[3] || SUM_TANPA_LOKASI, e[4], e[5]]), 4)
+    .sort((a, b) => banding(a[0], b[0]) || (a[1] === '' ? 99 : a[1]) - (b[1] === '' ? 99 : b[1]) || ai(a[2]) - ai(b[2]) || banding(a[3], b[3]));
+  // Sum_AMT_Jam: satu sel per tanggal x area x lokasi, satu baris teks per AMT per jam (sel dipecah bila terlalu panjang)
+  const G = {};
+  j.AJ.forEach(r => {
+    const g = tgl(r[0]) + '\u0001' + r[2] + '\u0001' + (r[3] || SUM_TANPA_LOKASI), k = (r[1] < 0 ? '-' : ('0' + r[1]).slice(-2)) + '\t' + r[4];
+    const o = G[g] || (G[g] = {}), t = o[k] || (o[k] = {}); t[r[5].toUpperCase()] = (t[r[5].toUpperCase()] || 0) + r[6];
+  });
+  const amtJam = [];
+  Object.keys(G).sort((a, b) => { const p = a.split('\u0001'), q = b.split('\u0001'); return banding(p[0], q[0]) || ai(p[1]) - ai(q[1]) || banding(p[2], q[2]); }).forEach(g => {
+    const kunci = g.split('\u0001'), o = G[g];
+    let isi = '';
+    Object.keys(o).sort().forEach(k => {
+      const b = k + '\t' + kol.filter(c => o[k][c[1]]).map(c => c[0] + '=' + o[k][c[1]]).join('\t');
+      if (isi && isi.length + b.length > 40000) { amtJam.push(kunci.concat([isi])); isi = ''; }
+      isi += (isi ? '\n' : '') + b;
+    });
+    if (isi) amtJam.push(kunci.concat([isi]));
+  });
+
+  const judul = kol.map(k => k[0]);
   const sheet = nama => { const sh = ss.getSheetByName(nama) || ss.insertSheet(nama); sh.getDataRange().breakApart(); sh.clear(); return sh; };
-  const tabel = (sh, hdr, rows) => {
+  const tabel = (sh, hdr, rows, garis) => {
     sh.getRange(1, 1, 1, hdr.length).setValues([hdr]).setFontWeight('bold').setBackground('#d9e7da');
-    if (rows.length) sh.getRange(2, 1, rows.length, hdr.length).setValues(rows);
-    sh.getRange(1, 1, rows.length + 1, hdr.length).setBorder(true, true, true, true, true, true);
+    for (let i = 0; i < rows.length; i += 20000) sh.getRange(2 + i, 1, Math.min(20000, rows.length - i), hdr.length).setValues(rows.slice(i, i + 20000));
+    if (garis) sh.getRange(1, 1, rows.length + 1, hdr.length).setBorder(true, true, true, true, true, true);
     sh.setFrozenRows(1);
   };
-
   const shH = sheet('Sum_Harian');
   shH.getRange(1, 1, harian.length + 1, 1).setNumberFormat('@');   // tanggal sebagai teks yyyy-mm-dd
-  tabel(shH, ['Tanggal', 'Area', 'Lokasi'].concat(judul), harian);
-  tabel(sheet('Sum_AMT'), ['Area', 'Lokasi', 'Nama AMT'].concat(judul), amt);
+  tabel(shH, ['Tanggal', 'Area', 'Lokasi'].concat(judul), harian, true);
+  tabel(sheet('Sum_AMT'), ['Area', 'Lokasi', 'Nama AMT'].concat(judul), amt, true);
+  const shJ = sheet('Sum_Jam');
+  shJ.getRange(1, 1, perJam.length + 1, 1).setNumberFormat('@');
+  tabel(shJ, ['Tanggal', 'Jam', 'Area', 'Lokasi'].concat(judul), perJam, false);
+  const shAJ = sheet('Sum_AMT_Jam');
+  shAJ.getRange(1, 1, amtJam.length + 1, 1).setNumberFormat('@');
+  tabel(shAJ, ['Tanggal', 'Area', 'Lokasi', 'Rincian: jam, Nama AMT, PARAMETER=jumlah (dipisah tab; satu baris per AMT per jam; jam - = tanpa jam)'], amtJam, false);
 
   // Sum_Bulanan: susunan "Jumlah Event" dan "Jumlah Event di Setiap Lokasi", angka dari rumus ke Sum_Harian
   const shB = ss.getSheetByName('Sum_Bulanan') || ss.getSheets()[0].setName('Sum_Bulanan');
   shB.getDataRange().breakApart(); shB.clear();
   const huruf = n => { let s = ''; for (; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; };
-  const kolH = j => 'Sum_Harian!' + huruf(4 + j) + ':' + huruf(4 + j);
+  const kolH = i => 'Sum_Harian!' + huruf(4 + i) + ':' + huruf(4 + i);
   shB.getRange(2, 1, 1, 2).merge().setValue('Jumlah Event').setHorizontalAlignment('center').setFontWeight('bold');
   shB.getRange(3, 1, 1, 2).setValues([['Parameter Event', 'Jumlah']]).setFontWeight('bold');
-  shB.getRange(4, 1, kol.length, 2).setFormulas(kol.map((k, j) => ['="' + k[0].replace(/"/g, '""') + '"', '=SUM(' + kolH(j) + ')']));
+  shB.getRange(4, 1, kol.length, 2).setFormulas(kol.map((k, i) => ['="' + k[0].replace(/"/g, '""') + '"', '=SUM(' + kolH(i) + ')']));
   shB.getRange(2, 1, kol.length + 2, 2).setBorder(true, true, true, true, true, true);
   const r0 = kol.length + 5, lokasi = [], lihat = {};
   harian.slice().sort((a, b) => ai(a[1]) - ai(b[1]) || banding(a[2], b[2])).forEach(r => { if (!lihat[r[2]]) { lihat[r[2]] = 1; lokasi.push(r[2]); } });
   shB.getRange(r0, 1, 1, kol.length + 1).setValues([['Jumlah Event di Setiap Lokasi'].concat(judul)]).setFontWeight('bold');
   if (lokasi.length) shB.getRange(r0 + 1, 1, lokasi.length, kol.length + 1).setFormulas(lokasi.map((l, i) =>
-    ['="' + l.replace(/"/g, '""') + '"'].concat(kol.map((k, j) => '=SUMIFS(' + kolH(j) + ',Sum_Harian!$C:$C,$A' + (r0 + 1 + i) + ')'))));
+    ['="' + l.replace(/"/g, '""') + '"'].concat(kol.map((k, c) => '=SUMIFS(' + kolH(c) + ',Sum_Harian!$C:$C,$A' + (r0 + 1 + i) + ')'))));
   shB.getRange(r0, 1, lokasi.length + 1, kol.length + 1).setBorder(true, true, true, true, true, true);
   shB.getRange(4, 2, kol.length, 1).setNumberFormat('#,##0;-#,##0;;@');
   if (lokasi.length) shB.getRange(r0 + 1, 2, lokasi.length, kol.length).setNumberFormat('#,##0;-#,##0;;@');   // 0 tampil kosong
   shB.autoResizeColumns(1, kol.length + 1);
 
   const shI = sheet('Info');
-  shI.getRange(1, 1, 5, 2).setValues([
+  shI.getRange(1, 1, 6, 2).setValues([
     ['Summary', BULAN[m].charAt(0) + BULAN[m].slice(1).toLowerCase() + ' ' + CFG.TAHUN],
     ['Sumber', src.map(o => o.f.getName()).join(' + ')],
     ['Diperbarui', new Date()],
-    ['Catatan', 'Dibuat otomatis. Dashboard membaca Sum_Harian dan Sum_AMT; koreksi di sana dipakai sampai file sumber bulan ini berubah (summary lalu dibuat ulang).'],
+    ['Catatan', 'Dibuat otomatis dari file sumber dan dibaca dashboard. Koreksi manual dipakai sampai file sumber bulan ini berubah (summary lalu ditulis ulang).'],
+    ['Baris jam', perJam.length],
     [SUM_TANDA, tanda],
   ]);
-  ss.getSheets().forEach((sh, i) => { const urut = ['Sum_Bulanan', 'Sum_Harian', 'Sum_AMT', 'Info'].indexOf(sh.getName()); if (urut >= 0 && urut !== i) { ss.setActiveSheet(sh); ss.moveActiveSheet(urut + 1); } });
-  Logger.log('Summary ' + namaBulan_('Summary', m) + ': ' + harian.length + ' baris harian, ' + amt.length + ' baris AMT.');
+  ss.getSheets().forEach((sh, i) => { const urut = ['Sum_Bulanan', 'Sum_Harian', 'Sum_AMT', 'Sum_Jam', 'Sum_AMT_Jam', 'Info'].indexOf(sh.getName()); if (urut >= 0 && urut !== i) { ss.setActiveSheet(sh); ss.moveActiveSheet(urut + 1); } });
+  Logger.log('Summary ' + namaBulan_('Summary', m) + ': ' + harian.length + ' baris harian, ' + amt.length + ' baris AMT, ' + perJam.length + ' baris jam, ' + amtJam.length + ' baris AMT jam.');
 }
 
 /** Tanda sumber: berubah bila file sumber, sheet Pemetaan, atau tanggal mulai tarikan berubah. */
