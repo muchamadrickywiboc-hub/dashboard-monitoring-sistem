@@ -62,18 +62,6 @@ function sesiLH_(token) {
   return ses;
 }
 
-/** Case (sudah dinormKasus) -> indeks panel. Teks Case langsung, lalu parameter di sheet Pemetaan. */
-function petaPanel_(peta) {
-  const out = {};
-  LH_PANEL.forEach((p, i) => p.kasus.forEach(c => { out[c] = i; }));
-  Object.keys(peta.kasus).forEach(c => {
-    if (out[c] !== undefined) return;
-    const P = teks(peta.kasus[c].p).toUpperCase(), i = LH_PANEL.findIndex(p => p.param.indexOf(P) >= 0);
-    if (i >= 0) out[c] = i;
-  });
-  return out;
-}
-
 /**
  * Event satu bulan per tanggal: { sumber, tanggal: { d: [[lokasi, area, panel, jumlah], ...] } }.
  * Disimpan di cache 15 menit.
@@ -81,28 +69,22 @@ function petaPanel_(peta) {
 function eventBulanLH_(m) {
   const kunci = 'LH2_' + versiData_() + '_' + m, ada = ambilCache_(kunci);
   if (ada) return JSON.parse(ada);
-  const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
-  let atur = null; const pilih = {};   // DATA / TARIKAN -> file (yang terakhir diubah bila ganda): Data untuk tanggal sebelum MULAI_TARIKAN, Tarikan sesudahnya
-  const it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
-  while (it.hasNext()) {
-    const f = it.next(), n = teks(f.getName()), t = n.match(/^(DATA|TARIKAN)\s+(\d{1,2})\b/i);
-    if (/^PENGATURAN/i.test(n)) atur = f;
-    else if (t && +t[2] === m + 1) { const tar = t[1].toUpperCase() === 'TARIKAN'; if (tar ? m >= BULAN_MULAI_TARIKAN : m <= BULAN_MULAI_TARIKAN) pilih[tar ? 'T' : 'D'] = terbaru_(pilih[tar ? 'T' : 'D'], f); }
-  }
-  const files = ['D', 'T'].filter(k => pilih[k]).map(k => [pilih[k], k === 'T']);
-  const out = { sumber: files.map(x => x[0].getName()).join(' + '), tanggal: {}, lokArea: {} };
-  if (atur && files.length) {
-    const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(atur), 'Pemetaan') || []), pp = petaPanel_(peta);
+  const folder = DriveApp.getFolderById(CFG.FOLDER_ID), S = sumberBulan_(folder), src = S.perBulan[m] || [];
+  const out = { sumber: src.map(o => o.f.getName()).join(' + '), tanggal: {}, lokArea: {} };
+  if (S.atur && src.length) {
+    // dari file Summary bulan itu (Sum_Harian) bila masih sesuai sumbernya; summary ditulis oleh dashboard, bukan di sini
+    const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(S.atur), 'Pemetaan') || []), pp = {};
+    LH_PANEL.forEach((p, i) => p.param.forEach(P => { pp[P] = i; }));
     const T = {};
-    files.forEach(([file, tar]) => (nilaiSheet(SpreadsheetApp.open(file), 'Event') || []).slice(1).forEach(r => {
+    dataBulan_(folder, m, src, peta, {}, false).EV.forEach(e => {
       // baris tanpa Lokasi tetap dihitung di total area (sama seperti dashboard: baris "(TANPA LOKASI)")
-      const tg = tanggalTeks(r[0]), pi = pp[normKasus(r[3])], n = angka(r[4]) || 0, l = teks(r[2]).toUpperCase() || '(TANPA LOKASI)';
-      if (!tg || tg.m !== m || dariTarikan_(tg, r[1]) !== tar || pi === undefined || !n) return;
-      const lok = ALIAS_LOKASI[l] || l, area = areaNorm(r[1]) || peta.lokasi[lok] || '';
+      const pi = pp[e[3].toUpperCase()], l = e[2] || '(TANPA LOKASI)';
+      if (pi === undefined) return;
+      const lok = ALIAS_LOKASI[l] || l, area = e[1] || peta.lokasi[lok] || '';
       if (area) out.lokArea[lok] = area;
-      const k = tg.d + '|' + lok + '|' + pi;
-      (T[k] || (T[k] = [tg.d, lok, area, pi, 0]))[4] += n;
-    }));
+      const k = e[0] + '|' + lok + '|' + pi;
+      (T[k] || (T[k] = [e[0], lok, area, pi, 0]))[4] += e[4];
+    });
     Object.keys(T).forEach(k => { const x = T[k]; (out.tanggal[x[0]] = out.tanggal[x[0]] || []).push(x.slice(1)); });
   }
   simpanCache_(JSON.stringify(out), kunci, LH.CACHE_DETIK);

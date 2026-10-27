@@ -14,6 +14,17 @@ Mulai Oktober 2026 data juga datang dari **tarikan harian**: spreadsheet *Tarika
 
 Nomor bulan diambil dari nama file. Bulan baru = tambah file `Data 11 November 2026`. File .xlsx harus dikonversi ke Google Sheet (setelan Drive "Konversi upload"), atau aktifkan layanan Drive API di Apps Script supaya dikonversi otomatis. Case yang tidak ada di `Pemetaan` dilaporkan di bagian Catatan dashboard.
 
+## Summary bulanan
+
+Dashboard dan Laporan Harian membaca data per bulan dari Google Sheet `Summary <nn> <Bulan> 2026` di subfolder **Summary Bulanan** (dibuat otomatis di folder data):
+
+- `Sum_Bulanan`: tabel *Jumlah Event* per parameter dan *Jumlah Event di Setiap Lokasi* (rumus `SUM` / `SUMIFS` ke `Sum_Harian`).
+- `Sum_Harian`: `Tanggal | Area | Lokasi | OVERSPEED | HARSH CORNERING | ... | MENGUAP` (+ Camera Covering / Illegal Shutdown untuk Laporan Harian), satu baris per tanggal & lokasi.
+- `Sum_AMT`: `Area | Lokasi | Nama AMT | <parameter>`, untuk Top Driver.
+- `Info`: sumber dan tanda sumber.
+
+Summary ditulis ulang oleh `bangunData_()` (pemicu tiap jam, setelah `prosesTarikan`, atau menu *Perbarui data dashboard sekarang*) setiap file sumber bulan itu (`Data <nn>` / `Tarikan <nn>`), sheet Pemetaan, atau tanggal mulai tarikan berubah. Selama sumbernya tetap, koreksi manual di `Sum_Harian` / `Sum_AMT` ikut dipakai dashboard. Menu *Buat ulang Summary bulanan* menulis ulang semuanya dari sumber. Filter Tanggal / Shift / Jam tetap membaca `Event Jam` (file Tarikan) dan `Jam <nn> ...`.
+
 ## Fitur tampilan
 - Bulanan: grafik event per hari (dibanding tanggal yang sama di bulan pembanding), bulan terpilih dibanding bulan pembanding (default bulan sebelumnya), tren dan tabel parameter per kategori, rekap regional, TOP 10 AMT, lokasi yang paling berubah, rekap per lokasi.
 - Rekap YTD: event per bulan, peringkat regional, parameter terbanyak, TOP 10 AMT seluruh periode, lokasi terbanyak.
