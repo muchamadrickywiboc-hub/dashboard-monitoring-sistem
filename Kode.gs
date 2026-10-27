@@ -1020,9 +1020,13 @@ function prosesSatuTarikan(folder, o, batas) {
     const ms = wk ? wk.map(r => waktuMs(r[0])) : [], urut = [];
     for (let i = 0; i < nr; i++) urut.push(i);
     if (jeda && pl && wk) urut.sort((a, b) => (ms[a] || 0) - (ms[b] || 0));
-    let n = 0;
+    // baris yang kolom Time-nya bukan tanggal file (mis. file "20 Oktober" ikut memuat baris 22 Oktober) dilewati:
+    // baris itu milik file tanggalnya sendiri, jadi kalau ikut dihitung akan dobel
+    const tglMs = t => { const x = new Date(t); return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
+    let n = 0, diluar = 0;
     for (const i of urut) {
       const c = normKasus(al[i][0]); if (!c) continue;
+      if (wk && ms[i] !== null && ms[i] !== undefined && tglMs(ms[i]) !== o.tgl) { diluar++; continue; }
       const g = gid ? teks(gid[i][0]) : '';
       if (g) { if (lihat[g]) continue; lihat[g] = 1; }   // baris dobel (Alert Group ID sama) dihitung sekali
       // alert yang sama dari kendaraan yang sama berulang tiap 1-10 detik (mis. Yawning) = satu kejadian
@@ -1035,6 +1039,7 @@ function prosesSatuTarikan(folder, o, batas) {
       const nama = am ? namaAmt(am[i][0]) : '';
       if (nama) { const ka = lok + '\u0001' + nama + '\u0001' + c; amt[ka] = (amt[ka] || 0) + 1; if (jam !== null) { const kj = jam + '\u0001' + ka; amj[kj] = (amj[kj] || 0) + 1; } }
     }
+    if (diluar) Logger.log(o.nama + ' (' + o.area + '): ' + diluar + ' baris bertanggal lain dilewati.');
     const ss = bukaTarikan_(folder, +o.tgl.slice(5, 7));
     gantiBaris(ss.getSheetByName('Event'), o.id, Object.keys(ev).map(x => { const p = x.split('\u0001'); return [o.tgl, o.area, p[0], p[1], ev[x], o.id]; }));
     gantiBaris(sheetAtauBuat(ss, 'Event Jam', HDR_TARIKAN['Event Jam']), o.id,
