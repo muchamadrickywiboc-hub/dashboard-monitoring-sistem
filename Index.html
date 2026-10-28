@@ -283,7 +283,8 @@ td{padding:7px 10px}
 #tnaik .bar{width:16%;min-width:90px}#tnaik .bar span{display:block;height:10px;border-radius:5px}
 #tnaik .pen small{color:var(--muted)}
 #tnaik tr.turun td{color:var(--ink-2)}
-.peran-lokasi #tnaik th:nth-child(n+7),.peran-lokasi #tnaik td:nth-child(n+7){display:none}
+/* Kenaikan Event hanya untuk akun RTC (Pusat) */
+.peran-area #panelNaik,.peran-lokasi #panelNaik{display:none!important}
 .amttbl th:nth-child(-n+3),.amttbl th:last-child{text-align:left}
 .cattbl td:first-child{white-space:normal}
 .emptyamt{padding:14px 16px;color:var(--muted,#6b7a72);font-size:12.5px;line-height:1.55}
@@ -1114,6 +1115,7 @@ function renderEvent() {
 // Kenaikan Event: per event (parameter) periode ini vs pembanding, ikut filter area/lokasi/waktu,
 // beserta area & lokasi yang paling banyak menyumbang kenaikan event tersebut.
 function renderNaik() {
+  if (AKUN && AKUN.peran !== 'PUSAT') return;
   const t = document.getElementById('tnaik'), sub = document.getElementById('naikSub'), A = RAW.areas, W = KC === 'W';
   if (KP === null || KP === undefined) { sub.textContent = `${judulK(KC)} · ${scope()} · belum ada periode pembanding`; t.innerHTML = ''; return; }
   const okLok = li => selLok < 0 || li === selLok, E = {};   // kunci parameter -> {ini, lalu, a: {area: selisih}, l: {lokasi: selisih}}
