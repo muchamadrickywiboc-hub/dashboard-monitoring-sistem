@@ -1121,6 +1121,8 @@ function kartu(judulK, warna, b, satuan, catatan, lbl) {
       <div class="n">${b.terpasang ? `${nf(b.online)} dari ${nf(b.terpasang)} ${satuan} ${lOn.toLowerCase()}` : catatan}</div></div>${donut(b, lOff.toLowerCase())}</div>
     <div class="splitlbl"><span><i style="background:var(--on)"></i>${lOn} ${nf(b.online)}</span><span><i style="background:var(--off)"></i>${lOff} ${nf(off)}</span></div></div>`;
 }
+// judul kartu & kolom nama: akun Control Room (Lokasi) vs Command Center (Area)
+const LBL = () => INFO && INFO.akun.peran === 'LOKASI' ? {cc: 'Control Room', mgr: 'Integrated/Fuel Terminal Manager'} : {cc: 'Command Center', mgr: 'Manager Region S&amp;D'};
 // kolom nama di bawah kartu: tombol pensil untuk mengisi / mengganti (hanya bila satu lokasi dipilih)
 function kolomNama(judulK, f, L) {
   const bisa = !!lokAktif();
@@ -1139,13 +1141,13 @@ function gambar(L) {
   h += `<section class="kpis">
     ${kartu('GPS', 'var(--gps)', P.gps, satuan, 'Belum ada data Justifikasi Uptime')}
     ${kartu('Dashcam (ADAS)', 'var(--cam)', P.dashcam, satuan, 'Belum ada data Justifikasi Uptime')}
-    ${kartu('Command Center', 'var(--forest)', P.rtc, bln ? 'orang-hari' : 'orang', 'Belum diinput', ['Hadir', 'Tidak Hadir'])}
+    ${kartu(LBL().cc, 'var(--forest)', P.rtc, bln ? 'orang-hari' : 'orang', 'Belum diinput', ['Hadir', 'Tidak Hadir'])}
     <div class="kpi"><div class="l"><i style="background:var(--red)"></i>Total event</div><div class="v">${nf(totalEv)}</div>
       <div class="n">${L.panel.filter(p => p.total).length} dari ${L.panel.length} jenis event terjadi${bln ? ' bulan ini' : ''}</div>
       <div class="n">Nopol offline tercatat: <b style="color:var(--ink)">${nf(L.offlineTotal)}</b></div></div>
   </section>`;
   if (!bln) h += `<section class="infobar"><div><div class="k">Tanggal</div><div class="v">${esc(per)}</div></div>
-    ${kolomNama('Command Center', 'operator', L)}${kolomNama('Manager Region S&amp;D', 'supervisor', L)}</section>`;
+    ${kolomNama(LBL().cc, 'operator', L)}${kolomNama(LBL().mgr, 'supervisor', L)}</section>`;
   if (bln) h += `<section class="grid g-2">
     <div class="panel"><div class="ph"><h2>Uptime harian</h2><p>Persentase Nopol online per tanggal</p></div>
       <div class="legend"><span><i style="background:var(--gps)"></i>GPS</span><span><i style="background:var(--cam)"></i>Dashcam (ADAS)</span></div>${grafikGaris(L.perHari)}</div>
