@@ -76,7 +76,9 @@ function eventBulanLH_(m) {
     const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(S.atur), 'Pemetaan') || []), pp = {};
     LH_PANEL.forEach((p, i) => p.param.forEach(P => { pp[P] = i; }));
     const T = {};
-    dataBulan_(folder, m, src, peta, {}, false).EV.forEach(e => {
+    const t0 = Date.now(), x = dataBulan_(folder, m, src, peta, {}, false, true);
+    Logger.log('Laporan Harian ' + BULAN[m] + ': ' + x.EV.length + ' baris event, ' + (Date.now() - t0) + ' ms.');
+    x.EV.forEach(e => {
       // baris tanpa Lokasi tetap dihitung di total area (sama seperti dashboard: baris "(TANPA LOKASI)")
       const pi = pp[e[3].toUpperCase()], l = e[2] || '(TANPA LOKASI)';
       if (pi === undefined) return;
@@ -130,8 +132,9 @@ function lhLaporan(token, periode, area, lokasi) {
   const tg = tanggalTeks(bulanan ? p + '-01' : p);
   if (!tg) throw new Error('Tanggal tidak valid.');
   const m = tg.m, hari = bulanan ? null : tg.d;
-  const c = cakupanLH_(ses, area, lokasi), E = eventBulanLH_(m), J = kendalaBulan_(m), perArea = ses.peran === 'PUSAT' && !c.area && !c.lok;
+  const t0 = Date.now(), c = cakupanLH_(ses, area, lokasi), E = eventBulanLH_(m), t1 = Date.now(), J = kendalaBulan_(m), t2 = Date.now(), perArea = ses.peran === 'PUSAT' && !c.area && !c.lok;
   const info = lokasiLH_(ses), areaLok = {};
+  Logger.log('lhLaporan ' + p + ': event ' + (t1 - t0) + ' ms, kendala ' + (t2 - t1) + ' ms, lokasi ' + (Date.now() - t2) + ' ms.');   // lihat Apps Script > Eksekusi bila laporan lambat
   info.forEach(o => { areaLok[kunciLok(o.n)] = o.a; });
   Object.keys(E.lokArea).forEach(l => { const k = kunciLok(l); areaLok[k] = areaLok[k] || E.lokArea[l]; });
   const areaDari = (lok, a) => a || areaLok[kunciLok(lok)] || '';

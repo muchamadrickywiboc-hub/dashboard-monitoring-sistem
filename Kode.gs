@@ -750,12 +750,13 @@ function cariSummary_(folder, m, src, peta, buat) {
  * Event & AMT satu bulan: dari file Summary bila tandanya cocok dengan sumber sekarang, selain itu dari file sumber
  * (lalu Summary ditulis ulang bila waktu < tulis, batas waktu dalam ms). EV: [tanggal, area, lokasi, parameter, jumlah];
  * AM: [area, lokasi, nama, parameter, jumlah]; jam: bulan ini punya data jam; ditulis: summary baru ditulis.
+ * hanyaEvent: AMT tidak dibaca (Laporan Harian), summary tidak ditulis.
  */
-function dataBulan_(folder, m, src, peta, belum, tulis) {
+function dataBulan_(folder, m, src, peta, belum, tulis, hanyaEvent) {
   const S = cariSummary_(folder, m, src, peta, !!tulis);
-  if (S.segar) { const x = bacaSummary_(S.ss, peta); if (x) { x.jam = angka(S.info['Baris jam']) > 0; return x; } }
-  const x = bacaSumberBulan_(src, peta, belum);
-  if (tulis && Date.now() < tulis) {
+  if (S.segar) { const x = bacaSummary_(S.ss, peta, hanyaEvent); if (x) { x.jam = angka(S.info['Baris jam']) > 0; return x; } }
+  const x = bacaSumberBulan_(src, peta, belum, hanyaEvent);
+  if (tulis && !hanyaEvent && Date.now() < tulis) {
     const cache = CacheService.getScriptCache(), kunci = 'SUM_TULIS_' + m;   // dua proses tidak menulis summary yang sama bersamaan
     if (!cache.get(kunci)) {
       cache.put(kunci, '1', 600);
@@ -812,7 +813,7 @@ function bacaJamSumber_(folder, m, src, peta) {
 }
 
 /** Baris Event & AMT satu bulan langsung dari file Data / Tarikan (aturan tanggal mulai tarikan per area seperti biasa). */
-function bacaSumberBulan_(src, peta, belum) {
+function bacaSumberBulan_(src, peta, belum, hanyaEvent) {
   const EV = [], AM = [], lh = kasusLH_(peta);
   src.forEach(o => {
     const ss = SpreadsheetApp.open(o.f), sumberOk = {};   // file Tarikan: AMT hanya dari sumber (file harian) yang event-nya dipakai
@@ -826,7 +827,7 @@ function bacaSumberBulan_(src, peta, belum) {
       const p = c && c.k !== 'LAIN' ? c.p : lh[kc];   // case di luar dashboard tetap disimpan bila dipakai Laporan Harian
       if (p) EV.push([tg.d, areaNorm(r[1]), teks(r[2]).toUpperCase(), p, n]);
     });
-    (nilaiSheet(ss, 'AMT') || []).slice(1).filter(r => !o.tarikan || sumberOk[teks(r[5])]).forEach(r => {
+    if (!hanyaEvent) (nilaiSheet(ss, 'AMT') || []).slice(1).filter(r => !o.tarikan || sumberOk[teks(r[5])]).forEach(r => {
       const c = peta.kasus[normKasus(r[3])], n = angka(r[4]) || 0, nama = teks(r[2]).toUpperCase();
       if (!c || c.k === 'LAIN' || !n || !nama) return;
       AM.push([areaNorm(r[0]), teks(r[1]).toUpperCase(), nama, c.p, n]);
@@ -855,8 +856,8 @@ function paramJudul_(peta) {
 const lokSum_ = x => { const l = teks(x).toUpperCase(); return l === SUM_TANPA_LOKASI ? '' : l; };
 
 /** Isi Sum_Harian & Sum_AMT; null bila sheet-nya tidak ada. */
-function bacaSummary_(ss, peta) {
-  const H = nilaiSheet(ss, 'Sum_Harian'), A = nilaiSheet(ss, 'Sum_AMT');
+function bacaSummary_(ss, peta, hanyaEvent) {
+  const H = nilaiSheet(ss, 'Sum_Harian'), A = hanyaEvent ? [[]] : nilaiSheet(ss, 'Sum_AMT');
   if (!H || !A || !H.length || !A.length) return null;
   const pj = paramJudul_(peta), kol = (hdr, dari) => hdr.map((h, j) => j < dari ? null : pj(h));
   const EV = [], AM = [], kh = kol(H[0], 3), ka = kol(A[0], 3);
