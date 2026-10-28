@@ -238,19 +238,36 @@ function tglKendala_(x) {
  * Lokasi & area hanya dari kolom Lokasi / Area sheet ini. Nama unit yang lebih rinci
  * ("FT SIBOLGA POLTAPLUS MOR I") dicocokkan ke nama lokasi terpanjang di Master Lokasi yang menjadi awalannya ("FT SIBOLGA").
  * { hari: { d: [[lokasi, area, jenis, jumlahNopol, nopolOffline], ...] }, off: [[d, lokasi, area, lokasiDiSheet, perangkat, nopol, durasi, justifikasi, keterangan], ...] }
- * Cache 6 jam; kuncinya ikut waktu ubah spreadsheet kendala, jadi isian baru langsung terbaca.
+ * Sheet dibaca sekali untuk semua bulan (bukan sekali per bulan) lalu setiap bulan disimpan di cache 6 jam;
+ * kuncinya ikut waktu ubah spreadsheet kendala, jadi isian baru langsung terbaca.
  */
 function kendalaBulan_(m) {
-  const kunci = 'LHJU4_' + m + '_' + DriveApp.getFileById(LH.KENDALA_ID).getLastUpdated().getTime(), ada = ambilCache_(kunci);
+  const versi = DriveApp.getFileById(LH.KENDALA_ID).getLastUpdated().getTime(), kunci = x => 'LHJU5_' + x + '_' + versi, ada = ambilCache_(kunci(m));
   if (ada) return JSON.parse(ada);
-  const ss = SpreadsheetApp.openById(LH.KENDALA_ID), v = nilaiSheet(ss, 'Justifikasi Uptime') || [], k = petaKolom(v[0] || []);
+  const t0 = Date.now(), semua = kendalaSemua_();
+  Object.keys(semua).forEach(x => simpanCache_(JSON.stringify(semua[x]), kunci(x), CFG.CACHE_DETIK));
+  Logger.log('Justifikasi Uptime dibaca: ' + (Date.now() - t0) + ' ms.');
+  return semua[m] || { hari: {}, off: [] };
+}
+/** Kolom 1 s/d kolom terakhir yang dipakai saja (bukan seluruh lebar sheet) dari sheet bernama `nama`; [] bila tidak ada. */
+function kolomDipakai_(ss, nama, perlu) {
+  const sh = ss.getSheets().filter(x => teks(x.getName()).toUpperCase() === nama.toUpperCase())[0];
+  if (!sh || sh.getLastRow() < 1) return [];
+  const hdr = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0], k = petaKolom(hdr);
+  const n = Math.max.apply(null, [1].concat(Object.keys(k).filter(h => perlu.some(p => h.indexOf(p) === 0)).map(h => k[h] + 1)));
+  return [hdr.slice(0, n)].concat(sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, n).getValues() : []);
+}
+/** Justifikasi Uptime semua bulan: { m: { hari, off } } (lihat kendalaBulan_). */
+function kendalaSemua_() {
+  const ss = SpreadsheetApp.openById(LH.KENDALA_ID);
+  const v = kolomDipakai_(ss, 'Justifikasi Uptime', ['TANGGAL', 'AREA', 'LOKASI', 'PERANGKAT', 'NOPOL', 'STATUS', 'DURASI', 'JUSTIFIKASI', 'KETERANGAN']), k = petaKolom(v[0] || []);
   const kol = awalan => { const h = Object.keys(k).filter(x => x.indexOf(awalan) === 0)[0]; return h === undefined ? undefined : k[h]; };
   const iT = k['TANGGAL'], iA = k['AREA'], iL = k['LOKASI'], iP = k['PERANGKAT'], iN = k['NOPOL'], iS = k['STATUS'], iD = kol('DURASI'), iJ = kol('JUSTIFIKASI'), iK = kol('KETERANGAN');
   if (iT === undefined || iL === undefined || iP === undefined || iN === undefined) throw new Error('Sheet Justifikasi Uptime harus punya kolom Tanggal, Lokasi, Perangkat, dan Nopol.');
   const kunciNopol = x => teks(x).toUpperCase().replace(/[^A-Z0-9]/g, '');
   // nama lokasi resmi (Master Lokasi + alias), terpanjang dulu agar "FT SIBOLGA X" tidak jatuh ke nama yang lebih pendek
   const areaL = {}, resmi = [];
-  const w = nilaiSheet(ss, 'Master Lokasi') || [], h = petaKolom(w[0] || []);
+  const w = kolomDipakai_(ss, 'Master Lokasi', ['LOKASI', 'AREA']), h = petaKolom(w[0] || []);
   w.slice(1).forEach(r => { const l = teks(r[h['LOKASI']]).toUpperCase(); if (l) { const n = ALIAS_LOKASI[l] || l; areaL[kunciLok(n)] = areaNorm(r[h['AREA']]); resmi.push(l); } });
   Object.keys(ALIAS_LOKASI).forEach(l => resmi.push(l));
   resmi.sort((a, b) => b.length - a.length);
@@ -260,27 +277,26 @@ function kendalaBulan_(m) {
     const r = resmi.filter(x => l === x || l.indexOf(x + ' ') === 0)[0];
     return r ? ALIAS_LOKASI[r] || r : l;
   })());
-  const N = {};   // d|lokasi|jenis|nopol -> [d, lokasi, area, jenis, offline, baris]
+  const N = {};   // m|d|lokasi|jenis|nopol -> [m, d, lokasi, area, jenis, offline, baris]
   v.slice(1).forEach(r => {
     const tg = tglKendala_(r[iT]), jenis = jenisPerangkat_(teks(r[iP])), lokAsli = teks(r[iL]).toUpperCase(), nopol = kunciNopol(r[iN]);
-    if (!tg || tg.m !== m || !jenis || !lokAsli || !nopol) return;
+    if (!tg || !jenis || !lokAsli || !nopol) return;
     const lok = lokasiDari(lokAsli), area = areaL[kunciLok(lok)] || (iA === undefined ? '' : areaNorm(r[iA]));
     const off = iS !== undefined && teks(r[iS]) ? /OFF/i.test(teks(r[iS])) : (angka(iD === undefined ? 0 : r[iD]) || 0) > 0;
-    const u = tg.d + '|' + kunciLok(lok) + '|' + jenis + '|' + nopol, o = N[u] || (N[u] = [tg.d, lok, area, jenis, false, null]);
-    if (off && !o[4]) { o[4] = true; o[5] = r; }   // satu kendaraan dihitung sekali per hari
+    const u = tg.m + '|' + tg.d + '|' + kunciLok(lok) + '|' + jenis + '|' + nopol, o = N[u] || (N[u] = [tg.m, tg.d, lok, area, jenis, false, null]);
+    if (off && !o[5]) { o[5] = true; o[6] = r; }   // satu kendaraan dihitung sekali per hari
   });
-  const H = {}, out = { hari: {}, off: [] };
+  const H = {}, semua = {}, bulan = m => semua[m] || (semua[m] = { hari: {}, off: [] });
   Object.keys(N).forEach(u => {
-    const [d, lok, area, jenis, off, r] = N[u], kk = d + '|' + kunciLok(lok) + '|' + jenis;
-    (H[kk] || (H[kk] = [d, lok, area, jenis, 0, 0]))[4]++;
+    const [m, d, lok, area, jenis, off, r] = N[u], kk = m + '|' + d + '|' + kunciLok(lok) + '|' + jenis;
+    (H[kk] || (H[kk] = [m, d, lok, area, jenis, 0, 0]))[5]++;
     if (!off) return;
-    H[kk][5]++;
-    out.off.push([d, lok, area, teks(r[iL]), teks(r[iP]), teks(r[iN]), iD === undefined ? '' : angka(r[iD]) || 0, iJ === undefined ? '' : teks(r[iJ]), iK === undefined ? '' : teks(r[iK])]);
+    H[kk][6]++;
+    bulan(m).off.push([d, lok, area, teks(r[iL]), teks(r[iP]), teks(r[iN]), iD === undefined ? '' : angka(r[iD]) || 0, iJ === undefined ? '' : teks(r[iJ]), iK === undefined ? '' : teks(r[iK])]);
   });
-  Object.keys(H).forEach(kk => { const x = H[kk]; (out.hari[x[0]] = out.hari[x[0]] || []).push(x.slice(1)); });
-  out.off.sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
-  simpanCache_(JSON.stringify(out), kunci, CFG.CACHE_DETIK);
-  return out;
+  Object.keys(H).forEach(kk => { const x = H[kk], o = bulan(x[0]).hari; (o[x[1]] = o[x[1]] || []).push(x.slice(2)); });
+  Object.keys(semua).forEach(m => semua[m].off.sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)));
+  return semua;
 }
 
 const teksTanggal_ = tg => CFG.TAHUN + '-' + ('0' + (tg.m + 1)).slice(-2) + '-' + ('0' + tg.d).slice(-2);
@@ -402,7 +418,8 @@ function lhLogo() {
 function panaskanLH_() {
   const t0 = Date.now(), now = new Date(), m = now.getFullYear() === CFG.TAHUN ? now.getMonth() : 11;
   tanggalAkhirLH_();
-  [m, m - 1].filter(x => x >= 0).forEach(x => { eventBulanLH_(x); kendalaBulan_(x); });
+  [m, m - 1].filter(x => x >= 0).forEach(x => eventBulanLH_(x));
   bacaInputLH_();
+  kendalaBulan_(m);   // semua bulan sekaligus
   Logger.log('Cache Laporan Harian dipanaskan: ' + (Date.now() - t0) + ' ms.');
 }
