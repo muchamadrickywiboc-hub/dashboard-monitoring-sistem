@@ -528,6 +528,32 @@ function dataWaktu_(m, d, s, h) {
 }
 
 /**
+ * Event per tanggal satu bulan (0-11) untuk filter Event di dashboard: bentuknya sama dengan hitung_(), tetapi kolom "bulan"
+ * di fakta berisi tanggal (1-31), jadi fakta = jumlah per tanggal x lokasi x parameter. Dipotong sesuai cakupan akun.
+ */
+function getDataEvent(token, m) {
+  const ses = sesi_(token);
+  return potongJson_(dataEventHarian_(m), ses, 'SE_' + versiData_() + '_' + (+m) + '_');
+}
+function dataEventHarian_(m) {
+  m = +m;
+  const kunci = 'EVH1_' + versiData_() + '_' + m, ada = ambilCache_(kunci);
+  if (ada) return ada;
+  const folder = DriveApp.getFolderById(CFG.FOLDER_ID), S = sumberBulan_(folder), src = S.perBulan[m] || [];
+  if (!S.atur || !src.length) return JSON.stringify(kosong(['Data ' + BULAN[m] + ' belum ada.']));
+  const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(S.atur), 'Pemetaan') || []);
+  const kat = {}; peta.urut.forEach(o => { kat[o.p] = o.k; });
+  const x = dataBulan_(folder, m, src, peta, {}, 0, true), EV = [];
+  x.EV.forEach(e => { if (kat[e[3]] && kat[e[3]] !== 'LAIN') EV.push([e[0], e[0], e[1], e[2], e[3], kat[e[3]], e[4]]); });
+  const hasil = hitung_(EV, [], peta, [], []);
+  hasil.harian = []; hasil.harianRtc = []; hasil.harianLok = [];   // tidak dipakai: cukup fakta per tanggal
+  hasil.bulan = m;
+  const json = JSON.stringify(hasil);
+  simpanCache_(json, kunci, CFG.CACHE_DETIK);
+  return json;
+}
+
+/**
  * File jam Januari-September: "Jam <nn> <Bulan> 2026.json.gz" di folder data (dibuat dari file mentah, lihat tools/agregasi_jam.py).
  * Isi: daftar area / lok / kasus / nama, lalu baris per tanggal (d) dan gabungan sebulan (b):
  *   e = "jam,area,lok,kasus,jumlah;..."  a = "jam,area,lok,nama,kasus,jumlah;..."

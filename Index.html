@@ -186,6 +186,14 @@ svg text{font-family:var(--f-ui)}
 .legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink-2)}
 .legend span{display:inline-flex;align-items:center;gap:7px}
 .legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+/* Perkembangan event per tanggal (filter Event) */
+.evth{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.evtx{font:inherit;font-size:22px;line-height:1;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:8px;width:34px;height:34px;cursor:pointer;flex:none}
+.evtx:hover{background:var(--surface-2)}
+.evtstat{display:flex;flex-wrap:wrap;gap:10px}
+.evtstat div{background:var(--surface-2);border-radius:10px;padding:8px 14px;min-width:150px}
+.evtstat small{display:block;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+.evtstat b{font-size:17px}
 .rank{display:flex;flex-direction:column;gap:4px}
 .rrow{appearance:none;border:0;background:transparent;font:inherit;color:inherit;text-align:left;cursor:pointer;display:grid;grid-template-columns:112px minmax(0,1fr) 64px;align-items:center;gap:12px;padding:8px;border-radius:10px}
 .rrow:hover{background:var(--surface-2)}
@@ -395,6 +403,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
       <div class="seg" role="tablist" aria-label="Periode grafik"><button type="button" role="tab" id="perBln" aria-selected="true">Bulan</button><button type="button" role="tab" id="perThn" aria-selected="false">Tahun</button></div>
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
       <label class="pick" for="selCmp">Dibanding <select id="selCmp"></select></label>
+      <label class="pick" for="selEvt">Event <select id="selEvt"><option value="">Pilih event…</option></select></label>
     </div>
     <div class="ctrlrow" id="waktuRow">
       <span class="flabel">Waktu:</span>
@@ -468,6 +477,8 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
 <div class="wrap" id="view-bulan">
   <div class="warnbar" id="bwarn" hidden></div>
   <!-- satu halaman: tren per kategori (Top Area & Top Lokasi dihapus atas permintaan pengguna) -->
+  <section class="panel wpanel" id="panelEvt" hidden><div class="ph evth"><div><h2 id="evtH">Perkembangan event per tanggal</h2><p id="evtSub"></p></div><button type="button" class="evtx" id="evtTutup" title="Tutup (kembali ke semua event)">&times;</button></div>
+    <div class="legend" id="evtLeg"></div><div class="chart" id="evtChart"></div></section>
   <section class="satuhal wpanel" id="satuHal">
   <div class="anahead"><h2 style="margin:0;font-size:18px;font-weight:700">Tren &amp; parameter per kategori</h2><span class="hint" id="trendSub"></span></div>
   <div class="sh-isi">
@@ -984,6 +995,8 @@ function renderRekap() {
 /* ================= TAMPILAN & MUAT DATA ================= */
 document.getElementById('selMon').onchange = e => { mon = +e.target.value; tgl = 0; ERRW = ''; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
+document.getElementById('selEvt').onchange = e => { EVT = e.target.value; render(); if (EVT) document.getElementById('panelEvt').scrollIntoView({behavior: 'smooth', block: 'nearest'}); };
+document.getElementById('evtTutup').onclick = () => { EVT = ''; render(); };
 function aturPeriode(p) { PERIODE = p; try { localStorage.setItem('dashb_periode', p); } catch (e) { /* tanpa penyimpanan */ }
   document.getElementById('perBln').setAttribute('aria-selected', p === 'bulan'); document.getElementById('perThn').setAttribute('aria-selected', p === 'tahun'); render(); }
 try { if (localStorage.getItem('dashb_periode') === 'tahun') { PERIODE = 'tahun'; document.getElementById('perBln').setAttribute('aria-selected', false); document.getElementById('perThn').setAttribute('aria-selected', true); } } catch (e) { /* bawaan Bulan */ }
@@ -1002,7 +1015,100 @@ function render() {
   document.getElementById('view-bulan').classList.toggle('memuat', mw && !siap);
   if (siap) { deriveWaktu(); KC = 'W'; KP = WIN.waktu.adaPrev ? 'P' : null; renderJam(); }
   else { KC = mon; KP = prevM(); renderHarian(); }
-  renderBulan(); renderDriver(); renderRekap(); renderNaik();
+  renderBulan(); renderDriver(); renderRekap(); renderNaik(); renderEvent();
+}
+
+/* ================= FILTER EVENT: PERKEMBANGAN SATU EVENT PER TANGGAL ================= */
+// EVD[bulan]: hasil getDataEvent (bentuk data utama; kolom "bulan" di fakta = tanggal), 'muat' saat dimuat, {gagal} bila gagal.
+let EVT = '', EVD = {};
+const escH = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+function muatEvent(m) {
+  if (m === null || EVD[m]) return;
+  EVD[m] = 'muat';
+  google.script.run.withSuccessHandler(j => { EVD[m] = siapkanWin(JSON.parse(j)); if (EVT) render(); })
+    .withFailureHandler(e => { if (perluLogin(e)) return; EVD[m] = {gagal: e && e.message ? e.message : String(e)}; if (EVT) render(); })
+    .getDataEvent(TOKEN, m);
+}
+function pilihanEvent() {
+  const el = document.getElementById('selEvt');
+  if (EVT && !P.some(p => p.key === EVT)) EVT = '';
+  el.innerHTML = '<option value="">Pilih event…</option>' + CATS.map(c => `<optgroup label="${c.name}">${catParams(c.key).map(p => `<option value="${escH(p.key)}">${escH(p.label)}</option>`).join('')}</optgroup>`).join('');
+  el.value = EVT;
+}
+// jumlah event terpilih per tanggal di bulan m (sesuai filter area / lokasi); null bila datanya belum ada
+function evtHarian(m) {
+  const w = EVD[m];
+  if (!w || !w.fakta) return null;
+  const n = nHari(m), out = Array(n).fill(0), A = RAW.areas;
+  w.fakta.forEach(([d, ai, wl, pi, v]) => {
+    const p = w.params[pi], li = w.lokMap[wl];
+    if (!p || p.key !== EVT || d < 1 || d > n || !cocokReg(A[ai]) || (selLok >= 0 && li !== selLok)) return;
+    out[d - 1] += v;
+  });
+  const hari = (w.bulanAda || []).filter(d => d >= 1 && d <= n);   // tanggal yang ada datanya (semua event)
+  return {v: out, ada: out.map((_, i) => hari.indexOf(i + 1) >= 0)};
+}
+function renderEvent() {
+  const panel = document.getElementById('panelEvt');
+  pilihanEvent();
+  panel.hidden = !EVT;
+  if (!EVT) return;
+  const p = P.find(x => x.key === EVT), c = CATS.find(x => x.key === p.kat) || CATS[0], pm = prevM();
+  muatEvent(mon); muatEvent(pm);
+  document.getElementById('evtH').textContent = `Perkembangan ${p.label} per tanggal — ${BLN[mon]} ${D.tahun}`;
+  const sub = document.getElementById('evtSub'), host = document.getElementById('evtChart'), leg = document.getElementById('evtLeg');
+  const w = EVD[mon];
+  if (w === 'muat') { sub.textContent = `${scope()} · memuat data per tanggal…`; host.innerHTML = '<div class="emptyamt">Memuat data per tanggal…</div>'; leg.innerHTML = ''; return; }
+  if (w && w.gagal) { sub.textContent = scope(); host.innerHTML = `<div class="emptyamt">Data per tanggal gagal dimuat: ${escH(w.gagal)}</div>`; leg.innerHTML = ''; return; }
+  const cur = evtHarian(mon), prv = pm === null ? null : evtHarian(pm);
+  if (!cur || !cur.ada.some(x => x)) { sub.textContent = scope(); host.innerHTML = `<div class="emptyamt">Data per tanggal ${BLN[mon]} belum ada.</div>`; leg.innerHTML = ''; return; }
+  // statistik: hanya tanggal yang ada datanya
+  const idx = cur.v.map((_, i) => i).filter(i => cur.ada[i]), vals = idx.map(i => cur.v[i]);
+  const tot = sum(vals), avg = tot / vals.length, iMax = idx.reduce((a, i) => cur.v[i] > cur.v[a] ? i : a, idx[0]);
+  const iAkhir = idx[idx.length - 1], iSebelum = idx.length > 1 ? idx[idx.length - 2] : null;
+  // tren garis lurus (regresi linear) per hari
+  const xm = sum(idx) / idx.length, ym = avg;
+  const kem = idx.reduce((s0, i) => s0 + (i - xm) * (i - xm), 0), b = kem ? idx.reduce((s0, i) => s0 + (i - xm) * (cur.v[i] - ym), 0) / kem : 0;
+  const trenY = i => ym + b * (i - xm);
+  const persen = avg ? b / avg * 100 : 0, arah = Math.abs(persen) < 0.5 ? 'cenderung stabil' : b > 0 ? 'cenderung naik' : 'cenderung turun';
+  const pIdx = prv ? prv.v.map((_, i) => i).filter(i => prv.ada[i]) : [], pavg = pIdx.length ? sum(pIdx.map(i => prv.v[i])) / pIdx.length : null;
+  const chg = (a, b0) => b0 === null || b0 === undefined ? '' : naikTxt(a, b0);
+  sub.innerHTML = `${scope()} · ${p.label} (${c.name}) · ${idx.length} tanggal ada data · batang = event per tanggal, garis merah = tren${prv ? `, garis putus-putus = ${BLN[pm]} (tanggal yang sama)` : ''}`;
+  leg.innerHTML = `<div class="evtstat">
+    <div><small>Tren harian</small><b class="${b > 0 && arah !== 'cenderung stabil' ? 'up' : arah === 'cenderung stabil' ? 'flat' : 'down'}">${arah}</b><br><span class="hint">${b >= 0 ? '+' : '\u2212'}${nf(Math.abs(b))} event/hari (${d1(Math.abs(persen))}%)</span></div>
+    <div><small>Tanggal ${iAkhir + 1} vs ${iSebelum === null ? '–' : iSebelum + 1}</small><b>${nf(cur.v[iAkhir])}</b><br>${iSebelum === null ? '' : chg(cur.v[iAkhir], cur.v[iSebelum])}</div>
+    <div><small>Rata-rata per hari</small><b>${nf(avg)}</b><br>${pavg === null ? '' : `vs ${nf(pavg)} di ${BLN[pm]} ${pctTxt(avg, pavg)}`}</div>
+    <div><small>Tertinggi</small><b>${iMax + 1} ${B3[mon]}</b><br>${nf(cur.v[iMax])}</div>
+    <div><small>Total ${B3[mon]}</small><b>${nf(tot)}</b></div></div>`;
+  host.innerHTML = '';
+  const W = 1180, H = 260, m = {l: 54, r: 12, t: 22, b: 26}, iw = W - m.l - m.r, ih = H - m.t - m.b, n = 31, slot = iw / n, bw = Math.min(24, slot * .7);
+  // skala dari bulan ini; bulan pembanding yang jauh lebih tinggi dipotong di atas grafik (nilainya tetap di tooltip)
+  const top0 = Math.max(1, ...cur.v, ...idx.map(trenY)), pTop = prv ? Math.max(0, ...prv.v) : 0, top = pTop <= top0 * 2 ? Math.max(top0, pTop) : top0;
+  const ymax = niceMax(top * 1.08), y = v => m.t + ih - Math.min(Math.max(0, v), ymax * 1.03) / ymax * ih, NT = nTicks(ymax), cx = i => m.l + slot * i + slot / 2;
+  const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${p.label} per tanggal ${BLN[mon]}`});
+  for (let i = 0; i <= NT; i++) { const v = ymax * i / NT; svgEl('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: i ? 'gl' : 'base'}, svg); const t = svgEl('text', {x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'tick'}, svg); t.textContent = ax(v); }
+  cur.v.forEach((v, i) => {
+    const pilih = tgl && i + 1 === tgl;
+    if (cur.ada[i] && v > 0) svgEl('path', {d: topRound(cx(i) - bw / 2, y(v), bw, y(0) - y(v), 3), style: `fill:${pilih || i === iAkhir ? c.dark : c.color};opacity:${tgl && !pilih ? .45 : 1}`}, svg);
+    const t = svgEl('text', {x: cx(i), y: H - 8, 'text-anchor': 'middle', class: 'tick', style: i === iMax || pilih ? 'font-weight:700;fill:#1b1f1d' : ''}, svg); t.textContent = i + 1;
+  });
+  // label angka di batang tertinggi & tanggal terakhir
+  [iMax, iAkhir].filter((v, k, a) => a.indexOf(v) === k).forEach(i => { const t = svgEl('text', {x: cx(i), y: y(cur.v[i]) - 6, 'text-anchor': 'middle', style: 'font-size:12px;font-weight:700;fill:#1b1f1d'}, svg); t.textContent = ax(cur.v[i]); });
+  if (prv) {
+    let d = '', pen = false;
+    prv.v.forEach((v, i) => { if (!prv.ada[i] || i >= cur.v.length) { pen = false; return; } d += (pen ? 'L' : 'M') + cx(i).toFixed(1) + ',' + y(v).toFixed(1); pen = true; });
+    const id = 'evclip' + Date.now(), cp = svgEl('clipPath', {id}, svgEl('defs', {}, svg)); svgEl('rect', {x: m.l, y: m.t - 4, width: iw, height: ih + 4}, cp);
+    svgEl('path', {d, 'clip-path': `url(#${id})`, style: 'fill:none;stroke:#1b1f1d;stroke-width:1.6;stroke-dasharray:5 4;pointer-events:none'}, svg);
+  }
+  if (idx.length > 1) svgEl('line', {x1: cx(idx[0]), x2: cx(iAkhir), y1: y(trenY(idx[0])), y2: y(trenY(iAkhir)), style: 'stroke:#c0392b;stroke-width:2.2;pointer-events:none'}, svg);
+  cur.v.forEach((v, i) => {
+    const hit = svgEl('rect', {x: m.l + slot * i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
+    const j = idx.indexOf(i), sebelum = j > 0 ? idx[j - 1] : null;
+    bindTip(hit, () => `<b>${i + 1} ${BLN[mon]} ${D.tahun}</b><br>${p.label}: ${cur.ada[i] ? '<b>' + nf(v) + '</b>' : 'tidak ada data'}` +
+      (cur.ada[i] && sebelum !== null ? `<br>vs ${sebelum + 1} ${B3[mon]} (${nf(cur.v[sebelum])}): ${chg(v, cur.v[sebelum])}` : '') +
+      (prv && prv.ada[i] ? `<br>${i + 1} ${BLN[pm]}: ${nf(prv.v[i])}` : ''));
+  });
+  host.appendChild(svg);
 }
 
 // Kenaikan Event: per event (parameter) periode ini vs pembanding, ikut filter area/lokasi/waktu,
