@@ -76,6 +76,12 @@ h1{margin:2px 0 4px;font-size:clamp(22px,3vw,34px);font-weight:700;letter-spacin
 .infobar>div:last-child{border-right:0}
 .infobar .k{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .infobar .v{font-size:15.5px;font-weight:600;margin-top:2px;overflow-wrap:anywhere}
+.namabox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:2px}.namabox .v{margin-top:0}
+.pensil{font:inherit;font-size:12px;font-weight:600;color:var(--forest);background:none;border:1px solid var(--grid);border-radius:999px;padding:3px 10px;cursor:pointer}
+.pensil::before{content:'\270E';margin-right:5px}.pensil:hover{background:var(--surface-2,#f3f5f3)}
+.hint2{font-size:12px;color:var(--muted)}
+.namaedit{display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%}.namaedit input{flex:1;min-width:140px;font:inherit;font-size:14px;padding:6px 10px;border:1px solid var(--grid);border-radius:8px}
+.namaedit .btn{padding:6px 12px}.namabox .msg{flex-basis:100%;color:var(--red,#c0392b);font-size:12px}
 .grid{display:grid;gap:20px}
 .g-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 22px 22px;min-width:0;display:flex;flex-direction:column;gap:14px}
@@ -243,7 +249,6 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
         <label class="pick" id="lBln" hidden>Bulan <select id="fBln"></select></label>
         <label class="pick" id="lArea">Area <select id="fArea"></select></label>
         <label class="pick" id="lLok">Lokasi <select id="fLok"></select></label>
-        <button class="hbtn" id="btnInput" type="button">Input Command Center</button>
         <button class="hbtn pdf" id="btnPdf" type="button" disabled>Export PDF</button>
       </div>
     </div>
@@ -261,25 +266,6 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
     </div>
     <div class="row-end"><button class="btn" type="button" id="expBatal">Batal</button></div>
   </div>
-</dialog>
-<dialog id="dlg">
-  <form class="dlg" id="fInput" method="dialog">
-    <h3>Input harian Command Center</h3>
-    <p class="sub2" id="inSub">Diisi oleh Control Room setiap hari. GPS &amp; Dashcam diambil otomatis dari Justifikasi Uptime.</p>
-    <div class="grid2">
-      <label class="fld">Tanggal<input type="date" id="inTgl" required></label>
-      <label class="fld">Lokasi<select id="inLok"></select></label>
-    </div>
-    <div class="grp"><b>Command Center</b><div class="grid2">
-      <label class="fld">Jumlah Command Center<input type="number" min="0" step="1" id="inRtcT" required></label>
-      <label class="fld">Hadir<input type="number" min="0" step="1" id="inRtcO" required></label></div><div class="off" id="offRtc"></div></div>
-    <div class="grid2">
-      <label class="fld">Nama Command Center<input id="inOp" maxlength="80"></label>
-      <label class="fld">Nama Manager Region S&amp;D<input id="inSv" maxlength="80"></label>
-    </div>
-    <div class="msg" id="inErr"></div>
-    <div class="row-end"><button class="btn" type="button" id="inBatal">Batal</button><button class="btn pri" type="submit" id="inSimpan">Simpan</button></div>
-  </form>
 </dialog>
 
 <script>
@@ -1135,6 +1121,12 @@ function kartu(judulK, warna, b, satuan, catatan, lbl) {
       <div class="n">${b.terpasang ? `${nf(b.online)} dari ${nf(b.terpasang)} ${satuan} ${lOn.toLowerCase()}` : catatan}</div></div>${donut(b, lOff.toLowerCase())}</div>
     <div class="splitlbl"><span><i style="background:var(--on)"></i>${lOn} ${nf(b.online)}</span><span><i style="background:var(--off)"></i>${lOff} ${nf(off)}</span></div></div>`;
 }
+// kolom nama di bawah kartu: tombol pensil untuk mengisi / mengganti (hanya bila satu lokasi dipilih)
+function kolomNama(judulK, f, L) {
+  const bisa = !!lokAktif();
+  return `<div><div class="k">${judulK}</div><div class="namabox"><span class="v">${esc(L[f] || '–')}</span>` +
+    (bisa ? `<button type="button" class="pensil" data-ubah="${f}" data-html2canvas-ignore title="${L[f] ? 'Ganti' : 'Isi'} nama">${L[f] ? 'Ganti' : 'Isi nama'}</button>` : `<span class="hint2" data-html2canvas-ignore>Pilih lokasi untuk mengisi nama</span>`) + '</div></div>';
+}
 function gambar(L) {
   const bln = L.mode === 'bulanan', P = L.perangkat, lbl = L.baris === 'Area' ? L.lokasi : judul(L.lokasi);
   const per = bln ? blnPanjang(L.periode) : tglPanjang(L.periode);
@@ -1143,7 +1135,6 @@ function gambar(L) {
   const cat = (L.gagal || []).slice();   // sumber yang gagal dibaca; bagian lain tetap ditampilkan
   if (!L.adaEvent) cat.push(`Belum ada data event untuk ${per}${L.sumber ? '' : ' (file tarikan bulan ini belum ada di folder data)'}.`);
   if (!P.adaJustifikasi) cat.push(`Belum ada data Justifikasi Uptime untuk ${per}.`);
-  if (!bln && P.lokasiInput < P.lokasiCakupan) cat.push(`Data Command Center baru diisi ${P.lokasiInput} dari ${P.lokasiCakupan} lokasi. Klik "Input Command Center".`);
   let h = cat.length ? `<div class="warnbar">${cat.map(c => `<div>${esc(c)}</div>`).join('')}</div>` : '';
   h += `<section class="kpis">
     ${kartu('GPS', 'var(--gps)', P.gps, satuan, 'Belum ada data Justifikasi Uptime')}
@@ -1154,8 +1145,7 @@ function gambar(L) {
       <div class="n">Nopol offline tercatat: <b style="color:var(--ink)">${nf(L.offlineTotal)}</b></div></div>
   </section>`;
   if (!bln) h += `<section class="infobar"><div><div class="k">Tanggal</div><div class="v">${esc(per)}</div></div>
-    <div><div class="k">Command Center</div><div class="v">${esc(L.operator || '–')}</div></div>
-    <div><div class="k">Manager Region S&amp;D</div><div class="v">${esc(L.supervisor || '–')}</div></div></section>`;
+    ${kolomNama('Command Center', 'operator', L)}${kolomNama('Manager Region S&amp;D', 'supervisor', L)}</section>`;
   if (bln) h += `<section class="grid g-2">
     <div class="panel"><div class="ph"><h2>Uptime harian</h2><p>Persentase Nopol online per tanggal</p></div>
       <div class="legend"><span><i style="background:var(--gps)"></i>GPS</span><span><i style="background:var(--cam)"></i>Dashcam (ADAS)</span></div>${grafikGaris(L.perHari)}</div>
@@ -1375,44 +1365,24 @@ $('btnPdf').onclick = async () => {
   finally { if (box) box.remove(); b.disabled = !LAP; b.textContent = 'Export PDF'; }
 };
 
-/* ================= INPUT HARIAN ================= */
-const IN = ['RtcT', 'RtcO'], KEY = {RtcT: 'rtcT', RtcO: 'rtcO'};
-function hitungOff() {
-  const t = +$('inRtcT').value, o = +$('inRtcO').value, ada = $('inRtcT').value !== '' && $('inRtcO').value !== '';
-  $('offRtc').textContent = !ada ? '' : o > t ? 'Hadir melebihi jumlah Command Center.' : `Tidak hadir ${nf(t - o)} · Hadir ${t ? Math.round(o / t * 100) : 0}%`;
-}
-IN.forEach(k => { $('in' + k).oninput = hitungOff; });
-function isiForm(o, dariSebelumnya) {
-  IN.forEach(k => { $('in' + k).value = o ? o[KEY[k]] : ''; });
-  $('inOp').value = o ? o.operator || '' : ''; $('inSv').value = o ? o.supervisor || '' : '';
-  $('inSub').textContent = dariSebelumnya ? `Belum ada data tanggal ini. Diisi dengan data ${tglPanjang(o.tanggal)}; periksa lalu simpan.` : o ? 'Data tanggal ini sudah ada; menyimpan akan menimpanya.' : 'Belum ada data. GPS & Dashcam diambil otomatis dari Justifikasi Uptime.';
-  hitungOff();
-}
-function muatForm() {
-  $('inErr').textContent = ''; isiForm(null); $('inSub').textContent = 'Memuat…';
-  run('lhAmbilInput', TOKEN, $('inTgl').value, $('inLok').value).then(j => { const r = JSON.parse(j); isiForm(r.ada || r.sebelumnya, !r.ada && !!r.sebelumnya); })
-    .catch(e => { if (!cekLogin(e)) $('inErr').textContent = pesan(e); });
-}
-$('btnInput').onclick = () => {
-  if (!INFO) return;
-  const a = INFO.akun, L = a.peran === 'LOKASI' ? [{n: a.lok}] : lokasiCakupan();
-  $('inLok').innerHTML = L.map(o => `<option value="${esc(o.n)}">${esc(judul(o.n))}</option>`).join('');
-  $('inLok').disabled = a.peran === 'LOKASI';
-  if ($('fLok').value) $('inLok').value = $('fLok').value;
-  $('inTgl').value = $('fTgl').value;
-  $('dlg').showModal(); muatForm();
-};
-$('inLok').onchange = muatForm; $('inTgl').onchange = muatForm;
-$('inBatal').onclick = () => $('dlg').close();
-$('fInput').onsubmit = e => {
-  e.preventDefault();
-  const o = {tanggal: $('inTgl').value, lokasi: $('inLok').value, operator: $('inOp').value, supervisor: $('inSv').value};
-  for (const k of IN) { const v = $('in' + k).value; if (v === '') { $('inErr').textContent = 'Lengkapi jumlah Command Center (isi 0 bila tidak ada).'; return; } o[KEY[k]] = +v; }
-  if (o.rtcO > o.rtcT) { $('inErr').textContent = 'Jumlah hadir tidak boleh lebih dari jumlah Command Center.'; return; }
-  $('inSimpan').disabled = true; $('inErr').textContent = '';
-  run('lhSimpanInput', TOKEN, o).then(() => { $('dlg').close(); if (o.tanggal !== $('fTgl').value) $('fTgl').value = o.tanggal; tampil(); })
-    .catch(e => { if (!cekLogin(e)) $('inErr').textContent = pesan(e); }).finally(() => { $('inSimpan').disabled = false; });
-};
+/* ================= NAMA COMMAND CENTER & MANAGER REGION S&D (diisi langsung di kolom) ================= */
+// lokasi yang sedang dilihat: pilihan Lokasi, atau lokasi akun Control Room
+const lokAktif = () => $('fLok').value || (INFO && INFO.akun.peran === 'LOKASI' ? INFO.akun.lok : '');
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-ubah]');
+  if (!b) return;
+  const kotak = b.closest('.namabox'), f = b.dataset.ubah, lama = LAP ? (LAP[f] || '') : '';
+  kotak.innerHTML = `<form class="namaedit"><input maxlength="80" value="${esc(lama)}" placeholder="Ketik nama" aria-label="Nama"><button class="btn pri" type="submit">Simpan</button><button class="btn" type="button" data-batal>Batal</button></form><div class="msg"></div>`;
+  const fm = kotak.querySelector('form'), inp = fm.querySelector('input'), msg = kotak.querySelector('.msg');
+  inp.focus(); inp.select();
+  fm.querySelector('[data-batal]').onclick = () => gambar(LAP);
+  fm.onsubmit = ev => {
+    ev.preventDefault();
+    const tombol = fm.querySelector('[type=submit]'); tombol.disabled = true; msg.textContent = '';
+    run('lhSimpanNama', TOKEN, {tanggal: $('fTgl').value, lokasi: lokAktif(), kolom: f, nama: inp.value})
+      .then(() => tampil()).catch(err => { tombol.disabled = false; if (!cekLogin(err)) msg.textContent = pesan(err); });
+  };
+});
 
 mulai();
 </script>

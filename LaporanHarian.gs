@@ -182,9 +182,9 @@ function lhLaporan(token, periode, area, lokasi) {
   const offline = offSemua.slice(0, 500)
     .map(r => ({ tanggal: teksTanggal_({ m: m, d: r[0] }), lokasi: r[3], perangkat: r[4], nopol: r[5], durasi: r[6], justifikasi: r[7], keterangan: r[8] }));
 
-  // RTC & penanda tangan dari form input
+  // Command Center (jumlah & hadir) dan nama Command Center / Manager Region S&D dari sheet input
   const awal = teksTanggal_({ m: m, d: hari || 1 }), akhir = teksTanggal_({ m: m, d: hari || 31 });
-  const inp = coba('Input RTC & penanda tangan', () => bacaInputLH_(), []).filter(r => r.tanggal >= awal && r.tanggal <= akhir && masuk(r.lokasi, r.area));
+  const inp = coba('Input Command Center', () => bacaInputLH_(), []).filter(r => r.tanggal >= awal && r.tanggal <= akhir && masuk(r.lokasi, r.area));
   const jml = a => inp.reduce((s, r) => s + (r[a] || 0), 0);
   const satu = !bulanan && c.lok && inp.length === 1 ? inp[0] : null;   // nama operator/supervisor hanya untuk laporan harian satu lokasi
   const nHari = bulanan ? new Date(CFG.TAHUN, m + 1, 0).getDate() : 1;
@@ -354,6 +354,27 @@ function lhSimpanInput(token, o) {
     const sh = sheetInputLH_(true), v = sh.getDataRange().getValues();
     const i = v.findIndex((r, j) => j > 0 && tanggalTeks(r[0]) && teksTanggal_(tanggalTeks(r[0])) === t && kunciLok(r[2]) === kunciLok(L.n));
     if (i > 0) sh.getRange(i + 1, 1, 1, baru.length).setValues([baru]); else sh.appendRow(baru);
+    CacheService.getScriptCache().remove('LHIN');
+  } finally { kunci.releaseLock(); }
+  return JSON.stringify({ ok: true, lokasi: L.n, tanggal: t });
+}
+
+/** Mengisi / mengganti satu nama (o.kolom: 'operator' = Command Center, 'supervisor' = Manager Region S&D) untuk satu tanggal & lokasi,
+ *  langsung dari kolom di halaman. Baris baru dibuat bila tanggal itu belum ada; kolom lain tidak diubah. */
+function lhSimpanNama(token, o) {
+  const ses = sesiLH_(token), tg = tanggalTeks(o && o.tanggal), kol = { operator: 10, supervisor: 11 }[o && o.kolom];
+  if (!tg) throw new Error('Tanggal tidak valid.');
+  if (!kol) throw new Error('Kolom tidak dikenal.');
+  const lok = ses.peran === 'LOKASI' ? ses.lok : teks(o.lokasi).toUpperCase();
+  const L = lokasiLH_(ses).filter(x => kunciLok(x.n) === kunciLok(lok))[0];
+  if (!L) throw new Error('Pilih lokasi terlebih dahulu (lokasi ' + (lok || '-') + ' tidak ada dalam cakupan akun ini).');
+  const t = teksTanggal_(tg), nama = teks(o.nama).slice(0, 80), oleh = ses.u || ses.nama;
+  const kunci = LockService.getScriptLock(); kunci.waitLock(10000);
+  try {
+    const sh = sheetInputLH_(true), v = sh.getDataRange().getValues();
+    const i = v.findIndex((r, j) => j > 0 && tanggalTeks(r[0]) && teksTanggal_(tanggalTeks(r[0])) === t && kunciLok(r[2]) === kunciLok(L.n));
+    if (i > 0) { sh.getRange(i + 1, kol).setValue(nama); sh.getRange(i + 1, 12, 1, 2).setValues([[oleh, new Date()]]); }
+    else { const baru = [t, L.a, L.n, '', '', '', '', '', '', '', '', oleh, new Date()]; baru[kol - 1] = nama; sh.appendRow(baru); }
     CacheService.getScriptCache().remove('LHIN');
   } finally { kunci.releaseLock(); }
   return JSON.stringify({ ok: true, lokasi: L.n, tanggal: t });
