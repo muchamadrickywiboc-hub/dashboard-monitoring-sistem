@@ -21,6 +21,12 @@ const LH = {
     'Operator', 'Fleet Supervisor', 'Diinput oleh', 'Waktu input'],
   CACHE_DETIK: 900,   // 15 menit, mengikuti pemicu prosesTarikan
   KENDALA_ID: '1nHNYOFXLh7JNYNWz7CI5-83SI_cd7jZ9THqLgcoW6s4',   // spreadsheet "Kegagalan & Penormalan Operasi" (sheet Justifikasi Uptime & Master Lokasi)
+  // absensi (kartu Hadir / Tidak Hadir): akun Lokasi dari Control Room, akun Area dari Command Center
+  ABSEN: {
+    cr: { id: '1M-dzcZr2NmGBhj7SnNb3THvFEwi5-iSJuSOa5tpayQA', sheet: 'T_KEHADIRAN_HARIAN_CONTROL_ROOM' },
+    cc: { id: '14P1rvBJ3B3VmZoR2iC5Qi-FZ_ksFEi8vEeGdCKT2ZKI', sheet: 'T_KEHADIRAN_HARIAN_COMMAND_CENTER' },
+  },
+  ABSEN_DETIK: 600,
 };
 /** 14 jenis event laporan: judul tabel, judul grafik, teks Case yang masuk, dan nama parameter Pemetaan (cadangan). */
 const LH_PANEL = [
@@ -186,6 +192,11 @@ function lhLaporan(token, periode, area, lokasi) {
   const awal = teksTanggal_({ m: m, d: hari || 1 }), akhir = teksTanggal_({ m: m, d: hari || 31 });
   const inp = coba('Input Command Center', () => bacaInputLH_(), []).filter(r => r.tanggal >= awal && r.tanggal <= akhir && masuk(r.lokasi, r.area));
   const jml = a => inp.reduce((s, r) => s + (r[a] || 0), 0);
+  // kehadiran dari spreadsheet absensi: Control Room per lokasi, Command Center per area (cluster_flight)
+  const jenisAbsen = c.lok ? 'cr' : 'cc';
+  const absen = coba('Absensi ' + (c.lok ? 'Control Room' : 'Command Center'), () => kehadiranLH_(jenisAbsen), null);
+  const rtc = absen ? hitungHadir_(absen.filter(r => r.tanggal >= awal && r.tanggal <= akhir &&
+    (c.lok ? kunciLok(r.lokasi) === kunciLok(c.lok) : !c.area || r.area === c.area))) : { terpasang: jml('rtcT'), online: jml('rtcO') };
   // nama Command Center / Manager Region S&D (laporan harian): akun Area dari baris "COMMAND CENTER <AREA>", selain itu bila satu lokasi
   const cc = ses.peran === 'AREA' ? inp.filter(r => kunciLok(r.lokasi) === kunciLok(lokasiCC_(c.area)))[0] || null : null;
   const satu = bulanan ? null : cc || (c.lok && inp.length === 1 ? inp[0] : null);
@@ -219,7 +230,7 @@ function lhLaporan(token, periode, area, lokasi) {
     lokasi: c.lok || (c.area ? 'Command Center ' + c.area : 'Semua Area'), baris: perArea ? 'Area' : 'Lokasi', sumber: E.sumber,
     panel: LH_PANEL.map((pn, i) => ({ w: i, tabel: pn.tabel, grafik: pn.grafik, rows: baris.map((n, j) => ({ n: n, v: V[i][j] || 0 })), total: V[i].reduce((s, v) => s + (v || 0), 0) })).filter((_, i) => tampil[i]),
     perangkat: {
-      gps: bagi(up.gps), dashcam: bagi(up.cctv), rtc: { terpasang: jml('rtcT'), online: jml('rtcO') },
+      gps: bagi(up.gps), dashcam: bagi(up.cctv), rtc: rtc,
       adaJustifikasi: adaJust, lokasiInput: inp.filter(r => r !== cc).length, lokasiCakupan: perArea ? info.length : baris.length,
     },
     perBaris: baris.map((n, i) => ({ n: n, gps: bagi((upBaris[i] || kosong()).gps), dashcam: bagi((upBaris[i] || kosong()).cctv), event: V.reduce((s, x) => s + (x[i] || 0), 0) })),
@@ -363,6 +374,40 @@ function lhSimpanInput(token, o) {
 
 /** Mengisi / mengganti satu nama (o.kolom: 'operator' = Command Center, 'supervisor' = Manager Region S&D) untuk satu tanggal & lokasi,
  *  langsung dari kolom di halaman. Baris baru dibuat bila tanggal itu belum ada; kolom lain tidak diubah. */
+/** Baris absensi harian {tanggal yyyy-mm-dd, area, lokasi, nip, nama, status} dari sheet T_KEHADIRAN_HARIAN_*; kolom dicari dari judulnya. */
+function kehadiranLH_(jenis) {
+  const cfg = LH.ABSEN[jenis], kunci = 'LHABS_' + jenis, cache = CacheService.getScriptCache(), ada = cache.get(kunci);
+  if (ada) return JSON.parse(ada);
+  const sh = SpreadsheetApp.openById(cfg.id).getSheetByName(cfg.sheet);
+  if (!sh) throw new Error('sheet ' + cfg.sheet + ' tidak ditemukan');
+  const v = sh.getDataRange().getValues(), hdr = (v[0] || []).map(h => teks(h).toLowerCase()), k = n => hdr.indexOf(n);
+  const iT = k('tanggal'), iA = k('cluster_flight'), iL = k('lokasi'), iN = k('nip'), iNm = k('nama'), iS = k('status_kehadiran');
+  if (iT < 0 || iS < 0) throw new Error('kolom tanggal / status_kehadiran tidak ditemukan di ' + cfg.sheet);
+  const tz = Session.getScriptTimeZone();
+  const tgl = x => {
+    if (x instanceof Date) return Utilities.formatDate(x, tz, 'yyyy-MM-dd');
+    const s = teks(x), a = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/), b = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);   // yyyy-mm-dd atau mm/dd/yyyy
+    const d2 = n => ('0' + n).slice(-2);
+    return a ? a[1] + '-' + d2(a[2]) + '-' + d2(a[3]) : b ? b[3] + '-' + d2(b[1]) + '-' + d2(b[2]) : '';
+  };
+  const out = v.slice(1).map(r => ({
+    tanggal: tgl(r[iT]), area: iA >= 0 ? areaNorm(r[iA]) : '', lokasi: iL >= 0 ? teks(r[iL]) : '',
+    nip: iN >= 0 ? teks(r[iN]) : '', nama: iNm >= 0 ? teks(r[iNm]) : '', status: teks(r[iS]).toUpperCase(),
+  })).filter(r => r.tanggal && r.status);
+  try { cache.put(kunci, JSON.stringify(out), LH.ABSEN_DETIK); } catch (e) { /* terlalu besar: tanpa cache */ }
+  return out;
+}
+/** Jumlah personel (tanpa status OFF) dan yang hadir (HADIR / TELAT); satu orang dihitung sekali per tanggal. */
+function hitungHadir_(rows) {
+  const per = {};
+  rows.forEach(r => {
+    const id = r.tanggal + '|' + (r.nip || r.nama) + '|' + r.lokasi, hadir = /^(HADIR|TELAT)/.test(r.status);
+    if (/^(OFF|LIBUR)/.test(r.status)) { if (!(id in per)) per[id] = null; return; }
+    per[id] = per[id] || hadir;
+  });
+  const v = Object.keys(per).map(k => per[k]).filter(x => x !== null);
+  return { terpasang: v.length, online: v.filter(Boolean).length };
+}
 const lokasiCC_ = area => 'COMMAND CENTER ' + areaNorm(area);   // baris nama untuk akun Area (bukan lokasi sungguhan)
 function lhSimpanNama(token, o) {
   const ses = sesiLH_(token), tg = tanggalTeks(o && o.tanggal), kol = { operator: 10, supervisor: 11 }[o && o.kolom];

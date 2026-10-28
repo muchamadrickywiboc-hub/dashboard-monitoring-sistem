@@ -1064,7 +1064,7 @@ function mulai() {
     $('lArea').hidden = a.peran !== 'PUSAT'; $('lLok').hidden = a.peran !== 'PUSAT';   // akun Area (Command Center) melapor untuk seluruh area
     $('fArea').innerHTML = '<option value="">Semua Area</option>' + INFO.areas.map(x => `<option value="${x}">${esc(judul(x))}</option>`).join('');
     isiLokasi();
-    const akhir = INFO.tanggalAkhir || new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    const akhir = new Date(Date.now() + 7 * 36e5 - 864e5).toISOString().slice(0, 10);   // pelaporan H+1: bawaan tanggal kemarin (WIB)
     if (!$('fTgl').value) $('fTgl').value = akhir;
     const mAkhir = Math.max(+akhir.slice(5, 7), 1);
     $('fBln').innerHTML = Array.from({length: mAkhir}, (_, i) => { const v = INFO.tahun + '-' + ('0' + (i + 1)).slice(-2); return `<option value="${v}">${BLN[i]} ${INFO.tahun}</option>`; }).reverse().join('');
@@ -1141,7 +1141,7 @@ function gambar(L) {
   h += `<section class="kpis">
     ${kartu('GPS', 'var(--gps)', P.gps, satuan, 'Belum ada data Justifikasi Uptime')}
     ${kartu('Dashcam (ADAS)', 'var(--cam)', P.dashcam, satuan, 'Belum ada data Justifikasi Uptime')}
-    ${kartu(LBL().cc, 'var(--forest)', P.rtc, bln ? 'orang-hari' : 'orang', 'Belum diinput', ['Hadir', 'Tidak Hadir'])}
+    ${kartu(LBL().cc, 'var(--forest)', P.rtc, bln ? 'orang-hari' : 'orang', 'Belum ada data absensi', ['Hadir', 'Tidak Hadir'])}
     <div class="kpi"><div class="l"><i style="background:var(--red)"></i>Total event</div><div class="v">${nf(totalEv)}</div>
       <div class="n">${L.panel.filter(p => p.total).length} dari ${L.panel.length} jenis event terjadi${bln ? ' bulan ini' : ''}</div>
       <div class="n">Nopol offline tercatat: <b style="color:var(--ink)">${nf(L.offlineTotal)}</b></div></div>
