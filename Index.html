@@ -343,6 +343,12 @@ body.tv .tvnav{display:flex}
 .tvnav button{font:inherit;font-size:16px;font-weight:600;padding:8px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
 .tvnav button[aria-pressed=true]{background:#fff;color:var(--forest);border-color:#fff}
 .tvnav .tvkeluar{margin-left:auto;font-size:14px;font-weight:500;background:none}
+.tvmode{display:inline-flex;padding:3px;border-radius:999px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.4)}
+.tvnav .tvmode button{border:0;background:none;font-size:17px;padding:8px 22px}
+.tvnav .tvmode button[aria-pressed=true]{background:#fff;color:var(--forest)}
+.tvsub{display:inline-flex;gap:8px;padding-left:14px;margin-left:6px;border-left:1px solid rgba(255,255,255,.4)}
+.tvnav .tvsub button{font-size:15px;padding:6px 16px}
+body.tv[data-tvv=tren] .tvsub{display:none}
 body.tv[data-tvv=lokasi]{overflow-y:auto}
 body.tv #bdrv{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 body.tv .drv{padding:10px 12px 10px;gap:6px}
@@ -373,7 +379,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><a class="btnlink" id="btnHarian" target="_top" href="#" hidden title="Laporan Harian Operasional GPS & Dashcam">Laporan Harian</a><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnTv" class="btntv" title="Tampilan satu layar untuk TV besar">Mode TV</button><button type="button" id="btnKeluar">Keluar</button><span class="tvjam" id="tvJam"></span></div></div>
     </div>
-    <nav class="tvnav" id="tvNav" aria-label="Tampilan Mode TV"><button type="button" data-v="tren">Tren &amp; parameter</button><button type="button" data-v="area">Rekap per area</button><button type="button" data-v="lokasi">Rekap per lokasi</button><button type="button" data-v="driver">Top Pelanggaran Driver</button><button type="button" class="tvkeluar" id="tvKeluar">Keluar Mode TV</button></nav>
+    <nav class="tvnav" id="tvNav" aria-label="Tampilan Mode TV"><span class="tvmode"><button type="button" data-m="utama" title="Tren &amp; parameter per kategori (tombol 1)">Mode Utama</button><button type="button" data-m="detail" title="Rekap per area, Rekap per lokasi, Top Pelanggaran Driver (tombol 2)">Mode Detail</button></span><span class="tvsub"><button type="button" data-v="area">Rekap per area</button><button type="button" data-v="lokasi">Rekap per lokasi</button><button type="button" data-v="driver">Top Pelanggaran Driver</button></span><button type="button" class="tvkeluar" id="tvKeluar">Keluar Mode TV</button></nav>
     <div class="ctrlrow" id="bulanRow">
       <div class="seg" role="tablist" aria-label="Periode grafik"><button type="button" role="tab" id="perBln" aria-selected="true">Bulan</button><button type="button" role="tab" id="perThn" aria-selected="false">Tahun</button></div>
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
@@ -1408,9 +1414,10 @@ function muat(diam) {
    Tampilan awal: Tren & parameter per kategori memenuhi layar. Tombol di atas (atau panah kiri/kanan) membuka
    Rekap per area, Rekap per lokasi, dan Top Pelanggaran Driver. Tiap tampilan punya lebar tetap (TV_LEBAR) lalu
    diperkecil/diperbesar dengan zoom agar muat di layar; Rekap per lokasi (semua lokasi) hanya dipaskan lebarnya dan bisa digulir.
+   Dua mode: Utama (Tren & parameter) dan Detail (Rekap per area / lokasi / Top Driver); tombol 1 / 2, panah ←/→ di Mode Detail.
    Dipilih lewat tombol "Mode TV" (diingat di perangkat ini); keluar dengan tombol Keluar Mode TV atau Esc. */
 const TV_VIEW = ['tren', 'area', 'lokasi', 'driver'], TV_LEBAR = {tren: 1900, area: 1400, lokasi: 1900, driver: 1800}, TV_SIMPAN = 'dashb_tv';
-let TV = false, TVV = 'tren';
+let TV = false, TVV = 'tren', TVD = 'area';   // TVD = tampilan terakhir di Mode Detail
 try { TV = localStorage.getItem(TV_SIMPAN) === '1'; } catch (e) { /* tanpa penyimpanan */ }
 function tvPas() {
   const b = document.body, on = TV && AKUN && AKUN.peran === 'PUSAT' && !b.classList.contains('nologin');
@@ -1418,6 +1425,7 @@ function tvPas() {
   if (!on) { b.style.zoom = ''; b.style.marginLeft = ''; b.style.width = ''; delete b.dataset.tvv; return; }
   b.dataset.tvv = TVV;
   document.querySelectorAll('#tvNav [data-v]').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === TVV));
+  document.querySelectorAll('#tvNav [data-m]').forEach(x => x.setAttribute('aria-pressed', (x.dataset.m === 'utama') === (TVV === 'tren')));
   const lebar = TV_LEBAR[TVV], gulir = TVV === 'lokasi';
   b.style.width = lebar + 'px'; b.style.zoom = 1; b.style.marginLeft = '0px';
   const isi = document.getElementById('view-bulan');
@@ -1433,21 +1441,29 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => tvPa
 if (window.ResizeObserver) new ResizeObserver(() => { if (!TV) return; clearTimeout(tvPas.r); tvPas.r = setTimeout(() => { if (TVV !== 'lokasi' && Math.abs(document.getElementById('view-bulan').getBoundingClientRect().bottom - innerHeight) > 2) tvPas(); }, 200); }).observe(document.body);
 function aturTv(on) {
   TV = on; try { localStorage.setItem(TV_SIMPAN, on ? '1' : '0'); } catch (e) { /* tanpa penyimpanan */ }
-  if (on) { mon = Math.max(0, LAST); tgl = 0; shift = 0; jam = -1; sel = 'ALL'; selLok = -1; TVV = 'tren'; }   // TV: bulan terakhir, semua area, mulai dari tren
+  if (on) { mon = Math.max(0, LAST); tgl = 0; shift = 0; jam = -1; sel = 'ALL'; selLok = -1; TVV = 'tren'; TVD = 'area'; }   // TV: bulan terakhir, semua area, mulai dari tren
   showAllLok = on;   // Rekap per lokasi di TV: semua lokasi
   if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
   if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
   if (D) render(); else tvPas();
 }
 document.getElementById('btnTv').onclick = () => aturTv(true);
-function tvLihat(v) { TVV = v; scrollTo(0, 0); tvPas(); }
-document.getElementById('tvNav').onclick = e => { const x = e.target.closest('[data-v]'); if (x) tvLihat(x.dataset.v); };
+// dua mode: Utama (Tren & parameter per kategori) dan Detail (Rekap per area / Rekap per lokasi / Top Pelanggaran Driver)
+function tvLihat(v) { TVV = v; if (v !== 'tren') TVD = v; scrollTo(0, 0); tvPas(); }
+document.getElementById('tvNav').onclick = e => {
+  const m = e.target.closest('[data-m]'), x = e.target.closest('[data-v]');
+  if (m) tvLihat(m.dataset.m === 'utama' ? 'tren' : TVD); else if (x) tvLihat(x.dataset.v);
+};
 document.getElementById('tvKeluar').onclick = () => aturTv(false);
 document.addEventListener('keydown', e => {
   if (!TV) return;
   if (e.key === 'Escape') aturTv(false);
-  else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const i = TV_VIEW.indexOf(TVV) + (e.key === 'ArrowRight' ? 1 : TV_VIEW.length - 1); tvLihat(TV_VIEW[i % TV_VIEW.length]); }
-  else if (/^[1-4]$/.test(e.key)) tvLihat(TV_VIEW[+e.key - 1]);
+  else if (e.key === '1') tvLihat('tren');
+  else if (e.key === '2') tvLihat(TVD);
+  else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {   // pindah tampilan di Mode Detail (dari Mode Utama: masuk Mode Detail)
+    const DV = TV_VIEW.slice(1), i = DV.indexOf(TVV);
+    tvLihat(i < 0 ? TVD : DV[(i + (e.key === 'ArrowRight' ? 1 : DV.length - 1)) % DV.length]);
+  }
 });
 addEventListener('resize', () => { clearTimeout(tvPas.t); tvPas.t = setTimeout(tvPas, 150); });
 setInterval(() => { document.getElementById('tvJam').textContent = new Date().toLocaleString('id-ID', {weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'}); }, 1000);
