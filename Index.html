@@ -126,6 +126,12 @@ body:not(.peran-lokasi):not(.peran-area) #btnHarian{display:none!important}
 .peran-area .pick[for="selShift"],.peran-lokasi .pick[for="selShift"]{display:none!important}
 .chip.tetap{cursor:default}
 .pick select:disabled{opacity:.55;cursor:not-allowed}
+/* periode: kalender Tanggal (pilih tanggal = data tanggal itu; "Sebulan penuh" = seluruh bulan tanggal tersebut) menggantikan Bulan/Tahun + Bulan */
+#bulanRow .seg,#bulanRow .pick[for=selMon]{display:none!important}
+.pick input[type=date]{font:600 13.5px var(--f-ui);color:var(--ink);background:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer;min-width:150px}
+.sebulan{font:600 12.5px var(--f-ui);color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.55);border-radius:999px;padding:6px 12px;cursor:pointer}
+.sebulan:hover{background:rgba(255,255,255,.25)}
+.tglket{font-size:12.5px;color:rgba(255,255,255,.9)}
 #view-bulan.memuat .wpanel{opacity:.45;transition:opacity .2s}
 .chip{appearance:none;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;font:500 13.5px var(--f-ui);padding:7px 14px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
 .chip:hover{background:rgba(255,255,255,.24)}
@@ -405,6 +411,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
     <div class="ctrlrow" id="bulanRow">
       <div class="seg" role="tablist" aria-label="Periode grafik"><button type="button" role="tab" id="perBln" aria-selected="true">Bulan</button><button type="button" role="tab" id="perThn" aria-selected="false">Tahun</button></div>
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
+      <label class="pick" for="inTgl">Tanggal <input type="date" id="inTgl"></label><button type="button" class="sebulan" id="btnSebulan" hidden>Sebulan penuh</button><span class="tglket" id="tglKet"></span>
       <label class="pick" for="selCmp">Dibanding <select id="selCmp"></select></label>
       <label class="pick" for="selEvt">Event <select id="selEvt"><option value="">Pilih event…</option></select></label>
     </div>
@@ -732,6 +739,7 @@ function kontrol() {
   document.getElementById('waktuInfo').textContent = !jOk ? ((RAW.jamAda || []).length ? `Filter waktu hanya tersedia untuk bulan yang punya data jam kejadian: ${RAW.jamAda.map(m => BLN[m]).join(', ')}.` : 'Filter waktu belum aktif karena data jam kejadian belum diproses.')
     : ERRW ? ERRW : modeWaktu() && !(WIN && WKEY === [mon, tgl, shift, jam].join('_')) ? 'Memuat data…' : '';
   document.getElementById('tSrc').textContent = BLN[ADA[0]] + '–' + BLN[LAST] + ' ' + D.tahun;
+  kontrolTanggal();
 }
 const cakupan = () => selLok >= 0 ? `${lokNama(selLok)}<small>Lokasi · ${rn(sel)}</small>` : sel === 'ALL' ? `Semua area<small>${REG.filter(r => D.regional[r] && D.regional[r].lokasi).length} area · ${sum(REG.map(r => (D.regional[r] || {}).lokasi || 0))} lokasi</small>` : `${rn(sel)}<small>${(D.regional[sel] || {}).lokasi || '–'} lokasi</small>`;
 function peringatan(el) {
@@ -996,13 +1004,33 @@ function renderRekap() {
 }
 
 /* ================= TAMPILAN & MUAT DATA ================= */
+// kalender Tanggal: bulan ikut tanggal yang dipilih; tanggal kosong ("Clear") = seluruh bulan
+const isoTgl = (m, d) => `${D.tahun}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+document.getElementById('inTgl').onchange = e => {
+  const v = e.target.value, x = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!x) { tgl = 0; ERRW = ''; showAllLok = false; render(); return; }
+  const m = +x[2] - 1, d = +x[3];
+  if (ADA.indexOf(m) < 0) { render(); return; }   // bulan tanpa data: kembali ke pilihan sebelumnya
+  if (m !== mon) { mon = m; if (cmp === mon) cmp = -1; showAllDelta = false; }
+  tgl = d; ERRW = ''; showAllLok = false; render();
+};
+document.getElementById('btnSebulan').onclick = () => { tgl = 0; ERRW = ''; showAllLok = false; render(); };
+function kontrolTanggal() {
+  const it = document.getElementById('inTgl'), akhir = LAST >= 0 ? Math.max(0, ...(RAW.harian || []).filter(h => h[0] === LAST).map(h => h[1])) || nHari(LAST) : 1;
+  it.min = isoTgl(ADA[0] || 0, 1); it.max = isoTgl(LAST, akhir);
+  it.value = tgl > 0 ? isoTgl(mon, tgl) : '';
+  document.getElementById('btnSebulan').hidden = !(tgl > 0);
+  document.querySelector('.pick[for=selCmp]').style.display = tgl > 0 && adaJam() ? 'none' : '';   // per tanggal: pembanding = tanggal sebelumnya
+  document.getElementById('tglKet').textContent = ERRW ? ERRW : tgl > 0 ? (!adaJam() ? `Data per tanggal ${BLN[mon]} belum tersedia; ditampilkan sebulan.` : modeWaktu() && !(WIN && WKEY === [mon, tgl, shift, jam].join('_')) ? 'Memuat data tanggal…' : `Menampilkan ${tgl} ${BLN[mon]} ${D.tahun}`) : `Menampilkan sebulan penuh ${BLN[mon]} ${D.tahun}`;
+}
 document.getElementById('selMon').onchange = e => { mon = +e.target.value; tgl = 0; ERRW = ''; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
 document.getElementById('selEvt').onchange = e => { EVT = e.target.value; render(); if (EVT) document.getElementById('panelEvt').scrollIntoView({behavior: 'smooth', block: 'nearest'}); };
 document.getElementById('evtTutup').onclick = () => { EVT = ''; render(); };
 function aturPeriode(p) { PERIODE = p; try { localStorage.setItem('dashb_periode', p); } catch (e) { /* tanpa penyimpanan */ }
   document.getElementById('perBln').setAttribute('aria-selected', p === 'bulan'); document.getElementById('perThn').setAttribute('aria-selected', p === 'tahun'); render(); }
-try { if (localStorage.getItem('dashb_periode') === 'tahun') { PERIODE = 'tahun'; document.getElementById('perBln').setAttribute('aria-selected', false); document.getElementById('perThn').setAttribute('aria-selected', true); } } catch (e) { /* bawaan Bulan */ }
+// tombol Bulan/Tahun disembunyikan: selalu per bulan (pilihan Tahun yang tersimpan diabaikan)
+try { if (false && localStorage.getItem('dashb_periode') === 'tahun') { PERIODE = 'tahun'; document.getElementById('perBln').setAttribute('aria-selected', false); document.getElementById('perThn').setAttribute('aria-selected', true); } } catch (e) { /* bawaan Bulan */ }
 document.getElementById('perBln').onclick = () => aturPeriode('bulan');
 document.getElementById('perThn').onclick = () => aturPeriode('tahun');
 document.getElementById('selTgl').onchange = e => { tgl = +e.target.value; ERRW = ''; showAllLok = false; render(); };
