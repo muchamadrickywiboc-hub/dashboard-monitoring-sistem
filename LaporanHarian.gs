@@ -283,6 +283,9 @@ function kendalaSemua_() {
   const kol = awalan => { const h = Object.keys(k).filter(x => x.indexOf(awalan) === 0)[0]; return h === undefined ? undefined : k[h]; };
   const iT = k['TANGGAL'], iA = k['AREA'], iL = k['LOKASI'], iP = k['PERANGKAT'], iN = k['NOPOL'], iS = k['STATUS'], iD = kol('DURASI'), iJ = kol('JUSTIFIKASI'), iK = kol('KETERANGAN');
   if (iT === undefined || iL === undefined || iP === undefined || iN === undefined) throw new Error('Sheet Justifikasi Uptime harus punya kolom Tanggal, Lokasi, Perangkat, dan Nopol.');
+  // Tanggal dibaca seperti yang tampil di sheet (dd/mm/yyyy): sel yang terlanjur jadi tanggal format bulan/hari tidak tertukar bulan dan harinya
+  const shJ = ss.getSheets().filter(x => teks(x.getName()).toUpperCase() === 'JUSTIFIKASI UPTIME')[0];
+  if (v.length > 1) shJ.getRange(2, iT + 1, v.length - 1, 1).getDisplayValues().forEach((t, i) => { if (teks(t[0])) v[i + 1][iT] = t[0]; });
   const kunciNopol = x => teks(x).toUpperCase().replace(/[^A-Z0-9]/g, '');
   // nama lokasi resmi (Master Lokasi + alias), terpanjang dulu agar "FT SIBOLGA X" tidak jatuh ke nama yang lebih pendek
   const areaL = {}, resmi = [];
