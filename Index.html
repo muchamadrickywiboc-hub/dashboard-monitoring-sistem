@@ -118,6 +118,8 @@ body:not(.peran-lokasi):not(.peran-area) #btnHarian{display:none!important}
 .lgerr{color:var(--serious-ink);font-size:13px;min-height:1em;margin-top:-6px}
 .lg-foot{color:var(--muted);font-size:12px;text-align:center}
 @media (max-width:900px){.lg{grid-template-columns:minmax(0,1fr)}.lg-art{padding-top:22px;gap:12px}.lg-art h1{font-size:24px;max-width:none}.lg-art p,.lg-pills{display:none}.lg-scene img{max-height:220px;object-fit:cover;object-position:center 70%}.lg-panel{padding-top:20px}.lg-hex{display:none}}
+/* filter Waktu (Tanggal / Shift / Jam) tidak ditampilkan: periode cukup Bulan / Tahun + Bulan (elemennya tetap ada untuk skrip) */
+#waktuRow{display:none!important}
 .nologin #view-bulan,.nologin #loadwrap,.nologin #bulanRow,.nologin #waktuRow,.nologin .filters,.nologin #tUpdate{display:none!important}
 .peran-area #panelTopA,.peran-area #panelRegA,.peran-lokasi #topGrid,.peran-lokasi #panelRegA,.peran-lokasi #panelRegL,.peran-lokasi #chips,.peran-lokasi #chipsLbl,.peran-lokasi .filters .pick{display:none!important}
 .peran-area #topGrid{grid-template-columns:minmax(0,1fr)}
