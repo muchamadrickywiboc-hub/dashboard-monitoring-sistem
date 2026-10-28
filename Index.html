@@ -268,6 +268,14 @@ td{padding:7px 10px}
 .tblket{font-size:11.5px;color:var(--muted);line-height:1.45;padding:2px 2px 6px}.tblket b{color:var(--ink-2);font-weight:600}
 .cattbl th{padding:7px 6px;font-size:11px}.cattbl td{padding:6px 6px;font-size:12.5px}
 #breg th,#breg td,#bdelta th,#bdelta td{padding-left:7px;padding-right:7px}
+/* Kenaikan Event: semua event diurutkan dari kenaikan terbesar, dengan area & lokasi penyumbang kenaikan terbesar */
+#tnaik th:nth-child(2),#tnaik td:nth-child(2),#tnaik th:nth-child(n+7),#tnaik td:nth-child(n+7){text-align:left}
+#tnaik td:first-child{color:var(--muted);width:2em}
+#tnaik .ev{font-weight:600}#tnaik .ev i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:7px}#tnaik .ev small{font-weight:400;color:var(--muted);margin-left:6px;font-size:12px}
+#tnaik .bar{width:16%;min-width:90px}#tnaik .bar span{display:block;height:10px;border-radius:5px}
+#tnaik .pen small{color:var(--muted)}
+#tnaik tr.turun td{color:var(--ink-2)}
+.peran-lokasi #tnaik th:nth-child(n+7),.peran-lokasi #tnaik td:nth-child(n+7){display:none}
 .amttbl th:nth-child(-n+3),.amttbl th:last-child{text-align:left}
 .cattbl td:first-child{white-space:normal}
 .emptyamt{padding:14px 16px;color:var(--muted,#6b7a72);font-size:12.5px;line-height:1.55}
@@ -472,6 +480,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
     <div class="chart" id="bday"></div></section>
   <section class="panel wpanel" id="panelRegA"><div class="ph"><h2>Rekap per area</h2><p id="bregSub"></p></div><div class="tbl"><table id="breg"></table></div></section>
   <section class="panel wpanel" id="panelRegL"><div class="ph"><h2>Rekap per lokasi</h2><p id="blokSub"></p></div><div class="tbl"><table id="blok"></table></div><div id="blokMore"></div></section>
+  <section class="panel wpanel" id="panelNaik"><div class="ph"><h2>Kenaikan Event</h2><p id="naikSub"></p></div><div class="tbl"><table id="tnaik"></table></div></section>
   <div class="anahead"><h2 id="drvH" style="margin:0;font-size:18px;font-weight:700">Top Pelanggaran Driver</h2><span class="hint" id="drvSub"></span></div>
   <div id="bdrv" class="drvgrid wpanel"></div>
 </div>
@@ -993,7 +1002,36 @@ function render() {
   document.getElementById('view-bulan').classList.toggle('memuat', mw && !siap);
   if (siap) { deriveWaktu(); KC = 'W'; KP = WIN.waktu.adaPrev ? 'P' : null; renderJam(); }
   else { KC = mon; KP = prevM(); renderHarian(); }
-  renderBulan(); renderDriver(); renderRekap();
+  renderBulan(); renderDriver(); renderRekap(); renderNaik();
+}
+
+// Kenaikan Event: per event (parameter) periode ini vs pembanding, ikut filter area/lokasi/waktu,
+// beserta area & lokasi yang paling banyak menyumbang kenaikan event tersebut.
+function renderNaik() {
+  const t = document.getElementById('tnaik'), sub = document.getElementById('naikSub'), A = RAW.areas, W = KC === 'W';
+  if (KP === null || KP === undefined) { sub.textContent = `${judulK(KC)} · ${scope()} · belum ada periode pembanding`; t.innerHTML = ''; return; }
+  const okLok = li => selLok < 0 || li === selLok, E = {};   // kunci parameter -> {ini, lalu, a: {area: selisih}, l: {lokasi: selisih}}
+  const tambah = (lalu, ai, li, key, n) => {
+    if (!okLok(li) || !cocokReg(A[ai])) return;
+    const o = E[key] || (E[key] = {ini: 0, lalu: 0, a: {}, l: {}}), d = lalu ? -n : n;
+    if (lalu) o.lalu += n; else o.ini += n;
+    o.a[ai] = (o.a[ai] || 0) + d; o.l[li] = (o.l[li] || 0) + d;
+  };
+  if (W) WIN.fakta.forEach(([b, ai, wl, pi, n]) => { if (b < 2) tambah(b === 1, ai, WIN.lokMap[wl], WIN.params[pi].key, n); });   // b 2 = tanpa jam
+  else RAW.fakta.forEach(([m, ai, li, pi, n]) => { if (m === KC || m === KP) tambah(m === KP, ai, li, P[pi].key, n); });
+  const atas = obj => { let k = null, v = 0; for (const x in obj) if (obj[x] > v) { v = obj[x]; k = +x; } return k === null ? null : {k, v}; };
+  const rows = P.filter(p => E[p.key] && (E[p.key].ini || E[p.key].lalu)).map(p => ({p, ...E[p.key], d: E[p.key].ini - E[p.key].lalu})).sort((a, b) => b.d - a.d);
+  const mx = Math.max(1, ...rows.map(o => Math.abs(o.d))), naik = rows.filter(o => o.d > 0).length;
+  sub.textContent = `${judulK(KC)} dibanding ${namaK(KP)} · ${scope()} · ${naik} dari ${rows.length} event naik, diurutkan dari kenaikan terbesar · penyumbang = area/lokasi dengan tambahan event terbanyak`;
+  t.innerHTML = `<thead><tr><th>#</th><th>Event</th><th>${pendekK(KP)}</th><th>${pendekK(KC)}</th><th>Kenaikan</th><th></th><th>Area penyumbang terbesar</th><th>Lokasi penyumbang terbesar</th></tr></thead><tbody>` +
+    rows.map((o, i) => {
+      const c = CATS.find(x => x.key === o.p.kat) || CATS[0], a = o.d > 0 && atas(o.a), l = o.d > 0 && atas(o.l);
+      return `<tr class="${o.d > 0 ? '' : 'turun'}"><td>${i + 1}</td><td class="ev"><i style="background:${c.color}"></i>${o.p.label}<small>${c.name}</small></td>` +
+        `<td>${nf(o.lalu)}</td><td><b>${nf(o.ini)}</b></td><td>${naikTxt(o.ini, o.lalu)}</td>` +
+        `<td class="bar"><span style="width:${Math.abs(o.d) / mx * 100}%;background:${o.d > 0 ? 'var(--red)' : '#2f7a2f'}"></span></td>` +
+        `<td class="pen">${a ? `<span class="rdot" style="background:${rv(A[a.k])}"></span>${rn(A[a.k])} <small>+${nf(a.v)}</small>` : '–'}</td>` +
+        `<td class="pen">${l ? `${lokNama(l.k)} <small>+${nf(l.v)}</small>` : '–'}</td></tr>`;
+    }).join('') + '</tbody>';
 }
 
 
