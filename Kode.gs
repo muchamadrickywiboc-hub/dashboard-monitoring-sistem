@@ -26,9 +26,9 @@ const CFG = {
   FOLDER_ID: '1nUJtRTcKwJua4Am9EdiFXoQxcTALgt9e',   // folder Drive "3. Data Dashboard"
   TARIKAN_ID: '11akfRibrQLixrBicdNXazEWX-TGmgfYu4zdYYNaOEy8',   // spreadsheet "Tarikan Sistem": kolom Area | linkgdrive (folder tarikan harian per regional)
   MULAI_TARIKAN: '2026-10-27',   // mulai tanggal ini data HANYA dari tarikan (link Tarikan Sistem); tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..." 
-  // area yang mulai dari tarikan pada tanggal lain: Sumbagut 1 & 2 seluruh Oktober (file Data tidak memuat Sumbagut);
-  // Sulawesi mulai 26 karena file regional Oktober tidak memuat tanggal 26
-  MULAI_TARIKAN_AREA: { SUMBAGUT: '2026-10-01', SULAWESI: '2026-10-26' },
+  // area yang mulai dari tarikan pada tanggal lain: Sulawesi mulai 26 karena file regional Oktober tidak memuat tanggal 26
+  // (Sumbagut 1 & 2 tanggal 1-26 Oktober kini dari file rekap PKDA Sumbagut di "Data 10 Oktober 2026", tarikan mulai 27 seperti area lain)
+  MULAI_TARIKAN_AREA: { SULAWESI: '2026-10-26' },
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
   JEDA_GABUNG_DETIK: 0,   // (mis. 10) alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
