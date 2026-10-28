@@ -183,11 +183,6 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 .trsvg{overflow-x:auto}.trsvg svg{display:block;width:100%;height:auto}
 .up{color:var(--serious-ink);font-weight:600}.down{color:#2f6a37;font-weight:600}.flat{color:var(--muted)}
 .trket{font-size:12px;color:var(--muted)}
-.ttd{display:block;max-height:54px;max-width:180px;margin-top:6px;object-fit:contain}
-.ttdbox{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:6px}
-.ttdprev{width:200px;height:80px;border:1.5px dashed var(--grid);border-radius:12px;display:grid;place-items:center;background:#fff;overflow:hidden}
-.ttdprev img{max-width:92%;max-height:72px;object-fit:contain}.ttdprev span{font-size:12px;color:var(--muted)}
-.ttdaksi{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:1;min-width:200px}.ttdaksi .sub2{flex-basis:100%;margin:0}
 .pdfwaktu{position:absolute;right:24px;top:84px;text-align:right;font-size:12px;line-height:1.5;color:rgba(255,255,255,.92)}.pdfwaktu b{display:block;font-size:13.5px;color:#fff}
 .pdfhead{position:relative}
 .expopsi{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 6px}.expopsi .btn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;height:auto;padding:12px 14px;text-align:left}
@@ -248,7 +243,7 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
         <label class="pick" id="lBln" hidden>Bulan <select id="fBln"></select></label>
         <label class="pick" id="lArea">Area <select id="fArea"></select></label>
         <label class="pick" id="lLok">Lokasi <select id="fLok"></select></label>
-        <button class="hbtn" id="btnInput" type="button">Input RTC &amp; Penanda Tangan</button>
+        <button class="hbtn" id="btnInput" type="button">Input Command Center</button>
         <button class="hbtn pdf" id="btnPdf" type="button" disabled>Export PDF</button>
       </div>
     </div>
@@ -269,23 +264,19 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 </dialog>
 <dialog id="dlg">
   <form class="dlg" id="fInput" method="dialog">
-    <h3>Input harian RTC &amp; penanda tangan</h3>
+    <h3>Input harian Command Center</h3>
     <p class="sub2" id="inSub">Diisi oleh Control Room setiap hari. GPS &amp; Dashcam diambil otomatis dari Justifikasi Uptime.</p>
     <div class="grid2">
       <label class="fld">Tanggal<input type="date" id="inTgl" required></label>
       <label class="fld">Lokasi<select id="inLok"></select></label>
     </div>
-    <div class="grp"><b>RTC</b><div class="grid2">
-      <label class="fld">Jumlah RTC<input type="number" min="0" step="1" id="inRtcT" required></label>
-      <label class="fld">Online<input type="number" min="0" step="1" id="inRtcO" required></label></div><div class="off" id="offRtc"></div></div>
+    <div class="grp"><b>Command Center</b><div class="grid2">
+      <label class="fld">Jumlah Command Center<input type="number" min="0" step="1" id="inRtcT" required></label>
+      <label class="fld">Hadir<input type="number" min="0" step="1" id="inRtcO" required></label></div><div class="off" id="offRtc"></div></div>
     <div class="grid2">
-      <label class="fld">Nama Operator<input id="inOp" maxlength="80"></label>
-      <label class="fld">Nama Fleet Supervisor<input id="inSv" maxlength="80"></label>
+      <label class="fld">Nama Command Center<input id="inOp" maxlength="80"></label>
+      <label class="fld">Nama Manager Region S&amp;D<input id="inSv" maxlength="80"></label>
     </div>
-    <div class="grp"><b>Tanda tangan Operator</b>
-      <div class="ttdbox"><div class="ttdprev" id="ttdPrev"><span>Belum ada tanda tangan</span></div>
-        <div class="ttdaksi"><label class="btn" for="inTtd">Upload file</label><input type="file" id="inTtd" accept="image/png,image/jpeg" hidden><button class="btn" type="button" id="ttdHapus" hidden>Hapus</button>
-          <span class="sub2">PNG / JPG, sebaiknya latar putih atau transparan. Disimpan per nama operator di lokasi ini.</span></div></div></div>
     <div class="msg" id="inErr"></div>
     <div class="row-end"><button class="btn" type="button" id="inBatal">Batal</button><button class="btn pri" type="submit" id="inSimpan">Simpan</button></div>
   </form>
@@ -1127,21 +1118,22 @@ function tampil() {
 
 /* ================= TAMPILAN ================= */
 /** Donut online (biru) / offline (merah); jumlah offline di tengah. */
-function donut(b) {
+function donut(b, lblOff) {
   const R = 38, C = 2 * Math.PI * R, v = persen(b), on = b.terpasang ? b.online / b.terpasang : 0, off = Math.max(0, b.terpasang - b.online);
   const seg = (frac, warna, mulai) => frac > 0 ? `<circle cx="48" cy="48" r="${R}" fill="none" stroke="${warna}" stroke-width="13" stroke-dasharray="${(frac * C).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-mulai * C).toFixed(2)}" transform="rotate(-90 48 48)"/>` : '';
   return `<svg class="donut" viewBox="0 0 96 96" role="img" aria-label="Online ${fp(v)}">
     <circle cx="48" cy="48" r="${R}" fill="none" stroke="#e6e9e6" stroke-width="13"/>
     ${b.terpasang ? seg(on, '#0f78bf', 0) + seg(1 - on, '#e03d3e', on) : ''}
     <text x="48" y="${b.terpasang ? 50 : 52}" text-anchor="middle" font-size="${b.terpasang ? (String(nf(off)).length > 4 ? 14 : 18) : 12}" font-weight="700" fill="${off ? '#b42324' : '#1b1f1d'}">${b.terpasang ? nf(off) : '–'}</text>
-    ${b.terpasang ? '<text x="48" y="63" text-anchor="middle" font-size="9.5" fill="#737b76">offline</text>' : ''}</svg>`;
+    ${b.terpasang ? '<text x="48" y="63" text-anchor="middle" font-size="9.5" fill="#737b76">' + (lblOff || 'offline') + '</text>' : ''}</svg>`;
 }
-function kartu(judulK, warna, b, satuan, catatan) {
-  const v = persen(b), off = Math.max(0, b.terpasang - b.online);
+// lbl: [online, offline], untuk Command Center: Hadir / Tidak Hadir
+function kartu(judulK, warna, b, satuan, catatan, lbl) {
+  const v = persen(b), off = Math.max(0, b.terpasang - b.online), [lOn, lOff] = lbl || ['Online', 'Offline'];
   return `<div class="kpi"><div class="l"><i style="background:${warna}"></i>${judulK}</div>
     <div class="atas"><div><div class="v">${fp(v)}</div>
-      <div class="n">${b.terpasang ? `${nf(b.online)} dari ${nf(b.terpasang)} ${satuan} online` : catatan}</div></div>${donut(b)}</div>
-    <div class="splitlbl"><span><i style="background:var(--on)"></i>Online ${nf(b.online)}</span><span><i style="background:var(--off)"></i>Offline ${nf(off)}</span></div></div>`;
+      <div class="n">${b.terpasang ? `${nf(b.online)} dari ${nf(b.terpasang)} ${satuan} ${lOn.toLowerCase()}` : catatan}</div></div>${donut(b, lOff.toLowerCase())}</div>
+    <div class="splitlbl"><span><i style="background:var(--on)"></i>${lOn} ${nf(b.online)}</span><span><i style="background:var(--off)"></i>${lOff} ${nf(off)}</span></div></div>`;
 }
 function gambar(L) {
   const bln = L.mode === 'bulanan', P = L.perangkat, lbl = L.baris === 'Area' ? L.lokasi : judul(L.lokasi);
@@ -1151,19 +1143,19 @@ function gambar(L) {
   const cat = (L.gagal || []).slice();   // sumber yang gagal dibaca; bagian lain tetap ditampilkan
   if (!L.adaEvent) cat.push(`Belum ada data event untuk ${per}${L.sumber ? '' : ' (file tarikan bulan ini belum ada di folder data)'}.`);
   if (!P.adaJustifikasi) cat.push(`Belum ada data Justifikasi Uptime untuk ${per}.`);
-  if (!bln && P.lokasiInput < P.lokasiCakupan) cat.push(`Data RTC baru diisi ${P.lokasiInput} dari ${P.lokasiCakupan} lokasi. Klik "Input RTC & Penanda Tangan".`);
+  if (!bln && P.lokasiInput < P.lokasiCakupan) cat.push(`Data Command Center baru diisi ${P.lokasiInput} dari ${P.lokasiCakupan} lokasi. Klik "Input Command Center".`);
   let h = cat.length ? `<div class="warnbar">${cat.map(c => `<div>${esc(c)}</div>`).join('')}</div>` : '';
   h += `<section class="kpis">
     ${kartu('GPS', 'var(--gps)', P.gps, satuan, 'Belum ada data Justifikasi Uptime')}
     ${kartu('Dashcam (ADAS)', 'var(--cam)', P.dashcam, satuan, 'Belum ada data Justifikasi Uptime')}
-    ${kartu('RTC', 'var(--forest)', P.rtc, bln ? 'unit-hari' : 'unit', 'Belum diinput')}
+    ${kartu('Command Center', 'var(--forest)', P.rtc, bln ? 'orang-hari' : 'orang', 'Belum diinput', ['Hadir', 'Tidak Hadir'])}
     <div class="kpi"><div class="l"><i style="background:var(--red)"></i>Total event</div><div class="v">${nf(totalEv)}</div>
       <div class="n">${L.panel.filter(p => p.total).length} dari ${L.panel.length} jenis event terjadi${bln ? ' bulan ini' : ''}</div>
       <div class="n">Nopol offline tercatat: <b style="color:var(--ink)">${nf(L.offlineTotal)}</b></div></div>
   </section>`;
   if (!bln) h += `<section class="infobar"><div><div class="k">Tanggal</div><div class="v">${esc(per)}</div></div>
-    <div><div class="k">Operator</div><div class="v">${esc(L.operator || '–')}</div>${L.operatorTtd ? `<img class="ttd" src="${L.operatorTtd}" alt="Tanda tangan ${esc(L.operator)}">` : ''}</div>
-    <div><div class="k">Fleet Supervisor · PT Pertamina Patra Niaga</div><div class="v">${esc(L.supervisor || '–')}</div></div></section>`;
+    <div><div class="k">Command Center</div><div class="v">${esc(L.operator || '–')}</div></div>
+    <div><div class="k">Manager Region S&amp;D</div><div class="v">${esc(L.supervisor || '–')}</div></div></section>`;
   if (bln) h += `<section class="grid g-2">
     <div class="panel"><div class="ph"><h2>Uptime harian</h2><p>Persentase Nopol online per tanggal</p></div>
       <div class="legend"><span><i style="background:var(--gps)"></i>GPS</span><span><i style="background:var(--cam)"></i>Dashcam (ADAS)</span></div>${grafikGaris(L.perHari)}</div>
@@ -1387,29 +1379,9 @@ $('btnPdf').onclick = async () => {
 const IN = ['RtcT', 'RtcO'], KEY = {RtcT: 'rtcT', RtcO: 'rtcO'};
 function hitungOff() {
   const t = +$('inRtcT').value, o = +$('inRtcO').value, ada = $('inRtcT').value !== '' && $('inRtcO').value !== '';
-  $('offRtc').textContent = !ada ? '' : o > t ? 'Online melebihi jumlah terpasang.' : `Offline ${nf(t - o)} · Online ${t ? Math.round(o / t * 100) : 0}%`;
+  $('offRtc').textContent = !ada ? '' : o > t ? 'Hadir melebihi jumlah Command Center.' : `Tidak hadir ${nf(t - o)} · Hadir ${t ? Math.round(o / t * 100) : 0}%`;
 }
 IN.forEach(k => { $('in' + k).oninput = hitungOff; });
-// tanda tangan: TTD = data URI tampil di form; TTD_UBAH = undefined (tidak diubah) / data URI baru / '' (hapus)
-let TTD = '', TTD_UBAH;
-function tampilTtd(src) { TTD = src || ''; $('ttdPrev').innerHTML = TTD ? `<img src="${TTD}" alt="Tanda tangan">` : '<span>Belum ada tanda tangan</span>'; $('ttdHapus').hidden = !TTD; }
-// gambar diperkecil (lebar maks. 360px) dan disimpan sebagai PNG supaya muat di satu sel spreadsheet
-function kecilkanTtd(file) {
-  return new Promise((ok, bad) => { const fr = new FileReader(); fr.onerror = () => bad(new Error('File tidak bisa dibaca.'));
-    fr.onload = () => { const im = new Image(); im.onerror = () => bad(new Error('File bukan gambar PNG/JPG.'));
-      im.onload = () => { for (const w of [360, 280, 200]) { const s = Math.min(1, w / im.width, 140 / im.height), c = document.createElement('canvas');
-          c.width = Math.max(1, Math.round(im.width * s)); c.height = Math.max(1, Math.round(im.height * s)); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-          const d = c.toDataURL('image/png'); if (d.length <= 45000) return ok(d); }
-        bad(new Error('Gambar tanda tangan terlalu rumit. Gunakan gambar yang lebih sederhana (latar polos).')); };
-      im.src = fr.result; };
-    fr.readAsDataURL(file); });
-}
-$('inTtd').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  if (!/^image\/(png|jpeg)$/.test(f.type)) { $('inErr').textContent = 'File tanda tangan harus PNG atau JPG.'; return; }
-  kecilkanTtd(f).then(d => { tampilTtd(d); TTD_UBAH = d; $('inErr').textContent = ''; }).catch(err => { $('inErr').textContent = err.message; }); };
-$('ttdHapus').onclick = () => { tampilTtd(''); TTD_UBAH = ''; };
-$('inOp').onchange = () => { if (TTD_UBAH !== undefined) return; const n = $('inOp').value.trim(); if (!n) return tampilTtd('');
-  run('lhTtd', TOKEN, $('inLok').value, n).then(tampilTtd).catch(() => {}); };
 function isiForm(o, dariSebelumnya) {
   IN.forEach(k => { $('in' + k).value = o ? o[KEY[k]] : ''; });
   $('inOp').value = o ? o.operator || '' : ''; $('inSv').value = o ? o.supervisor || '' : '';
@@ -1417,8 +1389,8 @@ function isiForm(o, dariSebelumnya) {
   hitungOff();
 }
 function muatForm() {
-  $('inErr').textContent = ''; isiForm(null); tampilTtd(''); TTD_UBAH = undefined; $('inSub').textContent = 'Memuat…';
-  run('lhAmbilInput', TOKEN, $('inTgl').value, $('inLok').value).then(j => { const r = JSON.parse(j); isiForm(r.ada || r.sebelumnya, !r.ada && !!r.sebelumnya); tampilTtd(r.ttd); })
+  $('inErr').textContent = ''; isiForm(null); $('inSub').textContent = 'Memuat…';
+  run('lhAmbilInput', TOKEN, $('inTgl').value, $('inLok').value).then(j => { const r = JSON.parse(j); isiForm(r.ada || r.sebelumnya, !r.ada && !!r.sebelumnya); })
     .catch(e => { if (!cekLogin(e)) $('inErr').textContent = pesan(e); });
 }
 $('btnInput').onclick = () => {
@@ -1435,9 +1407,8 @@ $('inBatal').onclick = () => $('dlg').close();
 $('fInput').onsubmit = e => {
   e.preventDefault();
   const o = {tanggal: $('inTgl').value, lokasi: $('inLok').value, operator: $('inOp').value, supervisor: $('inSv').value};
-  if (TTD_UBAH !== undefined) { if (!o.operator.trim()) { $('inErr').textContent = 'Isi Nama Operator untuk menyimpan tanda tangan.'; return; } o.ttd = TTD_UBAH; }
-  for (const k of IN) { const v = $('in' + k).value; if (v === '') { $('inErr').textContent = 'Lengkapi jumlah RTC (isi 0 bila tidak ada).'; return; } o[KEY[k]] = +v; }
-  if (o.rtcO > o.rtcT) { $('inErr').textContent = 'Jumlah RTC online tidak boleh lebih dari jumlah RTC.'; return; }
+  for (const k of IN) { const v = $('in' + k).value; if (v === '') { $('inErr').textContent = 'Lengkapi jumlah Command Center (isi 0 bila tidak ada).'; return; } o[KEY[k]] = +v; }
+  if (o.rtcO > o.rtcT) { $('inErr').textContent = 'Jumlah hadir tidak boleh lebih dari jumlah Command Center.'; return; }
   $('inSimpan').disabled = true; $('inErr').textContent = '';
   run('lhSimpanInput', TOKEN, o).then(() => { $('dlg').close(); if (o.tanggal !== $('fTgl').value) $('fTgl').value = o.tanggal; tampil(); })
     .catch(e => { if (!cekLogin(e)) $('inErr').textContent = pesan(e); }).finally(() => { $('inSimpan').disabled = false; });
