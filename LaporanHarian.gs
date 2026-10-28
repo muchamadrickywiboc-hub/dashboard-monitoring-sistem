@@ -124,7 +124,7 @@ function tanggalAkhirLH_() {
 function cakupanLH_(ses, area, lokasi) {
   area = areaNorm(area); lokasi = teks(lokasi).toUpperCase();
   if (ses.peran === 'LOKASI') return { area: ses.area || '', lok: ses.lok };
-  if (ses.peran === 'AREA') return { area: ses.area, lok: lokasi };
+  if (ses.peran === 'AREA') return { area: ses.area, lok: '' };   // laporan Command Center: seluruh area, tanpa filter lokasi
   return { area: area, lok: lokasi };
 }
 const cocokLH_ = (c, lok, area) => c.lok ? kunciLok(lok) === kunciLok(c.lok) : !c.area || area === c.area;
@@ -186,7 +186,9 @@ function lhLaporan(token, periode, area, lokasi) {
   const awal = teksTanggal_({ m: m, d: hari || 1 }), akhir = teksTanggal_({ m: m, d: hari || 31 });
   const inp = coba('Input Command Center', () => bacaInputLH_(), []).filter(r => r.tanggal >= awal && r.tanggal <= akhir && masuk(r.lokasi, r.area));
   const jml = a => inp.reduce((s, r) => s + (r[a] || 0), 0);
-  const satu = !bulanan && c.lok && inp.length === 1 ? inp[0] : null;   // nama operator/supervisor hanya untuk laporan harian satu lokasi
+  // nama Command Center / Manager Region S&D (laporan harian): akun Area dari baris "COMMAND CENTER <AREA>", selain itu bila satu lokasi
+  const cc = ses.peran === 'AREA' ? inp.filter(r => kunciLok(r.lokasi) === kunciLok(lokasiCC_(c.area)))[0] || null : null;
+  const satu = bulanan ? null : cc || (c.lok && inp.length === 1 ? inp[0] : null);
   const nHari = bulanan ? new Date(CFG.TAHUN, m + 1, 0).getDate() : 1;
 
   // tren per baris & jenis event: event per tanggal (harian: tanggal 1 s/d tanggal terpilih) dan per jenis event periode sebelumnya (H-1 / bulan lalu)
@@ -218,7 +220,7 @@ function lhLaporan(token, periode, area, lokasi) {
     panel: LH_PANEL.map((pn, i) => ({ w: i, tabel: pn.tabel, grafik: pn.grafik, rows: baris.map((n, j) => ({ n: n, v: V[i][j] || 0 })), total: V[i].reduce((s, v) => s + (v || 0), 0) })).filter((_, i) => tampil[i]),
     perangkat: {
       gps: bagi(up.gps), dashcam: bagi(up.cctv), rtc: { terpasang: jml('rtcT'), online: jml('rtcO') },
-      adaJustifikasi: adaJust, lokasiInput: inp.length, lokasiCakupan: perArea ? info.length : baris.length,
+      adaJustifikasi: adaJust, lokasiInput: inp.filter(r => r !== cc).length, lokasiCakupan: perArea ? info.length : baris.length,
     },
     perBaris: baris.map((n, i) => ({ n: n, gps: bagi((upBaris[i] || kosong()).gps), dashcam: bagi((upBaris[i] || kosong()).cctv), event: V.reduce((s, x) => s + (x[i] || 0), 0) })),
     perHari: bulanan ? Array.from({ length: nHari }, (_, k) => { const d = k + 1, u = upHari[d] || kosong();
@@ -361,12 +363,13 @@ function lhSimpanInput(token, o) {
 
 /** Mengisi / mengganti satu nama (o.kolom: 'operator' = Command Center, 'supervisor' = Manager Region S&D) untuk satu tanggal & lokasi,
  *  langsung dari kolom di halaman. Baris baru dibuat bila tanggal itu belum ada; kolom lain tidak diubah. */
+const lokasiCC_ = area => 'COMMAND CENTER ' + areaNorm(area);   // baris nama untuk akun Area (bukan lokasi sungguhan)
 function lhSimpanNama(token, o) {
   const ses = sesiLH_(token), tg = tanggalTeks(o && o.tanggal), kol = { operator: 10, supervisor: 11 }[o && o.kolom];
   if (!tg) throw new Error('Tanggal tidak valid.');
   if (!kol) throw new Error('Kolom tidak dikenal.');
   const lok = ses.peran === 'LOKASI' ? ses.lok : teks(o.lokasi).toUpperCase();
-  const L = lokasiLH_(ses).filter(x => kunciLok(x.n) === kunciLok(lok))[0];
+  const L = ses.peran === 'AREA' ? { n: lokasiCC_(ses.area), a: areaNorm(ses.area) } : lokasiLH_(ses).filter(x => kunciLok(x.n) === kunciLok(lok))[0];
   if (!L) throw new Error('Pilih lokasi terlebih dahulu (lokasi ' + (lok || '-') + ' tidak ada dalam cakupan akun ini).');
   const t = teksTanggal_(tg), nama = teks(o.nama).slice(0, 80), oleh = ses.u || ses.nama;
   const kunci = LockService.getScriptLock(); kunci.waitLock(10000);

@@ -1061,7 +1061,7 @@ function mulai() {
     const a = INFO.akun;
     const nama = a.peran === 'PUSAT' ? 'RTC' : a.peran === 'AREA' ? 'Command Center ' + judul(a.area) : 'Control Room ' + judul(a.lok);
     $('akunNama').textContent = nama; $('tEyebrow').textContent = nama + ' · Laporan';
-    $('lArea').hidden = a.peran !== 'PUSAT'; $('lLok').hidden = a.peran === 'LOKASI';
+    $('lArea').hidden = a.peran !== 'PUSAT'; $('lLok').hidden = a.peran !== 'PUSAT';   // akun Area (Command Center) melapor untuk seluruh area
     $('fArea').innerHTML = '<option value="">Semua Area</option>' + INFO.areas.map(x => `<option value="${x}">${esc(judul(x))}</option>`).join('');
     isiLokasi();
     const akhir = INFO.tanggalAkhir || new Date(Date.now() - 864e5).toISOString().slice(0, 10);
@@ -1367,7 +1367,8 @@ $('btnPdf').onclick = async () => {
 
 /* ================= NAMA COMMAND CENTER & MANAGER REGION S&D (diisi langsung di kolom) ================= */
 // lokasi yang sedang dilihat: pilihan Lokasi, atau lokasi akun Control Room
-const lokAktif = () => $('fLok').value || (INFO && INFO.akun.peran === 'LOKASI' ? INFO.akun.lok : '');
+// akun Area: nama berlaku untuk seluruh area (server memakai baris Command Center area tersebut)
+const lokAktif = () => !INFO ? '' : INFO.akun.peran === 'LOKASI' ? INFO.akun.lok : INFO.akun.peran === 'AREA' ? 'AREA' : $('fLok').value;
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-ubah]');
   if (!b) return;
