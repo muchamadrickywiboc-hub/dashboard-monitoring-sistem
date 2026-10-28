@@ -1148,7 +1148,7 @@ function gambar(L) {
   const per = bln ? blnPanjang(L.periode) : tglPanjang(L.periode);
   $('tSub').textContent = `${bln ? 'Monthly' : 'Daily'} · ${per} · ${lbl}`;
   const satuan = bln ? 'Nopol-hari' : 'Nopol', totalEv = L.panel.reduce((s, p) => s + p.total, 0);
-  const cat = [];
+  const cat = (L.gagal || []).slice();   // sumber yang gagal dibaca; bagian lain tetap ditampilkan
   if (!L.adaEvent) cat.push(`Belum ada data event untuk ${per}${L.sumber ? '' : ' (file tarikan bulan ini belum ada di folder data)'}.`);
   if (!P.adaJustifikasi) cat.push(`Belum ada data Justifikasi Uptime untuk ${per}.`);
   if (!bln && P.lokasiInput < P.lokasiCakupan) cat.push(`Data RTC baru diisi ${P.lokasiInput} dari ${P.lokasiCakupan} lokasi. Klik "Input RTC & Penanda Tangan".`);

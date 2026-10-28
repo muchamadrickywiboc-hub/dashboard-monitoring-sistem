@@ -20,7 +20,7 @@ const LH = {
   INPUT_HDR: ['Tanggal', 'Area', 'Lokasi', 'GPS Terpasang', 'GPS Online', 'Dashcam Terpasang', 'Dashcam Online', 'RTC Jumlah', 'RTC Online',
     'Operator', 'Fleet Supervisor', 'Diinput oleh', 'Waktu input'],
   CACHE_DETIK: 900,   // 15 menit, mengikuti pemicu prosesTarikan
-  KENDALA_ID: '1XL7AskYFqEQBIrISThFTaJ3dNrVrMZi10202a-vO3zE',   // spreadsheet "LAPORAN KENDALA DEVICE CONTROL ROOM"
+  KENDALA_ID: '1nHNYOFXLh7JNYNWz7CI5-83SI_cd7jZ9THqLgcoW6s4',   // spreadsheet "Kegagalan & Penormalan Operasi" (sheet Justifikasi Uptime & Master Lokasi)
 };
 /** 14 jenis event laporan: judul tabel, judul grafik, teks Case yang masuk, dan nama parameter Pemetaan (cadangan). */
 const LH_PANEL = [
@@ -108,7 +108,7 @@ function lokasiLH_(ses) {
 /** Dipanggil halaman: akun, daftar lokasi dalam cakupan, dan tanggal terakhir yang ada event. */
 function lhInfo(token) {
   const ses = sesiLH_(token);
-  return JSON.stringify({ akun: { nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }, areas: AREAS, tahun: CFG.TAHUN, lokasi: lokasiLH_(ses), tanggalAkhir: tanggalAkhirLH_() });
+  return JSON.stringify({ akun: { nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }, areas: AREAS, tahun: CFG.TAHUN, lokasi: lokasiLH_(ses), tanggalAkhir: (() => { try { return tanggalAkhirLH_(); } catch (e) { Logger.log('Tanggal terakhir gagal dibaca: ' + e.message); return ''; } })() });
 }
 /** Tanggal terakhir yang punya data event (yyyy-mm-dd), untuk pilihan awal halaman. */
 function tanggalAkhirLH_() {
@@ -138,8 +138,12 @@ function lhLaporan(token, periode, area, lokasi) {
   const tg = tanggalTeks(bulanan ? p + '-01' : p);
   if (!tg) throw new Error('Tanggal tidak valid.');
   const m = tg.m, hari = bulanan ? null : tg.d;
-  const t0 = Date.now(), c = cakupanLH_(ses, area, lokasi), E = eventBulanLH_(m), t1 = Date.now(), J = kendalaBulan_(m), t2 = Date.now(), perArea = ses.peran === 'PUSAT' && !c.area && !c.lok;
-  const info = lokasiLH_(ses), areaLok = {};
+  // setiap sumber dibaca terpisah: bila satu gagal, bagian lain laporan tetap tampil dan halaman diberi keterangan
+  const gagal = [], coba = (nama, f, cadangan) => { try { return f(); } catch (e) { Logger.log(nama + ' gagal dibaca: ' + e.message); gagal.push(nama + ' gagal dibaca (' + e.message + ')'); return cadangan; } };
+  const t0 = Date.now(), c = cakupanLH_(ses, area, lokasi), perArea = ses.peran === 'PUSAT' && !c.area && !c.lok;
+  const E = coba('Data Driving Behaviour (event)', () => eventBulanLH_(m), { sumber: '', tanggal: {}, lokArea: {} }), t1 = Date.now();
+  const J = coba('Data GPS & Dashcam (Justifikasi Uptime)', () => kendalaBulan_(m), { hari: {}, off: [] }), t2 = Date.now();
+  const info = coba('Daftar lokasi', () => lokasiLH_(ses), []), areaLok = {};
   Logger.log('lhLaporan ' + p + ': event ' + (t1 - t0) + ' ms, kendala ' + (t2 - t1) + ' ms, lokasi ' + (Date.now() - t2) + ' ms.');   // lihat Apps Script > Eksekusi bila laporan lambat
   info.forEach(o => { areaLok[kunciLok(o.n)] = o.a; });
   Object.keys(E.lokArea).forEach(l => { const k = kunciLok(l); areaLok[k] = areaLok[k] || E.lokArea[l]; });
@@ -180,7 +184,7 @@ function lhLaporan(token, periode, area, lokasi) {
 
   // RTC & penanda tangan dari form input
   const awal = teksTanggal_({ m: m, d: hari || 1 }), akhir = teksTanggal_({ m: m, d: hari || 31 });
-  const inp = bacaInputLH_().filter(r => r.tanggal >= awal && r.tanggal <= akhir && masuk(r.lokasi, r.area));
+  const inp = coba('Input RTC & penanda tangan', () => bacaInputLH_(), []).filter(r => r.tanggal >= awal && r.tanggal <= akhir && masuk(r.lokasi, r.area));
   const jml = a => inp.reduce((s, r) => s + (r[a] || 0), 0);
   const satu = !bulanan && c.lok && inp.length === 1 ? inp[0] : null;   // nama operator/supervisor hanya untuk laporan harian satu lokasi
   const nHari = bulanan ? new Date(CFG.TAHUN, m + 1, 0).getDate() : 1;
@@ -197,7 +201,7 @@ function lhLaporan(token, periode, area, lokasi) {
   let lalu = '', baruLalu = [];
   if (!bulanan && hari > 1) { lalu = teksTanggal_({ m: m, d: hari - 1 }); baruLalu = E.tanggal[hari - 1] || []; }
   else if (m > 0) {
-    const E0 = eventBulanLH_(m - 1), hs = Object.keys(E0.tanggal).map(Number);
+    const E0 = coba('Data Driving Behaviour bulan sebelumnya', () => eventBulanLH_(m - 1), { tanggal: {} }), hs = Object.keys(E0.tanggal).map(Number);
     if (bulanan) { lalu = teksTanggal_({ m: m - 1, d: 1 }).slice(0, 7); hs.forEach(d => { baruLalu = baruLalu.concat(E0.tanggal[d]); }); }
     else { const dl = new Date(CFG.TAHUN, m, 0).getDate(); lalu = teksTanggal_({ m: m - 1, d: dl }); baruLalu = E0.tanggal[dl] || []; }
   }
@@ -220,7 +224,8 @@ function lhLaporan(token, periode, area, lokasi) {
     perHari: bulanan ? Array.from({ length: nHari }, (_, k) => { const d = k + 1, u = upHari[d] || kosong();
       return { d: d, event: (evHari[d] || []).reduce((s, v) => s + v, 0), gps: bagi(u.gps), dashcam: bagi(u.cctv) }; }) : [],
     offline: offline, offlineTotal: offSemua.length,
-    operator: satu ? satu.operator : '', supervisor: satu ? satu.supervisor : '', operatorTtd: satu ? ttdLH_(satu.lokasi, satu.operator) : '',
+    operator: satu ? satu.operator : '', supervisor: satu ? satu.supervisor : '', operatorTtd: satu ? coba('Tanda tangan operator', () => ttdLH_(satu.lokasi, satu.operator), '') : '',
+    gagal: gagal,
     adaEvent: adaEvent,
     tren: { lalu: lalu, hari: nTren, rows: baris.map((n, i) => ({ n: n, h: LH_PANEL.map((_, pi) => trenHari[i] ? trenHari[i][pi] : new Array(nTren).fill(0)).filter((_, pi) => tampil[pi]), l: LH_PANEL.map((_, pi) => Vlalu[pi][i] || 0).filter((_, pi) => tampil[pi]) })) },
   });
@@ -419,9 +424,10 @@ function lhLogo() {
  */
 function panaskanLH_() {
   const t0 = Date.now(), now = new Date(), m = now.getFullYear() === CFG.TAHUN ? now.getMonth() : 11;
-  tanggalAkhirLH_();
-  [m, m - 1].filter(x => x >= 0).forEach(x => eventBulanLH_(x));
-  bacaInputLH_();
-  kendalaBulan_(m);   // semua bulan sekaligus
+  const coba = (nama, f) => { try { f(); } catch (e) { Logger.log('Panaskan ' + nama + ' gagal: ' + e.message); } };
+  coba('tanggal terakhir', tanggalAkhirLH_);
+  [m, m - 1].filter(x => x >= 0).forEach(x => coba('event ' + BULAN[x], () => eventBulanLH_(x)));
+  coba('input', bacaInputLH_);
+  coba('Justifikasi Uptime', () => kendalaBulan_(m));   // semua bulan sekaligus
   Logger.log('Cache Laporan Harian dipanaskan: ' + (Date.now() - t0) + ' ms.');
 }
