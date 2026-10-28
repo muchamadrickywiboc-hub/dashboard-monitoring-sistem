@@ -64,7 +64,7 @@ function sesiLH_(token) {
 
 /**
  * Event satu bulan per tanggal: { sumber, tanggal: { d: [[lokasi, area, panel, jumlah], ...] } }.
- * Disimpan di cache 15 menit.
+ * Disimpan di cache 6 jam; kuncinya ikut versi data (berganti setiap tarikan / summary baru), jadi tidak basi.
  */
 function eventBulanLH_(m) {
   const kunci = 'LH2_' + versiData_() + '_' + m, ada = ambilCache_(kunci);
@@ -89,15 +89,21 @@ function eventBulanLH_(m) {
     });
     Object.keys(T).forEach(k => { const x = T[k]; (out.tanggal[x[0]] = out.tanggal[x[0]] || []).push(x.slice(1)); });
   }
-  simpanCache_(JSON.stringify(out), kunci, LH.CACHE_DETIK);
+  simpanCache_(JSON.stringify(out), kunci, CFG.CACHE_DETIK);
   return out;
 }
 
 /** Lokasi dalam cakupan akun: [{n: nama, a: area}], diambil dari data dashboard bulanan. */
 function lokasiLH_(ses) {
+  // cache per cakupan akun: tanpa ini setiap laporan membuka dan mem-parse seluruh data dashboard (beberapa MB)
+  const c = CacheService.getScriptCache(), kunci = 'LHLOK_' + versiData_() + '_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
+  const ada = c.get(kunci);
+  if (ada) return JSON.parse(ada);
   const d = JSON.parse(potongJson_(dataUtama_(), ses, 'SC_')), unik = {};
   d.lok.filter(x => x[0] && !/^\(TANPA/.test(x[0])).forEach(x => { const k = kunciLok(x[0]); unik[k] = unik[k] || { n: x[0], a: d.areas[x[1]] || '' }; });
-  return Object.keys(unik).map(k => unik[k]).sort((a, b) => AREAS.indexOf(a.a) - AREAS.indexOf(b.a) || (a.n < b.n ? -1 : 1));
+  const out = Object.keys(unik).map(k => unik[k]).sort((a, b) => AREAS.indexOf(a.a) - AREAS.indexOf(b.a) || (a.n < b.n ? -1 : 1));
+  try { c.put(kunci, JSON.stringify(out), 3600); } catch (e) { /* tanpa cache */ }
+  return out;
 }
 /** Dipanggil halaman: akun, daftar lokasi dalam cakupan, dan tanggal terakhir yang ada event. */
 function lhInfo(token) {
@@ -232,10 +238,10 @@ function tglKendala_(x) {
  * Lokasi & area hanya dari kolom Lokasi / Area sheet ini. Nama unit yang lebih rinci
  * ("FT SIBOLGA POLTAPLUS MOR I") dicocokkan ke nama lokasi terpanjang di Master Lokasi yang menjadi awalannya ("FT SIBOLGA").
  * { hari: { d: [[lokasi, area, jenis, jumlahNopol, nopolOffline], ...] }, off: [[d, lokasi, area, lokasiDiSheet, perangkat, nopol, durasi, justifikasi, keterangan], ...] }
- * Cache 10 menit.
+ * Cache 6 jam; kuncinya ikut waktu ubah spreadsheet kendala, jadi isian baru langsung terbaca.
  */
 function kendalaBulan_(m) {
-  const kunci = 'LHJU3_' + m, ada = ambilCache_(kunci);
+  const kunci = 'LHJU4_' + m + '_' + DriveApp.getFileById(LH.KENDALA_ID).getLastUpdated().getTime(), ada = ambilCache_(kunci);
   if (ada) return JSON.parse(ada);
   const ss = SpreadsheetApp.openById(LH.KENDALA_ID), v = nilaiSheet(ss, 'Justifikasi Uptime') || [], k = petaKolom(v[0] || []);
   const kol = awalan => { const h = Object.keys(k).filter(x => x.indexOf(awalan) === 0)[0]; return h === undefined ? undefined : k[h]; };
@@ -273,18 +279,18 @@ function kendalaBulan_(m) {
   });
   Object.keys(H).forEach(kk => { const x = H[kk]; (out.hari[x[0]] = out.hari[x[0]] || []).push(x.slice(1)); });
   out.off.sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
-  simpanCache_(JSON.stringify(out), kunci, 600);
+  simpanCache_(JSON.stringify(out), kunci, CFG.CACHE_DETIK);
   return out;
 }
 
 const teksTanggal_ = tg => CFG.TAHUN + '-' + ('0' + (tg.m + 1)).slice(-2) + '-' + ('0' + tg.d).slice(-2);
 
 /* ---- Input harian GPS / Dashcam / RTC ---- */
-function sheetInputLH_() {
+function sheetInputLH_(tulis) {
   const ss = bukaAtauBuat(DriveApp.getFolderById(CFG.FOLDER_ID), LH.INPUT_NAMA, [['Input', LH.INPUT_HDR]]);
   LH.ss = ss;
   const sh = ss.getSheetByName('Input');
-  sh.getRange('A:A').setNumberFormat('@');   // tanggal disimpan sebagai teks yyyy-mm-dd
+  if (tulis) sh.getRange('A:A').setNumberFormat('@');   // tanggal disimpan sebagai teks yyyy-mm-dd (hanya saat menyimpan, bukan setiap baca)
   return sh;
 }
 function bacaInputLH_() {
@@ -322,7 +328,7 @@ function lhSimpanInput(token, o) {
   const t = teksTanggal_(tg), baru = [t, L.a, L.n, '', '', '', '', rT, rO, teks(o.operator), teks(o.supervisor), ses.u || ses.nama, new Date()];
   const kunci = LockService.getScriptLock(); kunci.waitLock(10000);
   try {
-    const sh = sheetInputLH_(), v = sh.getDataRange().getValues();
+    const sh = sheetInputLH_(true), v = sh.getDataRange().getValues();
     const i = v.findIndex((r, j) => j > 0 && tanggalTeks(r[0]) && teksTanggal_(tanggalTeks(r[0])) === t && kunciLok(r[2]) === kunciLok(L.n));
     if (i > 0) sh.getRange(i + 1, 1, 1, baru.length).setValues([baru]); else sh.appendRow(baru);
     CacheService.getScriptCache().remove('LHIN');
@@ -387,4 +393,16 @@ function lhLogo() {
   }
   try { c.put('LHLOGO', uri, 21600); } catch (e) { /* tanpa cache */ }
   return uri;
+}
+
+/**
+ * Dipanggil panaskanCache (pemicu tiap jam & setelah tarikan baru): mengisi cache Laporan Harian bulan berjalan dan bulan sebelumnya,
+ * supaya pengguna tidak menunggu summary, spreadsheet kendala, dan data dashboard dibaca ulang.
+ */
+function panaskanLH_() {
+  const t0 = Date.now(), now = new Date(), m = now.getFullYear() === CFG.TAHUN ? now.getMonth() : 11;
+  tanggalAkhirLH_();
+  [m, m - 1].filter(x => x >= 0).forEach(x => { eventBulanLH_(x); kendalaBulan_(x); });
+  bacaInputLH_();
+  Logger.log('Cache Laporan Harian dipanaskan: ' + (Date.now() - t0) + ' ms.');
 }

@@ -119,7 +119,12 @@ function doGet(e) {
 }
 
 /** Dijalankan pemicu waktu: membangun ulang cache supaya pengunjung tidak menunggu spreadsheet dihitung. */
-function panaskanCache() { simpanUtama_(JSON.stringify(bangunData_())); }
+function panaskanCache() {
+  simpanUtama_(JSON.stringify(bangunData_()));
+  // Laporan Harian ikut dipanaskan bila waktu eksekusi masih cukup (batas Apps Script 6 menit)
+  if (Date.now() - MULAI_EKSEKUSI_ < 4.5 * 60 * 1000) { try { panaskanLH_(); } catch (e) { Logger.log('Cache Laporan Harian gagal dipanaskan: ' + e.message); } }
+}
+const MULAI_EKSEKUSI_ = Date.now();   // dievaluasi sekali di awal setiap eksekusi
 /* Data utama hanya disimpan dalam bentuk gzip+base64 (sekitar 10x lebih kecil dari JSON):
    - di CacheService (kunci DASHB4Z). JSON mentah bisa melewati batas cache sehingga gagal tersimpan diam-diam,
      lalu setiap pengunjung menghitung ulang semua spreadsheet (inilah yang membuat dashboard lama terbuka);
@@ -515,11 +520,10 @@ function dataWaktu_(m, d, s, h) {
   const EV = [], AM = [];
   J.EJ.forEach(e => { const x = w(e[0], e[1]); if (x >= 0) EV.push([x, e[1] < 0 ? 0 : e[1] + 1, e[2], e[3], e[4], kat[e[4]], e[5]]); });
   J.AJ.forEach(r => { const x = w(r[0], r[1]); if (x >= 0) AM.push([x, r[2], r[3], r[4], r[5], kat[r[5]], r[6]]); });
-  const file = src.some(o => o.tarikan);
   const hasil = hitung_(EV, AM, peta, [], []);
   hasil.waktu = { m: m, d: d, s: s, h: h, adaPrev: d > 1 };
   const json = JSON.stringify(hasil);
-  simpanCache_(json, kunci, file ? 900 : 3600);   // tarikan: 15 menit, mengikuti pemicu prosesTarikan; file jam tidak berubah
+  simpanCache_(json, kunci, CFG.CACHE_DETIK);   // kunci ikut versi data: berganti setiap tarikan / summary baru
   return json;
 }
 
@@ -961,7 +965,7 @@ function tulisSummary_(ss, sf, m, x, j, peta, src, tanda) {
   const shB = ss.getSheetByName('Sum_Bulanan') || ss.getSheets()[0].setName('Sum_Bulanan');
   shB.getDataRange().breakApart(); shB.clear();
   const huruf = n => { let s = ''; for (; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; };
-  const kolH = i => 'Sum_Harian!' + huruf(4 + i) + ':' + huruf(4 + i);
+  const nH = harian.length + 1, kolH = i => 'Sum_Harian!$' + huruf(4 + i) + '$2:$' + huruf(4 + i) + '$' + Math.max(2, nH);   // rentang terbatas, bukan satu kolom penuh: hitung ulang lebih ringan
   shB.getRange(2, 1, 1, 2).merge().setValue('Jumlah Event').setHorizontalAlignment('center').setFontWeight('bold');
   shB.getRange(3, 1, 1, 2).setValues([['Parameter Event', 'Jumlah']]).setFontWeight('bold');
   shB.getRange(4, 1, kol.length, 2).setFormulas(kol.map((k, i) => ['="' + k[0].replace(/"/g, '""') + '"', '=SUM(' + kolH(i) + ')']));
@@ -970,7 +974,7 @@ function tulisSummary_(ss, sf, m, x, j, peta, src, tanda) {
   harian.slice().sort((a, b) => ai(a[1]) - ai(b[1]) || banding(a[2], b[2])).forEach(r => { if (!lihat[r[2]]) { lihat[r[2]] = 1; lokasi.push(r[2]); } });
   shB.getRange(r0, 1, 1, kol.length + 1).setValues([['Jumlah Event di Setiap Lokasi'].concat(judul)]).setFontWeight('bold');
   if (lokasi.length) shB.getRange(r0 + 1, 1, lokasi.length, kol.length + 1).setFormulas(lokasi.map((l, i) =>
-    ['="' + l.replace(/"/g, '""') + '"'].concat(kol.map((k, c) => '=SUMIFS(' + kolH(c) + ',Sum_Harian!$C:$C,$A' + (r0 + 1 + i) + ')'))));
+    ['="' + l.replace(/"/g, '""') + '"'].concat(kol.map((k, c) => '=SUMIFS(' + kolH(c) + ',Sum_Harian!$C$2:$C$' + Math.max(2, nH) + ',$A' + (r0 + 1 + i) + ')'))));
   shB.getRange(r0, 1, lokasi.length + 1, kol.length + 1).setBorder(true, true, true, true, true, true);
   shB.getRange(4, 2, kol.length, 1).setNumberFormat('#,##0;-#,##0;;@');
   if (lokasi.length) shB.getRange(r0 + 1, 2, lokasi.length, kol.length).setNumberFormat('#,##0;-#,##0;;@');   // 0 tampil kosong
