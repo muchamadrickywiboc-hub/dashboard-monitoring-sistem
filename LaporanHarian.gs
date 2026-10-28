@@ -259,8 +259,9 @@ function kolomDipakai_(ss, nama, perlu) {
 }
 /** Justifikasi Uptime semua bulan: { m: { hari, off } } (lihat kendalaBulan_). */
 function kendalaSemua_() {
-  const ss = SpreadsheetApp.openById(LH.KENDALA_ID);
+  const t0 = Date.now(), ss = SpreadsheetApp.openById(LH.KENDALA_ID), t1 = Date.now();
   const v = kolomDipakai_(ss, 'Justifikasi Uptime', ['TANGGAL', 'AREA', 'LOKASI', 'PERANGKAT', 'NOPOL', 'STATUS', 'DURASI', 'JUSTIFIKASI', 'KETERANGAN']), k = petaKolom(v[0] || []);
+  Logger.log('Justifikasi Uptime: buka file ' + (t1 - t0) + ' ms, baca ' + (v.length - 1) + ' baris x ' + (v[0] || []).length + ' kolom ' + (Date.now() - t1) + ' ms.');
   const kol = awalan => { const h = Object.keys(k).filter(x => x.indexOf(awalan) === 0)[0]; return h === undefined ? undefined : k[h]; };
   const iT = k['TANGGAL'], iA = k['AREA'], iL = k['LOKASI'], iP = k['PERANGKAT'], iN = k['NOPOL'], iS = k['STATUS'], iD = kol('DURASI'), iJ = kol('JUSTIFIKASI'), iK = kol('KETERANGAN');
   if (iT === undefined || iL === undefined || iP === undefined || iN === undefined) throw new Error('Sheet Justifikasi Uptime harus punya kolom Tanggal, Lokasi, Perangkat, dan Nopol.');
@@ -295,6 +296,7 @@ function kendalaSemua_() {
     bulan(m).off.push([d, lok, area, teks(r[iL]), teks(r[iP]), teks(r[iN]), iD === undefined ? '' : angka(r[iD]) || 0, iJ === undefined ? '' : teks(r[iJ]), iK === undefined ? '' : teks(r[iK])]);
   });
   Object.keys(H).forEach(kk => { const x = H[kk], o = bulan(x[0]).hari; (o[x[1]] = o[x[1]] || []).push(x.slice(2)); });
+  Logger.log('Justifikasi Uptime: diolah ' + (Date.now() - t0) + ' ms sejak mulai.');
   Object.keys(semua).forEach(m => semua[m].off.sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)));
   return semua;
 }
