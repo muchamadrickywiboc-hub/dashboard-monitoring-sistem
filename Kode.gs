@@ -799,7 +799,7 @@ function bacaJamSumber_(folder, m, src, peta) {
       (blok.e ? blok.e.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[3]], n = +v[4], a = area[+v[1]];
         if (p && n && !dariTarikan_(tg, a)) EJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], p, n]); });
       (blok.a ? blok.a.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[4]], n = +v[5], a = area[+v[1]];
-        if (p && n && !dariTarikan_(tg, a)) AJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], J.nama[+v[3]], p, n]); });
+        if (p && n && !dariTarikan_(tg, a) && namaAmt(J.nama[+v[3]])) AJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], J.nama[+v[3]], p, n]); });
     });
   }
   src.filter(o => o.tarikan).forEach(o => {
@@ -809,7 +809,7 @@ function bacaJamSumber_(folder, m, src, peta) {
       if (tg && tg.m === m && p && n && dariTarikan_(tg, r[2])) EJ.push([tg.d, +r[1], areaNorm(r[2]), teks(r[3]).toUpperCase(), p, n]);
     });
     (nilaiSheet(ss, 'AMT Jam') || []).slice(1).forEach(r => {
-      const tg = tanggalTeks(r[0]), p = kasus(r[5]), n = angka(r[6]) || 0, nama = teks(r[4]).toUpperCase();
+      const tg = tanggalTeks(r[0]), p = kasus(r[5]), n = angka(r[6]) || 0, nama = namaAmt(r[4]);
       if (tg && tg.m === m && p && n && nama && dariTarikan_(tg, r[2])) AJ.push([tg.d, +r[1], areaNorm(r[2]), teks(r[3]).toUpperCase(), nama, p, n]);
     });
   });
@@ -832,7 +832,7 @@ function bacaSumberBulan_(src, peta, belum, hanyaEvent) {
       if (p) EV.push([tg.d, areaNorm(r[1]), teks(r[2]).toUpperCase(), p, n]);
     });
     if (!hanyaEvent) (nilaiSheet(ss, 'AMT') || []).slice(1).filter(r => !o.tarikan || sumberOk[teks(r[5])]).forEach(r => {
-      const c = peta.kasus[normKasus(r[3])], n = angka(r[4]) || 0, nama = teks(r[2]).toUpperCase();
+      const c = peta.kasus[normKasus(r[3])], n = angka(r[4]) || 0, nama = namaAmt(r[2]);
       if (!c || c.k === 'LAIN' || !n || !nama) return;
       AM.push([areaNorm(r[0]), teks(r[1]).toUpperCase(), nama, c.p, n]);
     });
@@ -870,7 +870,7 @@ function bacaSummary_(ss, peta, hanyaEvent) {
     for (let j = 3; j < r.length; j++) { const n = kh[j] && angka(r[j]); if (n) EV.push([tg.d, areaNorm(r[1]), lokSum_(r[2]), kh[j], n]); }
   });
   A.slice(1).forEach(r => {
-    const nama = teks(r[2]).toUpperCase(); if (!nama) return;
+    const nama = namaAmt(r[2]); if (!nama) return;
     for (let j = 3; j < r.length; j++) { const n = ka[j] && angka(r[j]); if (n) AM.push([areaNorm(r[0]), lokSum_(r[1]), nama, ka[j], n]); }
   });
   return { EV: EV, AM: AM };
@@ -891,7 +891,7 @@ function bacaJamSummary_(ss, peta) {
     const a = areaNorm(r[1]), l = lokSum_(r[2]);
     teks(r[3]) && String(r[3]).split('\n').forEach(baris => {
       const v = baris.split('\t'); if (v.length < 3) return;
-      const nama = teks(v[1]).toUpperCase(); if (!nama) return;
+      const nama = namaAmt(v[1]); if (!nama) return;
       for (let i = 2; i < v.length; i++) { const k = v[i].lastIndexOf('='), p = k > 0 && pj(v[i].slice(0, k)), n = k > 0 && angka(v[i].slice(k + 1)); if (p && n) AJ.push([tg.d, jam(v[0]), a, l, nama, p, n]); }
     });
   });
@@ -1476,7 +1476,7 @@ function BACA_ULANG_SUMBAGUT_OKTOBER() { bacaUlangTarikan('SUMBAGUT', 10); }
 
 function namaAmt(x) {
   const s = teks(x).replace(/\s*[\[(].*?[\])]\s*/g, ' ').replace(/^[\s.\-]+|[\s.\-]+$/g, '').toUpperCase();
-  return s === '-' ? '' : s;
+  return /[A-Z]/.test(s) ? s : '';   // "-", "0", "0.0" dll. bukan nama Driver
 }
 
 /** Mengganti semua baris milik satu file sumber (kolom terakhir = File ID) dengan baris baru. */

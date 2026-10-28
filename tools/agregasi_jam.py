@@ -58,6 +58,8 @@ def tojam(r, idt, ibl, ij, igps):
         if h is not None: return h
     return -1
 NAMA = lambda s: re.sub(r'\s*[\[(].*?[\])]\s*', ' ', s).strip(' .-') if s else ''
+_NAMA = NAMA
+NAMA = lambda s: (lambda n: n if re.search('[A-Z]', n) else '')(_NAMA(s))   # '-', '0', '0.0' bukan nama Driver
 TIMECOLS = ('TANGGAL & JAM', 'TANGGAL CCTV', 'JAM', 'LOKASI_1', 'ALAMAT', 'LAT,LONG')
 merged = collections.Counter(); keyof = {}
 info = {'files': [], 'rows': 0, 'nodate': 0, 'nojam': 0, 'outmonth': collections.Counter(), 'dup_removed': 0}

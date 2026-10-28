@@ -318,6 +318,38 @@ td{padding:7px 10px}
 #pdfPage table{table-layout:fixed}#pdfPage th{letter-spacing:0!important;font-size:8.5px!important;background:#f1f4f1!important;color:#5d665f!important;position:static!important;font-weight:600;border:0}#pdfPage td,#pdfPage th{white-space:normal;line-height:1.3}
 #pdfPage .trentbl table{width:100%;border-collapse:collapse;font-size:10px}#pdfPage .trentbl td{padding:3px 6px;border-top:1px solid #eef1ee;text-align:right}#pdfPage .trentbl td:first-child{text-align:left;font-size:9.5px}#pdfPage .trentbl th{padding:4px 6px;text-align:right}#pdfPage .trentbl th:first-child{text-align:left}
 #pdfPage{position:fixed;left:-20000px;top:0;width:1123px;height:794px;overflow:hidden;background:#fff;color:#1b1f1d;font-family:Poppins,system-ui,sans-serif}
+/* ===== Mode TV (akun RTC/Pusat): seluruh isi dalam satu layar lebar, diperkecil otomatis agar tidak terpotong (lihat tvPas) ===== */
+.btntv{display:none}
+body:not(.peran-area):not(.peran-lokasi):not(.nologin) .btntv{display:inline-flex}
+body.tv{width:2400px;overflow:hidden;background:var(--bg,#f4f6f3)}
+body.tv .hero{padding-bottom:18px;border-radius:0 0 22px 22px}
+body.tv .hero::after,body.tv .tab.r,body.tv .tab.l{display:none}
+body.tv .heroin{padding-top:16px;gap:10px}
+body.tv .heroin h1{font-size:34px;margin:0}
+body.tv .heroin .sub,body.tv #bulanRow,body.tv #waktuRow,body.tv .filters,body.tv #btnPdf,body.tv #btnHarian,body.tv #btnKeluar,body.tv .footer,body.tv #blokMore{display:none!important}
+body.tv .tvjam{display:inline-flex}
+.tvjam{display:none;font-weight:700;font-size:22px;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+body.tv .wrap{margin-top:0;padding:16px 24px 20px;gap:14px}
+body.tv #view-bulan{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);grid-template-areas:"warn warn" "trend area" "trend lok" "drvh drvh" "drv drv";gap:14px;align-items:start}
+body.tv #bwarn{grid-area:warn}
+body.tv #satuHal{grid-area:trend;align-self:stretch}
+body.tv #panelRegA{grid-area:area}
+body.tv #panelRegL{grid-area:lok}
+body.tv #drvH{font-size:20px!important}
+body.tv #view-bulan>.anahead{grid-area:drvh;padding:10px 18px}
+body.tv #bdrv{grid-area:drv;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+body.tv .drv{padding:10px 12px 10px;gap:6px}
+body.tv .drv .ph{padding:6px 10px}.body.tv .drv .ph p{display:none}
+body.tv .drv .ph h2{font-size:15px}body.tv .drv .ph p{font-size:11.5px;margin:0}
+body.tv .drvtbl{font-size:12.5px;table-layout:fixed}body.tv .drvtbl td{padding:3px 4px;line-height:1.15;vertical-align:middle;overflow-wrap:normal;word-break:normal}
+body.tv .drvtbl td:first-child{width:18px}body.tv .drvtbl td:nth-child(2){width:47%;text-align:left}body.tv .drvtbl td:nth-child(3){font-size:11.5px;text-align:left}body.tv .drvtbl td:last-child{width:58px}
+body.tv .drvtbl .amtbar{margin-top:2px}
+body.tv .drvtbl .small{display:none}
+body.tv .panel .ph p{font-size:12px}
+body.tv #panelRegA td,body.tv #panelRegA th,body.tv #panelRegL td,body.tv #panelRegL th{padding:5px 5px;font-size:12.5px}
+body.tv #panelRegA th,body.tv #panelRegL th{white-space:normal;line-height:1.2;vertical-align:bottom}
+body.tv #panelRegA .tbl,body.tv #panelRegL .tbl{overflow:visible}
+body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
 </style>
 
 <header class="hero">
@@ -332,7 +364,7 @@ td{padding:7px 10px}
         <h1>Monitoring Driving Behaviour, Driver Discipline &amp; Fatigue Management — <span class="tBulan">2026</span></h1>
         <div class="sub">Sebaran pelanggaran Driving Behaviour, Driver Discipline &amp; Fatigue Management per area, lokasi dan Driver · data <span id="tPeriode">2026</span></div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><a class="btnlink" id="btnHarian" target="_top" href="#" hidden title="Laporan Harian Operasional GPS & Dashcam">Laporan Harian</a><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnKeluar">Keluar</button></div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><a class="btnlink" id="btnHarian" target="_top" href="#" hidden title="Laporan Harian Operasional GPS & Dashcam">Laporan Harian</a><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnTv" class="btntv" title="Tampilan satu layar untuk TV besar">Mode TV</button><button type="button" id="btnKeluar">Keluar</button><span class="tvjam" id="tvJam"></span></div></div>
     </div>
     <div class="ctrlrow" id="bulanRow">
       <div class="seg" role="tablist" aria-label="Periode grafik"><button type="button" role="tab" id="perBln" aria-selected="true">Bulan</button><button type="button" role="tab" id="perThn" aria-selected="false">Tahun</button></div>
@@ -1356,6 +1388,40 @@ function muat(diam) {
   const t0 = performance.now();
   google.script.run.withSuccessHandler(j => { const t1 = performance.now(); bukaData(j).then(p => { const t2 = performance.now(); start(p); if (!diam) waktuMuat(t0, t1, t2, performance.now(), j.length); }).catch(e => { if (!(diam && D)) gagal(e); }); }).withFailureHandler(e => { if (LGLANGKAH === 2 && !/LOGIN/.test(e && e.message ? e.message : String(e))) return lgGagalProses('Data gagal dimuat: ' + (e && e.message ? e.message : e)); if (perluLogin(e)) return; if (!(diam && D)) gagal(e); }).getDashboardData(TOKEN);
 }
+
+/* ================= MODE TV (akun RTC) =================
+   Tata letak satu layar (lebar tetap 2400 px) lalu diperkecil dengan zoom agar seluruh isi muat di layar, lebar maupun tinggi.
+   Dipilih lewat tombol "Mode TV" (diingat di perangkat ini); keluar dengan tombol Esc atau klik dua kali. */
+const TV_LEBAR = 2400, TV_SIMPAN = 'dashb_tv';
+let TV = false;
+try { TV = localStorage.getItem(TV_SIMPAN) === '1'; } catch (e) { /* tanpa penyimpanan */ }
+function tvPas() {
+  const b = document.body, on = TV && AKUN && AKUN.peran === 'PUSAT' && !b.classList.contains('nologin');
+  b.classList.toggle('tv', !!on);
+  if (!on) { b.style.zoom = ''; b.style.marginLeft = ''; return; }
+  b.style.zoom = 1; b.style.marginLeft = '0px';
+  const isi = document.getElementById('view-bulan');
+  const tinggi = () => Math.ceil(isi.getBoundingClientRect().bottom - b.getBoundingClientRect().top);   // tinggi isi (bukan tinggi body/scrollHeight yang minimal setinggi layar, supaya layar 4K ikut diperbesar)
+  let z = Math.min(innerWidth / TV_LEBAR, innerHeight / tinggi());
+  // setelah diperkecil, teks dibulatkan ke piksel sehingga tinggi tidak persis sebanding: perkecil lagi sampai muat
+  for (let i = 0; i < 6; i++) { b.style.zoom = z; const t = tinggi(); if (t <= innerHeight + 1) break; z *= innerHeight / t * 0.995; }
+  b.style.marginLeft = Math.max(0, (innerWidth / z - TV_LEBAR) / 2) + 'px';
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => tvPas());
+// isi yang selesai belakangan (huruf, grafik, data filter) mengubah tinggi halaman: pas-kan ulang
+if (window.ResizeObserver) new ResizeObserver(() => { if (!TV) return; clearTimeout(tvPas.r); tvPas.r = setTimeout(() => { if (Math.abs(document.getElementById('view-bulan').getBoundingClientRect().bottom - innerHeight) > 2) tvPas(); }, 200); }).observe(document.body);
+function aturTv(on) {
+  TV = on; try { localStorage.setItem(TV_SIMPAN, on ? '1' : '0'); } catch (e) { /* tanpa penyimpanan */ }
+  if (on) { mon = Math.max(0, LAST); tgl = 0; shift = 0; jam = -1; sel = 'ALL'; selLok = -1; showAllLok = false; }   // TV: bulan terakhir, semua area
+  if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+  if (D) render(); else tvPas();
+}
+document.getElementById('btnTv').onclick = () => aturTv(true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && TV) aturTv(false); });
+document.addEventListener('dblclick', () => { if (TV) aturTv(false); });
+addEventListener('resize', () => { clearTimeout(tvPas.t); tvPas.t = setTimeout(tvPas, 150); });
+setInterval(() => { document.getElementById('tvJam').textContent = new Date().toLocaleString('id-ID', {weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'}); }, 1000);
+{ const renderAsli = render; render = function () { renderAsli.apply(this, arguments); requestAnimationFrame(tvPas); }; }
 muat();
 setInterval(() => { if (TOKEN && D) muat(true); }, REFRESH_MS);
 </script>
