@@ -330,14 +330,21 @@ body.tv .heroin .sub,body.tv #bulanRow,body.tv #waktuRow,body.tv .filters,body.t
 body.tv .tvjam{display:inline-flex}
 .tvjam{display:none;font-weight:700;font-size:22px;letter-spacing:.02em;font-variant-numeric:tabular-nums}
 body.tv .wrap{margin-top:0;padding:16px 24px 20px;gap:14px}
-body.tv #view-bulan{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);grid-template-areas:"warn warn" "trend area" "trend lok" "drvh drvh" "drv drv";gap:14px;align-items:start}
-body.tv #bwarn{grid-area:warn}
-body.tv #satuHal{grid-area:trend;align-self:stretch}
-body.tv #panelRegA{grid-area:area}
-body.tv #panelRegL{grid-area:lok}
+body.tv #view-bulan{display:flex;flex-direction:column;gap:14px}
+/* satu bagian per tampilan: tren (awal), rekap area, rekap lokasi, top driver */
+body.tv #view-bulan>*{display:none!important}
+body.tv[data-tvv=tren] #satuHal,body.tv[data-tvv=area] #panelRegA,body.tv[data-tvv=lokasi] #panelRegL,body.tv[data-tvv=driver] #view-bulan>.anahead{display:flex!important}
+body.tv[data-tvv=driver] #bdrv{display:grid!important}
+body.tv #bwarn:not([hidden]){display:block!important}
 body.tv #drvH{font-size:20px!important}
-body.tv #view-bulan>.anahead{grid-area:drvh;padding:10px 18px}
-body.tv #bdrv{grid-area:drv;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+body.tv #view-bulan>.anahead{padding:10px 18px}
+.tvnav{display:none;gap:8px;flex-wrap:wrap;align-items:center}
+body.tv .tvnav{display:flex}
+.tvnav button{font:inherit;font-size:16px;font-weight:600;padding:8px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+.tvnav button[aria-pressed=true]{background:#fff;color:var(--forest);border-color:#fff}
+.tvnav .tvkeluar{margin-left:auto;font-size:14px;font-weight:500;background:none}
+body.tv[data-tvv=lokasi]{overflow-y:auto}
+body.tv #bdrv{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 body.tv .drv{padding:10px 12px 10px;gap:6px}
 body.tv .drv .ph{padding:6px 10px}.body.tv .drv .ph p{display:none}
 body.tv .drv .ph h2{font-size:15px}body.tv .drv .ph p{font-size:11.5px;margin:0}
@@ -366,6 +373,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><a class="btnlink" id="btnHarian" target="_top" href="#" hidden title="Laporan Harian Operasional GPS & Dashcam">Laporan Harian</a><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnTv" class="btntv" title="Tampilan satu layar untuk TV besar">Mode TV</button><button type="button" id="btnKeluar">Keluar</button><span class="tvjam" id="tvJam"></span></div></div>
     </div>
+    <nav class="tvnav" id="tvNav" aria-label="Tampilan Mode TV"><button type="button" data-v="tren">Tren &amp; parameter</button><button type="button" data-v="area">Rekap per area</button><button type="button" data-v="lokasi">Rekap per lokasi</button><button type="button" data-v="driver">Top Pelanggaran Driver</button><button type="button" class="tvkeluar" id="tvKeluar">Keluar Mode TV</button></nav>
     <div class="ctrlrow" id="bulanRow">
       <div class="seg" role="tablist" aria-label="Periode grafik"><button type="button" role="tab" id="perBln" aria-selected="true">Bulan</button><button type="button" role="tab" id="perThn" aria-selected="false">Tahun</button></div>
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
@@ -1390,38 +1398,53 @@ function muat(diam) {
 }
 
 /* ================= MODE TV (akun RTC) =================
-   Tata letak satu layar (lebar tetap 2400 px) lalu diperkecil dengan zoom agar seluruh isi muat di layar, lebar maupun tinggi.
-   Dipilih lewat tombol "Mode TV" (diingat di perangkat ini); keluar dengan tombol Esc atau klik dua kali. */
-const TV_LEBAR = 2400, TV_SIMPAN = 'dashb_tv';
-let TV = false;
+   Tampilan awal: Tren & parameter per kategori memenuhi layar. Tombol di atas (atau panah kiri/kanan) membuka
+   Rekap per area, Rekap per lokasi, dan Top Pelanggaran Driver. Tiap tampilan punya lebar tetap (TV_LEBAR) lalu
+   diperkecil/diperbesar dengan zoom agar muat di layar; Rekap per lokasi (semua lokasi) hanya dipaskan lebarnya dan bisa digulir.
+   Dipilih lewat tombol "Mode TV" (diingat di perangkat ini); keluar dengan tombol Keluar Mode TV atau Esc. */
+const TV_VIEW = ['tren', 'area', 'lokasi', 'driver'], TV_LEBAR = {tren: 1900, area: 1400, lokasi: 1900, driver: 1800}, TV_SIMPAN = 'dashb_tv';
+let TV = false, TVV = 'tren';
 try { TV = localStorage.getItem(TV_SIMPAN) === '1'; } catch (e) { /* tanpa penyimpanan */ }
 function tvPas() {
   const b = document.body, on = TV && AKUN && AKUN.peran === 'PUSAT' && !b.classList.contains('nologin');
   b.classList.toggle('tv', !!on);
-  if (!on) { b.style.zoom = ''; b.style.marginLeft = ''; return; }
-  b.style.zoom = 1; b.style.marginLeft = '0px';
+  if (!on) { b.style.zoom = ''; b.style.marginLeft = ''; b.style.width = ''; delete b.dataset.tvv; return; }
+  b.dataset.tvv = TVV;
+  document.querySelectorAll('#tvNav [data-v]').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === TVV));
+  const lebar = TV_LEBAR[TVV], gulir = TVV === 'lokasi';
+  b.style.width = lebar + 'px'; b.style.zoom = 1; b.style.marginLeft = '0px';
   const isi = document.getElementById('view-bulan');
   const tinggi = () => Math.ceil(isi.getBoundingClientRect().bottom - b.getBoundingClientRect().top);   // tinggi isi (bukan tinggi body/scrollHeight yang minimal setinggi layar, supaya layar 4K ikut diperbesar)
-  let z = Math.min(innerWidth / TV_LEBAR, innerHeight / tinggi());
+  let z = gulir ? innerWidth / lebar : Math.min(innerWidth / lebar, innerHeight / tinggi());
   // setelah diperkecil, teks dibulatkan ke piksel sehingga tinggi tidak persis sebanding: perkecil lagi sampai muat
-  for (let i = 0; i < 6; i++) { b.style.zoom = z; const t = tinggi(); if (t <= innerHeight + 1) break; z *= innerHeight / t * 0.995; }
-  b.style.marginLeft = Math.max(0, (innerWidth / z - TV_LEBAR) / 2) + 'px';
+  for (let i = 0; i < 6 && !gulir; i++) { b.style.zoom = z; const t = tinggi(); if (t <= innerHeight + 1) break; z *= innerHeight / t * 0.995; }
+  b.style.zoom = z;
+  b.style.marginLeft = Math.max(0, (innerWidth / z - lebar) / 2) + 'px';
 }
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => tvPas());
 // isi yang selesai belakangan (huruf, grafik, data filter) mengubah tinggi halaman: pas-kan ulang
-if (window.ResizeObserver) new ResizeObserver(() => { if (!TV) return; clearTimeout(tvPas.r); tvPas.r = setTimeout(() => { if (Math.abs(document.getElementById('view-bulan').getBoundingClientRect().bottom - innerHeight) > 2) tvPas(); }, 200); }).observe(document.body);
+if (window.ResizeObserver) new ResizeObserver(() => { if (!TV) return; clearTimeout(tvPas.r); tvPas.r = setTimeout(() => { if (TVV !== 'lokasi' && Math.abs(document.getElementById('view-bulan').getBoundingClientRect().bottom - innerHeight) > 2) tvPas(); }, 200); }).observe(document.body);
 function aturTv(on) {
   TV = on; try { localStorage.setItem(TV_SIMPAN, on ? '1' : '0'); } catch (e) { /* tanpa penyimpanan */ }
-  if (on) { mon = Math.max(0, LAST); tgl = 0; shift = 0; jam = -1; sel = 'ALL'; selLok = -1; showAllLok = false; }   // TV: bulan terakhir, semua area
+  if (on) { mon = Math.max(0, LAST); tgl = 0; shift = 0; jam = -1; sel = 'ALL'; selLok = -1; TVV = 'tren'; }   // TV: bulan terakhir, semua area, mulai dari tren
+  showAllLok = on;   // Rekap per lokasi di TV: semua lokasi
   if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+  if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
   if (D) render(); else tvPas();
 }
 document.getElementById('btnTv').onclick = () => aturTv(true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && TV) aturTv(false); });
-document.addEventListener('dblclick', () => { if (TV) aturTv(false); });
+function tvLihat(v) { TVV = v; scrollTo(0, 0); tvPas(); }
+document.getElementById('tvNav').onclick = e => { const x = e.target.closest('[data-v]'); if (x) tvLihat(x.dataset.v); };
+document.getElementById('tvKeluar').onclick = () => aturTv(false);
+document.addEventListener('keydown', e => {
+  if (!TV) return;
+  if (e.key === 'Escape') aturTv(false);
+  else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const i = TV_VIEW.indexOf(TVV) + (e.key === 'ArrowRight' ? 1 : TV_VIEW.length - 1); tvLihat(TV_VIEW[i % TV_VIEW.length]); }
+  else if (/^[1-4]$/.test(e.key)) tvLihat(TV_VIEW[+e.key - 1]);
+});
 addEventListener('resize', () => { clearTimeout(tvPas.t); tvPas.t = setTimeout(tvPas, 150); });
 setInterval(() => { document.getElementById('tvJam').textContent = new Date().toLocaleString('id-ID', {weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'}); }, 1000);
-{ const renderAsli = render; render = function () { renderAsli.apply(this, arguments); requestAnimationFrame(tvPas); }; }
+{ const renderAsli = render; render = function () { if (TV) showAllLok = true; renderAsli.apply(this, arguments); requestAnimationFrame(tvPas); }; }
 muat();
 setInterval(() => { if (TOKEN && D) muat(true); }, REFRESH_MS);
 </script>
