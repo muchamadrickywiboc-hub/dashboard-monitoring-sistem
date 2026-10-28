@@ -678,7 +678,7 @@ function derive() {
   RAW.harian.forEach(([m, d, ai, li, a, b, c]) => { if (!okLok(li)) return; const k = m + '|' + d + '|' + ai; const h = H[k] || (H[k] = [m, d, A[ai], 0, 0, 0]); h[3] += a; h[4] += b; h[5] += c; });
   const X = RAW.driver;
   D.drvNama = X ? X.nama : [];
-  const drv = !X ? null : selLok >= 0 ? X.lok.filter(r => r[2] === selLok) : sel !== 'ALL' ? X.area.filter(r => A[r[1]] === sel) : X.all;
+  const drv = !X ? null : (selLok >= 0 ? X.lok.filter(r => r[2] === selLok) : sel !== 'ALL' ? X.area.filter(r => A[r[1]] === sel) : X.all).filter(r => namaDriverOk(D.drvNama[r[4]]));
   Object.assign(D, {nilai, regional, lokasiBulan, lokasiYTD, harian: Object.values(H), drv});
 }
 function kontrol() {
@@ -796,7 +796,7 @@ function deriveWaktu() {
   const X = w.driver;
   D.drvNama = X ? X.nama : [];
   D.drv = !X ? null : (selLok >= 0 ? X.lok.filter(r => w.lokMap[r[2]] === selLok) : sel !== 'ALL' ? X.area.filter(r => A[r[1]] === sel) : X.all)
-    .filter(r => r[0] === 0).map(r => ['W', r[1], w.lokMap[r[2]], w.pMap[r[3]], r[4], r[5]]);
+    .filter(r => r[0] === 0 && namaDriverOk(D.drvNama[r[4]])).map(r => ['W', r[1], w.lokMap[r[2]], w.pMap[r[3]], r[4], r[5]]);
   const J = Array.from({length: 24}, () => ({DB: 0, DD: 0, FM: 0, t: 0, p: 0, pDB: 0, pDD: 0, pFM: 0}));
   w.harian.forEach(([b, d, ai, wl, x, y, z]) => { if (!okLok(w.lokMap[wl]) || !cocokReg(A[ai])) return;
     if (!d && !b) { TJ.grafik += x + y + z; return; }   // hanya filter tanggal: event tanpa jam ikut dihitung tapi tidak punya posisi di grafik
@@ -842,6 +842,13 @@ function renderJam() {
 }
 
 /* ================= TOP PELANGGARAN DRIVER ================= */
+// "0", "0.0", "-", satu huruf, nomor polisi, "CONTOH 1" dll. bukan nama Driver (sama dengan bukanNamaAmt_ di Kode.gs; berlaku juga untuk data lama)
+function namaDriverOk(n) {
+  const s = String(n || '').trim().toUpperCase();
+  return s.replace(/[^A-Z]/g, '').length >= 2
+    && !/^(NAN|NULL|NONE|N ?\/ ?A|#N\/A|NA|TIDAK ADA|KOSONG|UNKNOWN|NO NAME|NONAME|DRIVER|AMT ?\d*|SUPIR|SOPIR|TV ?\d*|CONTOH\b.*|TEST\b.*)$/.test(s)
+    && !/^[A-Z]{1,2} ?\d{1,4} ?[A-Z]{0,3}$/.test(s);
+}
 // D.drv: [[bulan, indeks area, indeks lokasi, indeks parameter, indeks nama, jumlah]] sudah sesuai filter (dari Kode.gs: 5 teratas per kelompok)
 const TOP_DRIVER = 5;   // jumlah Driver di Top Pelanggaran Driver (semua jenis akun)
 function renderDriver() {

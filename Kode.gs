@@ -799,7 +799,7 @@ function bacaJamSumber_(folder, m, src, peta) {
       (blok.e ? blok.e.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[3]], n = +v[4], a = area[+v[1]];
         if (p && n && !dariTarikan_(tg, a)) EJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], p, n]); });
       (blok.a ? blok.a.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[4]], n = +v[5], a = area[+v[1]];
-        if (p && n && !dariTarikan_(tg, a) && namaAmt(J.nama[+v[3]])) AJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], J.nama[+v[3]], p, n]); });
+        const nm = namaAmt(J.nama[+v[3]]); if (p && n && nm && !dariTarikan_(tg, a)) AJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], nm, p, n]); });
     });
   }
   src.filter(o => o.tarikan).forEach(o => {
@@ -1475,8 +1475,15 @@ function BACA_ULANG_SEMUA_OKTOBER() { bacaUlangTarikan('', 10); }
 function BACA_ULANG_SUMBAGUT_OKTOBER() { bacaUlangTarikan('SUMBAGUT', 10); }
 
 function namaAmt(x) {
-  const s = teks(x).replace(/\s*[\[(].*?[\])]\s*/g, ' ').replace(/^[\s.\-]+|[\s.\-]+$/g, '').toUpperCase();
-  return /[A-Z]/.test(s) ? s : '';   // "-", "0", "0.0" dll. bukan nama Driver
+  const s = teks(x).replace(/\s*[\[(].*?[\])]\s*/g, ' ').replace(/[\[(].*$/, '')
+    .replace(/^[\s.,'`|&\/\-]+|[\s.,'`|&\/\-]+$/g, '').replace(/\s+/g, ' ').toUpperCase();
+  return bukanNamaAmt_(s) ? '' : s;
+}
+/** "0", "0.0", "-", "N/A", satu huruf, nomor polisi (B 9577 SEI), "CONTOH 1", "TV6" dll. bukan nama Driver. */
+function bukanNamaAmt_(s) {
+  return s.replace(/[^A-Z]/g, '').length < 2
+    || /^(NAN|NULL|NONE|N ?\/ ?A|#N\/A|NA|TIDAK ADA|KOSONG|UNKNOWN|NO NAME|NONAME|DRIVER|AMT ?\d*|SUPIR|SOPIR|TV ?\d*|CONTOH\b.*|TEST\b.*)$/.test(s)
+    || /^[A-Z]{1,2} ?\d{1,4} ?[A-Z]{0,3}$/.test(s);
 }
 
 /** Mengganti semua baris milik satu file sumber (kolom terakhir = File ID) dengan baris baru. */

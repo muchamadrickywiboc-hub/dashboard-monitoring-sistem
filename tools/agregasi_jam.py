@@ -59,7 +59,10 @@ def tojam(r, idt, ibl, ij, igps):
     return -1
 NAMA = lambda s: re.sub(r'\s*[\[(].*?[\])]\s*', ' ', s).strip(' .-') if s else ''
 _NAMA = NAMA
-NAMA = lambda s: (lambda n: n if re.search('[A-Z]', n) else '')(_NAMA(s))   # '-', '0', '0.0' bukan nama Driver
+_BUKAN = re.compile(r"^(NAN|NULL|NONE|N ?/ ?A|#N/A|NA|TIDAK ADA|KOSONG|UNKNOWN|NO NAME|NONAME|DRIVER|AMT ?\d*|SUPIR|SOPIR|TV ?\d*|CONTOH\b.*|TEST\b.*)$|^[A-Z]{1,2} ?\d{1,4} ?[A-Z]{0,3}$")
+def NAMA(s):   # '-', '0', '0.0', satu huruf, nomor polisi, 'CONTOH 1' dll. bukan nama Driver (sama dengan namaAmt di Kode.gs)
+    n = re.sub(r'\s+', ' ', re.sub(r'[\[(].*$', '', _NAMA(s))).strip(" .,'`|&/-").upper()
+    return '' if len(re.sub('[^A-Z]', '', n)) < 2 or _BUKAN.match(n) else n
 TIMECOLS = ('TANGGAL & JAM', 'TANGGAL CCTV', 'JAM', 'LOKASI_1', 'ALAMAT', 'LAT,LONG')
 merged = collections.Counter(); keyof = {}
 info = {'files': [], 'rows': 0, 'nodate': 0, 'nojam': 0, 'outmonth': collections.Counter(), 'dup_removed': 0}
