@@ -106,7 +106,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-10-29d';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-10-29e';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE; }
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -1949,7 +1949,7 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
   const top10 = grup => {
     const G = {};
     xr.forEach(o => {
-      const g = grup(o) + '|' + o.p, key = g + '|' + o.nama;
+      const g = grup(o) + '|' + o.p, key = g + '|' + o.l + '|' + o.nama;   // nama sama di lokasi berbeda = orang berbeda
       const x = G[key] || (G[key] = { g: g, m: o.m, p: o.p, nama: o.nama, n: 0, lokT: {}, areaT: {} });
       x.n += o.n; x.lokT[o.l] = (x.lokT[o.l] || 0) + o.n; x.areaT[o.a] = (x.areaT[o.a] || 0) + o.n;
     });

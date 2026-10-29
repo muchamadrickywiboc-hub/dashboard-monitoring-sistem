@@ -1252,8 +1252,8 @@ function halamanPdf() {
   if (selLok < 0 && sel === 'ALL') { judulRank = 'Peringkat Area'; rank = REG.map(r => ({n: rn(r), v: regTot(r, KC) || 0, w: getComputedStyle(document.documentElement).getPropertyValue('--r' + REG.indexOf(r)).trim()})).filter(o => o.v > 0).sort((a, b) => b.v - a.v).slice(0, 10); }
   else if (selLok < 0) { judulRank = 'Top 10 Lokasi'; rank = (D.lokasiBulan[KC] || []).filter(o => cocokReg(o.r) && o.t > 0).slice(0, 10).map(o => ({n: o.l, v: o.t})); }
   else { judulRank = 'Top 10 Parameter'; rank = P.map(p => ({n: p.label, s: (CATS.find(c => c.key === p.kat) || {}).name, v: nv(p.key, kc) || 0, w: (CATS.find(c => c.key === p.kat) || {}).color})).filter(o => o.v > 0).sort((a, b) => b.v - a.v).slice(0, 10); }
-  const dg = {}; (D.drv || []).filter(r => r[0] === KC).forEach(r => { const o = dg[r[4]] || (dg[r[4]] = {v: 0, l: r[2], top: 0}); o.v += r[5]; if (r[5] > o.top) { o.top = r[5]; o.l = r[2]; } });
-  const drv = Object.keys(dg).map(k => ({n: D.drvNama[k], s: lokNama(dg[k].l), v: dg[k].v})).sort((a, b) => b.v - a.v).slice(0, TOP_DRIVER);
+  const dg = {}; (D.drv || []).filter(r => r[0] === KC).forEach(r => { const k = r[4] + '|' + r[2], o = dg[k] || (dg[k] = {v: 0, n: r[4], l: r[2]}); o.v += r[5]; });   // nama sama di lokasi berbeda = orang berbeda
+  const drv = Object.keys(dg).map(k => ({n: D.drvNama[dg[k].n], s: lokNama(dg[k].l), v: dg[k].v})).sort((a, b) => b.v - a.v).slice(0, TOP_DRIVER);
   const blok = (judul, isi, flex) => `<div style="flex:${flex || 1};min-width:0;border:1px solid #e3e8e3;border-radius:12px;padding:9px 12px"><div style="font-size:11.5px;font-weight:700;margin-bottom:6px">${judul}</div>${isi}</div>`;
   const tj = W && D.tanpaJam && D.tanpaJam.t && (shift || jam >= 0) ? ` · ${nf(D.tanpaJam.t)} event GPS tanpa jam tidak ikut filter shift/jam` : '';
   return `<div style="height:100%;display:flex;flex-direction:column">
