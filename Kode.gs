@@ -273,10 +273,14 @@ function sidikPw_(u, p) {
 function cakupanAkun_(r) {
   const u = teks(r[0]).toLowerCase(), nama = teks(r[2]) || u, peran = teks(r[3]).toUpperCase(), area = areaNorm(r[4]), lok = teks(r[5]).toUpperCase();
   if (peran === 'PUSAT') return { u: u, nama: nama, peran: peran };
+  if (peran === 'MASTER') return { u: u, nama: nama, peran: 'PUSAT' };   // akun induk: login sendiri = RTC; password-nya juga membuka akun lain (lihat login)
   if (peran === 'AREA' && area) return { u: u, nama: nama, peran: peran, area: area };
   if (peran === 'LOKASI' && lok) return { u: u, nama: nama, peran: peran, area: area, lok: ALIAS_LOKASI[lok] || lok };
   return null;
 }
+
+const aktifAkun_ = r => !/^(TIDAK|NO|FALSE|0|NONAKTIF)$/i.test(teks(r[6]));
+const pwCocok_ = (r, p) => { const pw = teks(r[1]); return !!pw && (pw.indexOf('sha256:') === 0 ? pw === sidikPw_(teks(r[0]).toLowerCase(), p) : pw === p); };
 
 /** Dipanggil halaman masuk. Mengembalikan token sesi + cakupan akun. */
 function login(username, password) {
@@ -287,12 +291,16 @@ function login(username, password) {
   const sh = sheetAkun_(), v = sh ? sh.getDataRange().getValues() : [];
   const r = v.slice(1).filter(x => teks(x[0]).toLowerCase() === u)[0];
   const pw = r ? teks(r[1]) : '';
-  const cocok = r && !/^(TIDAK|NO|FALSE|0|NONAKTIF)$/i.test(teks(r[6])) && pw && (pw.indexOf('sha256:') === 0 ? pw === sidikPw_(u, p) : pw === p);
-  if (!cocok) { cache.put(kg, String(gagal + 1), 900); Utilities.sleep(600); throw new Error('Username atau password salah.'); }
+  const cocok = r && aktifAkun_(r) && pwCocok_(r, p);
+  // password akun Peran MASTER membuka semua akun (RTC, Command Center, Control Room)
+  const master = !cocok && r && aktifAkun_(r) ? v.slice(1).filter(x => teks(x[3]).toUpperCase() === 'MASTER' && aktifAkun_(x) && pwCocok_(x, p))[0] : null;
+  if (!cocok && !master) { cache.put(kg, String(gagal + 1), 900); Utilities.sleep(600); throw new Error('Username atau password salah.'); }
   const ses = cakupanAkun_(r);
   if (!ses) throw new Error('Akun belum lengkap: isi Peran (PUSAT / AREA / LOKASI) beserta Area atau Lokasinya di sheet Akun.');
-  const isi = b64_(Utilities.newBlob(JSON.stringify({ u: u, c: capPw_(pw), t: Date.now() })).getBytes()), token = isi + '.' + tandaSesi_(isi);
-  cache.put('AK_' + u + '_' + capPw_(pw), JSON.stringify(ses), CEK_AKUN_DETIK);
+  const c = master ? 'm' + capPw_(teks(master[1])) : capPw_(pw), isiSesi = { u: u, c: c, t: Date.now() };
+  if (master) isiSesi.m = teks(master[0]).toLowerCase();
+  const isi = b64_(Utilities.newBlob(JSON.stringify(isiSesi)).getBytes()), token = isi + '.' + tandaSesi_(isi);
+  cache.put('AK_' + u + '_' + c, JSON.stringify(ses), CEK_AKUN_DETIK);
   cache.remove(kg);
   return JSON.stringify(Object.assign({ token: token }, ses));
 }
@@ -328,8 +336,11 @@ function sesi_(token) {
   if (ada) return JSON.parse(ada);
   // cek ulang akun: masih ada, aktif, dan password belum diganti
   const sh = sheetAkun_(), v = sh ? sh.getDataRange().getValues() : [];
-  const r = v.slice(1).filter(x => teks(x[0]).toLowerCase() === o.u)[0];
-  const ses = r && !/^(TIDAK|NO|FALSE|0|NONAKTIF)$/i.test(teks(r[6])) && teks(r[1]) && capPw_(teks(r[1])) === o.c ? cakupanAkun_(r) : null;
+  const cari = u => v.slice(1).filter(x => teks(x[0]).toLowerCase() === u)[0];
+  const r = cari(o.u), mr = o.m ? cari(o.m) : null;
+  const pwOk = o.m ? mr && teks(mr[3]).toUpperCase() === 'MASTER' && aktifAkun_(mr) && teks(mr[1]) && 'm' + capPw_(teks(mr[1])) === o.c
+    : r && teks(r[1]) && capPw_(teks(r[1])) === o.c;
+  const ses = r && aktifAkun_(r) && pwOk ? cakupanAkun_(r) : null;
   if (!ses) throw new Error('LOGIN');
   cache.put(kunci, JSON.stringify(ses), CEK_AKUN_DETIK);
   return ses;
