@@ -25,13 +25,22 @@
 const CFG = {
   FOLDER_ID: '1nUJtRTcKwJua4Am9EdiFXoQxcTALgt9e',   // folder Drive "3. Data Dashboard"
   TARIKAN_ID: '11akfRibrQLixrBicdNXazEWX-TGmgfYu4zdYYNaOEy8',   // spreadsheet "Tarikan Sistem": kolom Area | linkgdrive (folder tarikan harian per regional)
-  MULAI_TARIKAN: '2026-10-29',   // mulai tanggal ini data HANYA dari tarikan (link Tarikan Sistem); tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..."
-  // area yang mulai dari tarikan pada tanggal lain: file rekap Sumbagut 1 & 2 di "Data 10 Oktober 2026" hanya sampai tanggal 26, jadi 27-28 dari tarikan
-  MULAI_TARIKAN_AREA: { SUMBAGUT: '2026-10-27' },
+  // Oktober seluruhnya dari "Data 10 Oktober 2026" + "Jam 10 ..." (hasil olah Oktober.zip); folder per 4 jam dipakai mulai November
+  MULAI_TARIKAN: '2026-11-01',   // mulai tanggal ini data HANYA dari tarikan; tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..."
+  MULAI_TARIKAN_AREA: {},   // area yang mulai dari tarikan pada tanggal lain, mis. { SUMBAGUT: '2026-10-27' }
   // folder "4. Report Data alert Per 4 Jam": subfolder per regional ("7. Malupa"), isinya file alert mentah sebulan (Google Sheet "MALUPA_OKTOBER 2026") yang diperbarui tiap 4 jam; file Excel di folder ini tidak dibaca.
   // Mulai MULAI_4JAM event area yang filenya sudah terbaca dari folder ini HANYA diambil dari sini (tarikan harian di Tarikan Sistem tidak dipakai lagi untuk area itu).
   ALERT4JAM_ID: '1ZLTierdGgXgpA2BwFszLnGfLa1fHRF0F',
-  MULAI_4JAM: '2026-10-29',
+  MULAI_4JAM: '2026-11-01',
+  // tanggal anomali di file Data / Jam (total event satu area < 20% median hariannya bulan itu, data rekap tidak lengkap): tidak dihitung.
+  // Kunci = nama Area persis seperti di file Data (sebelum digabung, mis. "SUMBAGUT I").
+  TANGGAL_ANOMALI: {
+    'SUMBAGUT I': ['2026-10-01', '2026-10-02', '2026-10-23'],
+    'SUMBAGUT II': ['2026-10-01', '2026-10-02', '2026-10-22'],
+    'SUMBAGUT': ['2026-10-01'],   // 1 baris area "SUMBAGUT" tanpa nomor
+    'JABALINUS': ['2026-10-04', '2026-10-25'],
+    'MALUPA': ['2026-10-01'],
+  },
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
   JEDA_GABUNG_DETIK: 0,   // (mis. 10) alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
@@ -97,7 +106,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-10-29b';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-10-29c';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE; }
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -782,7 +791,7 @@ function bangunData_() {
   });
   if (Object.keys(belum).length) peringatan.push('Case belum ada di Pemetaan (tidak dihitung): ' + Object.keys(belum).slice(0, 15).join(', '));
   if (!dataBulan.length) peringatan.push('Belum ada file "Data <nomor bulan> ..." atau "Tarikan <nomor bulan> ..." (Google Sheet) di folder data.');
-  else if (!tarikan[BULAN_MULAI_TARIKAN]) peringatan.push('Data mulai ' + (+CFG.MULAI_TARIKAN.slice(8, 10)) + ' ' + BULAN[BULAN_MULAI_TARIKAN].charAt(0) + BULAN[BULAN_MULAI_TARIKAN].slice(1).toLowerCase() + ' dan seterusnya menunggu file tarikan selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang.');
+  else if (!tarikan[BULAN_MULAI_TARIKAN] && Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd') >= CFG.MULAI_TARIKAN) peringatan.push('Data mulai ' + (+CFG.MULAI_TARIKAN.slice(8, 10)) + ' ' + BULAN[BULAN_MULAI_TARIKAN].charAt(0) + BULAN[BULAN_MULAI_TARIKAN].slice(1).toLowerCase() + ' dan seterusnya menunggu file tarikan selesai diproses. Pastikan layanan Drive API sudah ditambahkan, lalu jalankan menu Dashboard > Proses file tarikan sekarang.');
   const log = bacaLogTarikan(folder);
   if (log.proses) peringatan.push('Data sedang dalam proses update secara otomatis.');
   if (log.gagal.length) peringatan.push('File tarikan gagal dibaca: ' + log.gagal.slice(0, 5).join('; '));
@@ -900,11 +909,11 @@ function bacaJamSumber_(folder, m, src, peta) {
   if (fJam) {
     const J = bacaJam_(fJam), ks = J.kasus.map(kasus), area = J.area.map(areaNorm);
     Object.keys(J.d).forEach(t => {
-      const tg = { m: m, d: +t }, blok = J.d[t], jam = x => +x === 99 ? -1 : +x;
+      const tg = { m: m, d: +t }, blok = J.d[t], jam = x => +x === 99 ? -1 : +x, anom = J.area.map(a => anomali_(a, m, +t));
       (blok.e ? blok.e.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[3]], n = +v[4], a = area[+v[1]];
-        if (p && n && !dariTarikan_(tg, a)) EJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], p, n]); });
+        if (p && n && !anom[+v[1]] && !dariTarikan_(tg, a)) EJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], p, n]); });
       (blok.a ? blok.a.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[4]], n = +v[5], a = area[+v[1]];
-        const nm = namaAmt(J.nama[+v[3]]); if (p && n && nm && !dariTarikan_(tg, a)) AJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], nm, p, n]); });
+        const nm = namaAmt(J.nama[+v[3]]); if (p && n && nm && !anom[+v[1]] && !dariTarikan_(tg, a)) AJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], nm, p, n]); });
     });
   }
   src.filter(o => o.tarikan).forEach(o => {
@@ -930,7 +939,7 @@ function bacaSumberBulan_(src, peta, belum, hanyaEvent) {
       const kc = normKasus(r[3]), c = peta.kasus[kc], n = angka(r[4]) || 0;
       if (!kc || !n) return;
       const tg = tanggalTeks(r[0]);
-      if (!tg || tg.m !== o.m || dariTarikan_(tg, r[1]) !== o.tarikan) return;
+      if (!tg || tg.m !== o.m || dariTarikan_(tg, r[1]) !== o.tarikan || (!o.tarikan && anomali_(r[1], tg.m, tg.d))) return;
       if (o.tarikan) sumberOk[teks(r[5])] = 1;
       if (!c && !KASUS_ABAIKAN[kc]) belum[kc] = 1;
       const p = c && c.k !== 'LAIN' ? c.p : lh[kc];   // case di luar dashboard tetap disimpan bila dipakai Laporan Harian
@@ -1099,8 +1108,13 @@ function tulisSummary_(ss, sf, m, x, j, peta, src, tanda) {
 }
 
 /** Tanda sumber: berubah bila file sumber, sheet Pemetaan, atau tanggal mulai tarikan berubah. */
+/** true bila baris file Data / Jam (area mentah, bulan 0-11, tanggal) termasuk CFG.TANGGAL_ANOMALI. */
+function anomali_(area, m, d) {
+  const L = (CFG.TANGGAL_ANOMALI || {})[teks(area).toUpperCase()];
+  return !!L && L.indexOf(CFG.TAHUN + '-' + ('0' + (m + 1)).slice(-2) + '-' + ('0' + d).slice(-2)) >= 0;
+}
 function tandaSumber_(src, peta) {
-  const isi = [CFG.MULAI_TARIKAN, JSON.stringify(CFG.MULAI_TARIKAN_AREA || {}), JSON.stringify(peta.kasus)]
+  const isi = [CFG.MULAI_TARIKAN, JSON.stringify(CFG.MULAI_TARIKAN_AREA || {}), JSON.stringify(CFG.TANGGAL_ANOMALI || {}), JSON.stringify(peta.kasus)]
     .concat(src.map(o => o.f.getId() + '@' + o.f.getLastUpdated().getTime())).join('|');
   return 'v1-' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, isi, Utilities.Charset.UTF_8)).slice(0, 22);
 }
