@@ -144,6 +144,9 @@ body:not(.peran-lokasi):not(.peran-area) #btnHarian{display:none!important}
 #loadwrap:not(:has(#loading[hidden])) ~ .wrap{margin-top:0}
 .loading{background:var(--surface);border-radius:16px;box-shadow:0 8px 24px rgba(30,60,40,.10);padding:18px 22px;font-size:15px;color:var(--ink-2);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .loading button{font:600 13px var(--f-ui);border:0;background:var(--forest);color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer}
+#pageLoad{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:rgba(245,248,244,.55);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .15s}
+#pageLoad.on{opacity:1;pointer-events:auto}
+#pageLoad .kartu{background:var(--surface);border-radius:16px;box-shadow:0 8px 24px rgba(30,60,40,.16);padding:18px 24px;display:flex;align-items:center;gap:12px;font-size:15px;color:var(--ink-2)}
 .spin{width:18px;height:18px;border-radius:50%;border:3px solid var(--grid);border-top-color:var(--forest);animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .status{display:flex;flex-direction:column;gap:10px;width:100%}
@@ -482,6 +485,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
     <div class="lg-bottom"><span>Elnusa Petrofin · RTC</span><span>Driving Behaviour · Driver Discipline · Fatigue Management</span></div>
   </section>
 </div>
+<div id="pageLoad" role="status" aria-live="polite"><div class="kartu"><span class="spin"></span><span id="pageLoadTeks">Memuat data…</span></div></div>
 <div class="wrap" id="loadwrap"><div class="loading" id="loading" role="status"></div></div>
 
 <div class="wrap" id="view-bulan">
@@ -805,6 +809,16 @@ function renderHarian() {
 
 /* ================= FILTER WAKTU (TANGGAL / SHIFT / JAM) ================= */
 // WIN: hasil getDataWaktu (bentuk sama dengan data utama; bulan 0 = jendela terpilih, 1 = tanggal sebelumnya, "tanggal" = jam + 1)
+// layar "memuat" selama ada permintaan data ke server (filter tanggal / event / muat ulang); dihitung supaya beberapa permintaan sekaligus aman
+let MUAT_N = 0, MUAT_T = null;
+function muatLayar(d, teks) {
+  MUAT_N = Math.max(0, MUAT_N + d);
+  const el = document.getElementById('pageLoad');
+  if (teks) document.getElementById('pageLoadTeks').textContent = teks;
+  clearTimeout(MUAT_T);
+  if (MUAT_N) MUAT_T = setTimeout(() => el.classList.add('on'), 120);   // jeda singkat supaya tidak berkedip bila data cepat datang
+  else el.classList.remove('on');
+}
 function siapkanWin(w) {
   const idx = {}; RAW.lok.forEach((x, i) => idx[x[0] + '|' + x[1]] = i);
   w.lokMap = w.lok.map(x => idx[x[0] + '|' + x[1]] === undefined ? -1 : idx[x[0] + '|' + x[1]]);
@@ -813,8 +827,9 @@ function siapkanWin(w) {
 }
 function muatWaktu(key) {
   WKEY = key; WIN = null; ERRW = '';
-  google.script.run.withSuccessHandler(j => { if (WKEY !== key) return; WIN = siapkanWin(JSON.parse(j)); render(); })
-    .withFailureHandler(e => { if (WKEY !== key) return; if (perluLogin(e)) return; ERRW = 'Data waktu gagal dimuat: ' + (e && e.message ? e.message : e); tgl = 0; shift = 0; jam = -1; WKEY = ''; render(); })
+  muatLayar(1, 'Memuat data tanggal…');
+  google.script.run.withSuccessHandler(j => { muatLayar(-1); if (WKEY !== key) return; WIN = siapkanWin(JSON.parse(j)); render(); })
+    .withFailureHandler(e => { muatLayar(-1); if (WKEY !== key) return; if (perluLogin(e)) return; ERRW = 'Data waktu gagal dimuat: ' + (e && e.message ? e.message : e); tgl = 0; shift = 0; jam = -1; WKEY = ''; render(); })
     .getDataWaktu(TOKEN, mon, tgl, shift, jam);
 }
 function deriveWaktu() {
@@ -1056,8 +1071,9 @@ const escH = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;',
 function muatEvent(m) {
   if (m === null || EVD[m]) return;
   EVD[m] = 'muat';
-  google.script.run.withSuccessHandler(j => { EVD[m] = siapkanWin(JSON.parse(j)); if (EVT) render(); })
-    .withFailureHandler(e => { if (perluLogin(e)) return; EVD[m] = {gagal: e && e.message ? e.message : String(e)}; if (EVT) render(); })
+  muatLayar(1, 'Memuat data event…');
+  google.script.run.withSuccessHandler(j => { muatLayar(-1); EVD[m] = siapkanWin(JSON.parse(j)); if (EVT) render(); })
+    .withFailureHandler(e => { muatLayar(-1); if (perluLogin(e)) return; EVD[m] = {gagal: e && e.message ? e.message : String(e)}; if (EVT) render(); })
     .getDataEvent(TOKEN, m);
 }
 function pilihanEvent() {
@@ -1585,8 +1601,10 @@ function waktuMuat(t0, t1, t2, t3, n) {
 function muat(diam) {
   if (!TOKEN) { tampilLogin(''); return; }
   if (!diam || !D) { const l = document.getElementById('loading'); l.hidden = false; l.innerHTML = '<span class="spin"></span> Memuat data dashboard…'; }
-  const t0 = performance.now();
-  google.script.run.withSuccessHandler(j => { const t1 = performance.now(); bukaData(j).then(p => { const t2 = performance.now(); start(p); if (!diam) waktuMuat(t0, t1, t2, performance.now(), j.length); }).catch(e => { if (!(diam && D)) gagal(e); }); }).withFailureHandler(e => { if (LGLANGKAH === 2 && !/LOGIN/.test(e && e.message ? e.message : String(e))) return lgGagalProses('Data gagal dimuat: ' + (e && e.message ? e.message : e)); if (perluLogin(e)) return; if (!(diam && D)) gagal(e); }).getDashboardData(TOKEN);
+  const t0 = performance.now(), layar = !diam && !!D;   // muat ulang dari halaman yang sudah terbuka; pembukaan pertama memakai kotak "Memuat data dashboard"
+  if (layar) muatLayar(1, 'Memuat data dashboard…');
+  const selesai = () => { if (layar) muatLayar(-1); };
+  google.script.run.withSuccessHandler(j => { const t1 = performance.now(); bukaData(j).then(p => { const t2 = performance.now(); start(p); selesai(); if (!diam) waktuMuat(t0, t1, t2, performance.now(), j.length); }).catch(e => { selesai(); if (!(diam && D)) gagal(e); }); }).withFailureHandler(e => { selesai(); if (LGLANGKAH === 2 && !/LOGIN/.test(e && e.message ? e.message : String(e))) return lgGagalProses('Data gagal dimuat: ' + (e && e.message ? e.message : e)); if (perluLogin(e)) return; if (!(diam && D)) gagal(e); }).getDashboardData(TOKEN);
 }
 
 /* ================= MODE TV (akun RTC) =================
