@@ -252,7 +252,7 @@ function tglKendala_(x) {
   return s ? { m: +s[2] - 1, d: +s[1] } : null;
 }
 /**
- * Justifikasi Uptime satu bulan. Setiap baris = satu Nopol per tanggal & perangkat; Status "Offline" = offline.
+ * Justifikasi Uptime satu bulan. Jumlah unit = Nopol di sheet Master GPS (Uptime) / Master CCTV (Uptime) per lokasi; offline = Nopol berstatus "Offline" di Justifikasi Uptime pada tanggal itu; online = unit - offline.
  * Lokasi & area hanya dari kolom Lokasi / Area sheet ini. Nama unit yang lebih rinci
  * ("FT SIBOLGA POLTAPLUS MOR I") dicocokkan ke nama lokasi terpanjang di Master Lokasi yang menjadi awalannya ("FT SIBOLGA").
  * { hari: { d: [[lokasi, area, jenis, jumlahNopol, nopolOffline], ...] }, off: [[d, lokasi, area, lokasiDiSheet, perangkat, nopol, durasi, justifikasi, keterangan], ...] }
@@ -260,7 +260,7 @@ function tglKendala_(x) {
  * kuncinya ikut waktu ubah spreadsheet kendala, jadi isian baru langsung terbaca.
  */
 function kendalaBulan_(m) {
-  const versi = DriveApp.getFileById(LH.KENDALA_ID).getLastUpdated().getTime(), kunci = x => 'LHJU5_' + x + '_' + versi, ada = ambilCache_(kunci(m));
+  const versi = DriveApp.getFileById(LH.KENDALA_ID).getLastUpdated().getTime(), kunci = x => 'LHJU6_' + x + '_' + versi, ada = ambilCache_(kunci(m));
   if (ada) return JSON.parse(ada);
   const t0 = Date.now(), semua = kendalaSemua_();
   Object.keys(semua).forEach(x => simpanCache_(JSON.stringify(semua[x]), kunci(x), CFG.CACHE_DETIK));
@@ -308,15 +308,42 @@ function kendalaSemua_() {
     const u = tg.m + '|' + tg.d + '|' + kunciLok(lok) + '|' + jenis + '|' + nopol, o = N[u] || (N[u] = [tg.m, tg.d, lok, area, jenis, false, null]);
     if (off && !o[5]) { o[5] = true; o[6] = r; }   // satu kendaraan dihitung sekali per hari
   });
-  const H = {}, semua = {}, bulan = m => semua[m] || (semua[m] = { hari: {}, off: [] });
+  // jumlah unit per lokasi dari sheet "Master GPS (Uptime)" / "Master CCTV (Uptime)" (status di sheet master tidak dibaca)
+  const MASTER = { gps: 'Master GPS (Uptime)', cctv: 'Master CCTV (Uptime)' }, mNopol = {}, mJml = {};
+  Object.keys(MASTER).forEach(jenis => {
+    const x = kolomDipakai_(ss, MASTER[jenis], ['NOPOL', 'LOKASI', 'AREA']), hx = petaKolom(x[0] || []);
+    if (hx['NOPOL'] === undefined || hx['LOKASI'] === undefined) throw new Error('Sheet ' + MASTER[jenis] + ' harus punya kolom Nopol dan Lokasi.');
+    const peta = mNopol[jenis] = {}, jml = mJml[jenis] = {};
+    x.slice(1).forEach(r => {
+      const n = kunciNopol(r[hx['NOPOL']]), la = teks(r[hx['LOKASI']]).toUpperCase();
+      if (!n || !la || peta[n]) return;   // nopol ganda dihitung sekali
+      const lok = lokasiDari(la), kl = kunciLok(lok), area = areaL[kl] || (hx['AREA'] === undefined ? '' : areaNorm(r[hx['AREA']]));
+      peta[n] = { lok: lok, area: area };
+      (jml[kl] || (jml[kl] = [lok, area, 0]))[2]++;
+    });
+  });
+  // offline per tanggal dari Justifikasi Uptime; tanggal yang punya baris (perangkat apa pun) = tanggal berdata
+  const semua = {}, bulan = m => semua[m] || (semua[m] = { hari: {}, off: [] }), adaTgl = {}, OFF = {};
   Object.keys(N).forEach(u => {
-    const [m, d, lok, area, jenis, off, r] = N[u], kk = m + '|' + d + '|' + kunciLok(lok) + '|' + jenis;
-    (H[kk] || (H[kk] = [m, d, lok, area, jenis, 0, 0]))[5]++;
+    const [m, d, lokJ, areaJ, jenis, off, r] = N[u], nopol = u.split('|')[4];
+    adaTgl[m + '|' + d] = 1;
     if (!off) return;
-    H[kk][6]++;
+    const mt = mNopol[jenis][nopol], lok = mt ? mt.lok : lokJ, area = mt ? mt.area : areaJ, kk = m + '|' + d + '|' + jenis + '|' + kunciLok(lok);
+    const o = OFF[kk] || (OFF[kk] = [lok, area, 0, 0]);
+    o[2]++; if (!mt) o[3]++;   // nopol yang tidak ada di master: ikut dihitung (offline) dan menambah jumlah unit
     bulan(m).off.push([d, lok, area, teks(r[iL]), teks(r[iP]), teks(r[iN]), iD === undefined ? '' : angka(r[iD]) || 0, iJ === undefined ? '' : teks(r[iJ]), iK === undefined ? '' : teks(r[iK])]);
   });
-  Object.keys(H).forEach(kk => { const x = H[kk], o = bulan(x[0]).hari; (o[x[1]] = o[x[1]] || []).push(x.slice(2)); });
+  Object.keys(adaTgl).forEach(md => {
+    const [m, d] = md.split('|').map(Number), o = bulan(m).hari, baris = o[d] = o[d] || [];
+    Object.keys(MASTER).forEach(jenis => {
+      const sudah = {};
+      Object.keys(mJml[jenis]).forEach(kl => {
+        const [lok, area, total] = mJml[jenis][kl], x = OFF[md + '|' + jenis + '|' + kl] || [lok, area, 0, 0];
+        sudah[kl] = 1; baris.push([lok, area, jenis, total + x[3], x[2]]);
+      });
+      Object.keys(OFF).filter(kk => kk.indexOf(md + '|' + jenis + '|') === 0 && !sudah[kk.split('|')[3]]).forEach(kk => { const x = OFF[kk]; baris.push([x[0], x[1], jenis, x[3], x[2]]); });
+    });
+  });
   Logger.log('Justifikasi Uptime: diolah ' + (Date.now() - t0) + ' ms sejak mulai.');
   Object.keys(semua).forEach(m => semua[m].off.sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)));
   return semua;
