@@ -18,7 +18,7 @@
  *
  *  - doGet()            : web app (?laporan=harian = Laporan GPS & Dashcam Daily/Monthly, LaporanHarian.gs).
  *  - getDashboardData() : dipanggil dashboard; hasil di-cache 6 jam + salinan di file Drive (menu "Perbarui data dashboard sekarang" setelah data diubah).
- *  - pasangPemicu()     : jalankan sekali; membangun ulang cache tiap jam supaya dashboard langsung terbuka.
+ *  - pasangPemicu()     : jalankan sekali; memeriksa data baru tiap 15 menit dan membangun ulang cache supaya dashboard langsung terbuka.
  */
 
 /* ============================== PENGATURAN ============================== */
@@ -28,11 +28,10 @@ const CFG = {
   MULAI_TARIKAN: '2026-10-29',   // mulai tanggal ini data HANYA dari tarikan (link Tarikan Sistem); tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..."
   // area yang mulai dari tarikan pada tanggal lain: file rekap Sumbagut 1 & 2 di "Data 10 Oktober 2026" hanya sampai tanggal 26, jadi 27-28 dari tarikan
   MULAI_TARIKAN_AREA: { SUMBAGUT: '2026-10-27' },
-  // folder "4. Report Data alert Per 4 Jam": subfolder per regional ("7. Malupa"), isinya file alert mentah sebulan (MALUPA_OKTOBER 2026.xlsx) yang diperbarui tiap 4 jam.
+  // folder "4. Report Data alert Per 4 Jam": subfolder per regional ("7. Malupa"), isinya file alert mentah sebulan (Google Sheet "MALUPA_OKTOBER 2026") yang diperbarui tiap 4 jam; file Excel di folder ini tidak dibaca.
   // Mulai MULAI_4JAM event area yang filenya sudah terbaca dari folder ini HANYA diambil dari sini (tarikan harian di Tarikan Sistem tidak dipakai lagi untuk area itu).
   ALERT4JAM_ID: '1ZLTierdGgXgpA2BwFszLnGfLa1fHRF0F',
   MULAI_4JAM: '2026-10-29',
-  MAKS_MB_4JAM: 40,   // file lebih besar dari ini tidak bisa diubah ke Google Sheet (batas 10 juta sel) -> dicatat di Log Tarikan, minta dipecah per hari
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
   JEDA_GABUNG_DETIK: 0,   // (mis. 10) alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
@@ -124,7 +123,9 @@ function doGet(e) {
 
 /** Dijalankan pemicu waktu: membangun ulang cache supaya pengunjung tidak menunggu spreadsheet dihitung. */
 function panaskanCache() {
+  const versi = versiData_();
   simpanUtama_(JSON.stringify(bangunData_()));
+  PropertiesService.getScriptProperties().setProperties({ VERSI_PANAS: versi, WAKTU_PANAS: String(Date.now()) });
   // Laporan Harian ikut dipanaskan bila waktu eksekusi masih cukup (batas Apps Script 6 menit)
   if (Date.now() - MULAI_EKSEKUSI_ < 4.5 * 60 * 1000) { try { panaskanLH_(); } catch (e) { Logger.log('Cache Laporan Harian gagal dipanaskan: ' + e.message); } }
 }
@@ -169,14 +170,24 @@ function dataUtamaZ_() {
 /** Data utama sebagai teks JSON. */
 function dataUtama_() { return unzip_(dataUtamaZ_()); }
 
-/** Jalankan sekali dari editor: memasang pemicu panaskanCache tiap jam. */
+/** Jalankan sekali dari editor: memasang pemicu prosesTarikan & panaskanOtomatis tiap 15 menit. */
+/**
+ * Pemicu tiap 15 menit: dashboard & summary dibangun ulang bila ada data baru sejak pembangunan terakhir
+ * (mis. prosesTarikan kehabisan waktu sebelum sempat memanaskan cache), atau bila sudah 1 jam. Kalau tidak ada yang berubah, langsung selesai
+ * supaya kuota waktu harian Apps Script tidak habis.
+ */
+function panaskanOtomatis() {
+  const p = PropertiesService.getScriptProperties();
+  if (p.getProperty('VERSI_PANAS') === versiData_() && Date.now() - Number(p.getProperty('WAKTU_PANAS') || 0) < 55 * 60 * 1000 && ambilCache_('DASHB4Z')) return;
+  panaskanCache();
+}
 function pasangPemicu() {
-  ScriptApp.getProjectTriggers().filter(t => ['panaskanCache', 'prosesTarikan', 'buatSheetDataKosong'].indexOf(t.getHandlerFunction()) >= 0).forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.getProjectTriggers().filter(t => ['panaskanCache', 'panaskanOtomatis', 'prosesTarikan', 'buatSheetDataKosong'].indexOf(t.getHandlerFunction()) >= 0).forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('buatSheetDataKosong').timeBased().everyDays(1).atHour(6).create();   // sheet Data Kosong diperbarui tiap pagi
-  ScriptApp.newTrigger('panaskanCache').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('panaskanOtomatis').timeBased().everyMinutes(15).create();   // data baru tampil di dashboard maksimal 15 menit kemudian
   ScriptApp.newTrigger('prosesTarikan').timeBased().everyMinutes(15).create();   // file harian baru terbaca maksimal 15 menit setelah diunggah
   panaskanCache();
-  Logger.log('Pemicu panaskanCache (tiap jam) dan prosesTarikan (tiap 15 menit) terpasang dan cache sudah diisi. Jalankan prosesTarikan sekali untuk mulai membaca file tarikan.');
+  Logger.log('Pemicu panaskanOtomatis (tiap 15 menit) dan prosesTarikan (tiap 15 menit) terpasang dan cache sudah diisi. Jalankan prosesTarikan sekali untuk mulai membaca file tarikan.');
 }
 
 function simpanCache_(json, kunci, detik) {
@@ -1151,7 +1162,7 @@ const BULAN_MULAI_TARIKAN = Math.min.apply(null, [CFG.MULAI_TARIKAN].concat(Obje
 
 /* ============================== TARIKAN HARIAN ============================== */
 const BATAS_MS = 3 * 60 * 1000;     // file baru tidak dimulai lewat dari ini (Apps Script berhenti di 6 menit; satu file besar bisa 2 menit lebih)
-const BATAS_CACHE_MS = 4 * 60 * 1000;   // lewat dari ini cache tidak dipanaskan di sini, diserahkan ke pemicu panaskanCache tiap jam
+const BATAS_CACHE_MS = 4 * 60 * 1000;   // lewat dari ini cache tidak dipanaskan di sini, diserahkan ke pemicu panaskanOtomatis tiap 15 menit
 const LOG_NAMA = 'Log Tarikan';
 const LOG_HDR = ['File ID', 'Nama file', 'Area', 'Tanggal', 'Diubah', 'Baris event', 'Diproses', 'Status'];
 
@@ -1193,11 +1204,6 @@ function prosesTarikan() {
     antre.sort((a, b) => gagal(a) - gagal(b) || (a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0));
     let n = 0;
     for (const o of antre) {
-      if (o.besar) {   // file per 4 jam yang terlalu besar: tidak dikonversi, cukup dicatat (dicoba lagi saat filenya berubah)
-        const row = [o.id, o.nama, o.area, o.tgl, o.diubah, 0, new Date(), 'TERLALU BESAR: ' + o.besar + ' MB, Google Sheet maks. 10 juta sel; minta file dipecah per hari'];
-        if (sudah[o.id]) logSh.getRange(sudah[o.id].baris, 1, 1, row.length).setValues([row]); else logSh.appendRow(row);
-        n++; continue;
-      }
       if (Date.now() - mulai > BATAS_MS) break;
       let status = 'OK', baris = 0;
       // ditandai dulu: kalau Apps Script menghentikan proses di tengah file ini, jalan berikutnya tahu file ini gagal
@@ -1266,15 +1272,13 @@ function daftar4Jam_() {
     const it = folder.getFiles();
     while (it.hasNext()) {
       const f = it.next(), nama = f.getName(), mime = f.getMimeType();
-      if (mime !== MimeType.MICROSOFT_EXCEL && mime !== MimeType.GOOGLE_SHEETS) continue;
+      if (mime !== MimeType.GOOGLE_SHEETS) continue;   // hanya Google Sheet; file Excel (.xlsx) di folder ini tidak dibaca
       const a = area || areaNorm(teks(nama).split(/[_\-]/)[0]);
       if (!a) continue;
       const bl = teks(nama).toUpperCase().match(/(JANUARI|FEBRUARI|MARET|APRIL|MEI|JUNI|JULI|AGUSTUS|SEPTEMBER|OKTOBER|NOVEMBER|DESEMBER)\s*(\d{4})/);
       const tgl = tanggalNama_(nama) || (bl ? bl[2] + '-' + ('0' + (BULAN.indexOf(bl[1]) + 1)).slice(-2) + '-01' : CFG.MULAI_4JAM);
       if (bl && +bl[2] !== CFG.TAHUN) continue;
-      const mb = Math.round(f.getSize() / 1048576);
-      out.push({ id: f.getId(), nama: nama, area: a, tgl: tgl, diubah: f.getLastUpdated().getTime(), mime: mime, file: f, multi: true,
-                 besar: mime === MimeType.MICROSOFT_EXCEL && mb > (CFG.MAKS_MB_4JAM || 40) ? mb : 0 });
+      out.push({ id: f.getId(), nama: nama, area: a, tgl: tgl, diubah: f.getLastUpdated().getTime(), mime: mime, file: f, multi: true });
     }
     if (dalam) { const sub = folder.getFolders(); while (sub.hasNext()) { const f = sub.next(), nm = areaNorm(teks(f.getName()).replace(/^\d+\s*[.)]\s*/, '')); baca(f, nm || area, dalam - 1); } }
   };
@@ -1619,7 +1623,6 @@ function bacaLogTarikan(folder) {
   if (!it.hasNext()) return out;
   const v = nilaiSheet(SpreadsheetApp.open(it.next()), LOG_NAMA) || [];
   v.slice(1).forEach(r => { const st = teks(r[7]);
-    if (/^TERLALU BESAR/.test(st)) { out.gagal.push(teks(r[1]) + ' (' + st.toLowerCase().slice(0, 100) + ')'); return; }
     if (!/^GAGAL/.test(st)) return;
     if (/waktu habis/i.test(st)) out.proses++; else out.gagal.push(teks(r[1]) + ' (' + st.slice(7, 80) + ')'); });
   return out;
