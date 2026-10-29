@@ -1445,6 +1445,9 @@ function bukaTarikan_(folder, m) {
 function prosesMulti_(folder, o, batas, lanjut) {
   const sh = SpreadsheetApp.openById(o.id).getSheets()[0], akhir = sh.getLastRow();
   const awalMulti = [CFG.MULAI_4JAM || '', mulaiTarikan_(o.area)].sort()[1];
+  // baris bertanggal setelah hari ini (jam perangkat salah) dilewati, supaya titik lanjut tidak melompati tanggal yang masih bertambah
+  const hariIni = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
+  if (lanjut > hariIni) lanjut = hariIni;
   const penuh = !lanjut || lanjut < awalMulti, mulai = penuh ? awalMulti : lanjut;   // penuh: belum pernah dibaca bertahap, hasil lama file ini dibuang semua
   const tglMs = t => { const x = new Date(t); return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
   const ke = n => akhir < 2 ? null : n;
@@ -1479,7 +1482,7 @@ function prosesMulti_(folder, o, batas, lanjut) {
     const wk = baca(cWk), tb = baca(cTb), al = baca(cAl), am = baca(cAm), gid = baca(cG), pl = jeda ? baca(cPl) : null;
     for (let i = 0; i < m; i++) {
       const t = waktuMs(wk[i][0], true); if (t === null || t === undefined) continue;
-      const tg = tglMs(t); if (tg < mulai || +tg.slice(0, 4) !== CFG.TAHUN) continue;
+      const tg = tglMs(t); if (tg < mulai || tg > hariIni || +tg.slice(0, 4) !== CFG.TAHUN) continue;
       if (tg > tAkhir) tAkhir = tg;
       const c = normKasus(al[i][0]); if (!c) continue;
       const g = gid ? teks(gid[i][0]) : '';
