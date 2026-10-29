@@ -96,7 +96,8 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-function versiData_() { return PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0'; }
+const VERSI_KODE = '2026-10-29b';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE; }
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
 /** DIAGNOSA: jalankan dari editor, lihat hasilnya di View > Logs. */
