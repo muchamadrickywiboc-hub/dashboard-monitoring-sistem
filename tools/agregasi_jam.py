@@ -101,6 +101,8 @@ for p in FILES:
             n += 1
             d = todate(V(itg))
             if d is None: info['nodate'] += 1; ds = ''
+            elif d.month == MON and d.year in (2027, 2028):   # salah ketik tahun di file sumber (mis. 26/10/2027 hasil tarik isi otomatis)
+                info['tahun_diperbaiki'] = info.get('tahun_diperbaiki', 0) + 1; ds = d.replace(year=2026).isoformat()
             elif d.month != MON or d.year != 2026: info['outmonth'][d.isoformat()[:7]] += 1; continue
             else: ds = d.isoformat()
             area = T(V(ia)) or REG; lok = T(V(il)); a1 = NAMA(T(V(i1)))
