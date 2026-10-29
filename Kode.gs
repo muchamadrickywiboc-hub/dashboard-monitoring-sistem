@@ -106,7 +106,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-10-29c';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-10-29d';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE; }
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -1012,8 +1012,17 @@ function bacaJamSummary_(ss, peta) {
   return { EJ: EJ, AJ: AJ };
 }
 
+/** "KIKIRIZKI" & "KIKI RIZKI": nama yang sama bila spasinya dibuang ditulis memakai ejaan yang paling banyak kejadiannya. L: [[baris, kolom nama, kolom jumlah]]. */
+function satukanNamaAmt_(L) {
+  const kunci = n => n.replace(/[^A-Z]/g, ''), hit = {}, pilih = {};
+  L.forEach(([R, i, j]) => R.forEach(r => { const k = kunci(r[i]), h = hit[k] || (hit[k] = {}); h[r[i]] = (h[r[i]] || 0) + r[j]; }));
+  Object.keys(hit).forEach(k => { const e = Object.keys(hit[k]); if (e.length > 1) pilih[k] = e.sort((a, b) => hit[k][b] - hit[k][a] || b.split(' ').length - a.split(' ').length)[0]; });
+  L.forEach(([R, i]) => R.forEach(r => { const p = pilih[kunci(r[i])]; if (p) r[i] = p; }));
+}
+
 /** Menulis (ulang) file Summary satu bulan. x: hasil bacaSumberBulan_, j: hasil bacaJamSumber_. */
 function tulisSummary_(ss, sf, m, x, j, peta, src, tanda) {
+  satukanNamaAmt_([[x.AM, 2, 4], [j.AJ, 4, 6]]);
   if (!ss) { ss = SpreadsheetApp.create(namaBulan_('Summary', m)); DriveApp.getFileById(ss.getId()).moveTo(sf); }
   // kolom parameter: urutan SUM_KOLOM, lalu parameter lain yang ada datanya (urutan sheet Pemetaan)
   const urutP = {}; peta.urut.forEach((o, i) => { urutP[o.p.toUpperCase()] = i; });
@@ -1114,7 +1123,7 @@ function anomali_(area, m, d) {
   return !!L && L.indexOf(CFG.TAHUN + '-' + ('0' + (m + 1)).slice(-2) + '-' + ('0' + d).slice(-2)) >= 0;
 }
 function tandaSumber_(src, peta) {
-  const isi = [CFG.MULAI_TARIKAN, JSON.stringify(CFG.MULAI_TARIKAN_AREA || {}), JSON.stringify(CFG.TANGGAL_ANOMALI || {}), JSON.stringify(peta.kasus)]
+  const isi = ['amt2', CFG.MULAI_TARIKAN, JSON.stringify(CFG.MULAI_TARIKAN_AREA || {}), JSON.stringify(CFG.TANGGAL_ANOMALI || {}), JSON.stringify(peta.kasus)]
     .concat(src.map(o => o.f.getId() + '@' + o.f.getLastUpdated().getTime())).join('|');
   return 'v1-' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, isi, Utilities.Charset.UTF_8)).slice(0, 22);
 }
@@ -1808,7 +1817,13 @@ function BACA_ULANG_SUMBAGUT_OKTOBER() { bacaUlangTarikan('SUMBAGUT', 10); }
 function namaAmt(x) {
   const s = teks(x).replace(/\s*[\[(].*?[\])]\s*/g, ' ').replace(/[\[(].*$/, '')
     .replace(/^[\s.,'`|&\/\-]+|[\s.,'`|&\/\-]+$/g, '').replace(/\s+/g, ' ').toUpperCase();
-  return bukanNamaAmt_(s) ? '' : s;
+  return bukanNamaAmt_(s) ? '' : rapikanNamaAmt_(s);
+}
+/** "BUDI 2135" -> "BUDI", "BUDI PT MAJU JAYA" / "BUDI CV ..." -> "BUDI", "BUDI, S.PD" -> "BUDI", "BU8DI"/"BU=DI" -> "BUDI", titik dibuang. */
+function rapikanNamaAmt_(s) {
+  const r = s.replace(/,.*$/, '').replace(/\s+(PT|CV)\b.*$/, '').replace(/(\s+\d+)+$/, '')
+    .replace(/[^A-Z '&\/]/g, '').replace(/\s*([&\/])\s*/g, ' $1 ').replace(/\s+/g, ' ').trim();
+  return bukanNamaAmt_(r) ? s : r;
 }
 /** "0", "0.0", "-", "N/A", satu huruf, nomor polisi (B 9577 SEI), "CONTOH 1", "TV6" dll. bukan nama Driver. */
 function bukanNamaAmt_(s) {
