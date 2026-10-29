@@ -31,7 +31,9 @@ h1{margin:2px 0 4px;font-size:clamp(24px,3.2vw,36px);font-weight:700;letter-spac
 .winfo{font-size:12.5px;opacity:.9}
 .akun{gap:10px;align-items:center}.akun button{font:600 12px var(--f-ui);border:0;background:#fff;color:var(--forest);border-radius:999px;padding:3px 10px;cursor:pointer}
 .akun a.btnlink{font:600 12px var(--f-ui);background:#fff;color:var(--forest);border-radius:999px;padding:3px 10px;text-decoration:none}
-body:not(.peran-lokasi):not(.peran-area) #btnHarian{display:none!important}
+body:not(.peran-lokasi):not(.peran-area):not(.master) #btnHarian{display:none!important}
+.akun select{font:600 12px var(--f-ui);border:0;background:#fff;color:var(--forest);border-radius:999px;padding:3px 8px;cursor:pointer;max-width:220px}
+body:not(.master) #selMaster{display:none}
 .peran-lokasi #btnPdf,.peran-area #btnPdf{display:none!important}
 .nologin .hero,.nologin .footer{display:none!important}
 .lg{min-height:100vh;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);background:var(--bg)}
@@ -408,7 +410,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
         <h1>Monitoring Driving Behaviour, Driver Discipline &amp; Fatigue Management — <span class="tBulan">2026</span></h1>
         <div class="sub">Sebaran pelanggaran Driving Behaviour, Driver Discipline &amp; Fatigue Management per area, lokasi dan Driver · data <span id="tPeriode">2026</span></div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><a class="btnlink" id="btnHarian" target="_top" href="#" hidden title="Laporan Harian Operasional GPS & Dashcam">Laporan Harian</a><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnTv" class="btntv" title="Tampilan satu layar untuk TV besar">Mode TV</button><button type="button" id="btnKeluar">Keluar</button><span class="tvjam" id="tvJam"></span></div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><select id="selMaster" title="Akun master: masuk sebagai akun lain"><option value="">Masuk sebagai…</option></select><a class="btnlink" id="btnHarian" target="_top" href="#" hidden title="Laporan Harian Operasional GPS & Dashcam">Laporan Harian</a><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnTv" class="btntv" title="Tampilan satu layar untuk TV besar">Mode TV</button><button type="button" id="btnKeluar">Keluar</button><span class="tvjam" id="tvJam"></span></div></div>
     </div>
     <nav class="tvnav" id="tvNav" aria-label="Tampilan Mode TV"><span class="tvmode"><button type="button" data-m="utama" title="Tren &amp; parameter per kategori (tombol 1)">Mode Utama</button><button type="button" data-m="detail" title="Rekap per area, Top Pelanggaran Driver, Rekap per lokasi (tombol 2)">Mode Detail</button></span><button type="button" class="tvkeluar" id="tvKeluar">Keluar Mode TV</button></nav>
     <div class="ctrlrow" id="bulanRow">
@@ -1544,7 +1546,7 @@ lgEl('lgBack').onclick = lgLangkah1;
 lgEl('lgEye').onclick = () => { const p = lgEl('lgP'), t = p.type === 'password'; p.type = t ? 'text' : 'password'; lgEl('lgEye').textContent = t ? 'Sembunyikan' : 'Lihat'; };
 function perluLogin(e) {
   if (!/LOGIN/.test(e && e.message ? e.message : String(e))) return false;
-  TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null;
+  TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null; lepasMaster();
   tampilLogin('Sesi berakhir. Silakan masuk lagi.'); return true;
 }
 function terapkanAkun(p) {
@@ -1554,7 +1556,9 @@ function terapkanAkun(p) {
   if (a.peran === 'AREA') document.body.classList.add('peran-area'); else if (a.peran === 'LOKASI') document.body.classList.add('peran-lokasi');
   // tombol Laporan (Daily & Monthly) untuk Control Room (Command Center bila LH_UNTUK_AREA = true di LaporanHarian.gs); Export PDF dashboard hanya untuk RTC
   const bh = document.getElementById('btnHarian');
-  if ((a.peran === 'LOKASI' || a.peran === 'AREA') && bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian(a.peran);
+  if (ganti) bh.hidden = true;
+  if ((a.peran === 'LOKASI' || a.peran === 'AREA' || MASTER) && bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian(a.peran);
+  cekMaster();
   document.getElementById('loginwrap').hidden = true;
   document.getElementById('akunBox').hidden = false;
   const label = a.peran === 'PUSAT' ? 'RTC' : a.peran === 'AREA' ? 'Command Center ' + rn(a.area) : 'Control Room ' + a.lok;
@@ -1563,6 +1567,36 @@ function terapkanAkun(p) {
   if (a.peran !== 'PUSAT') shift = 0;   // Command Center & Control Room tanpa filter shift
   if (ganti) { sel = 'ALL'; selLok = -1; }
 }
+// akun MASTER: pilihan "Masuk sebagai" (RTC / Command Center / Control Room) tanpa password akun tujuan
+let MASTER = false, MASTER_TOKEN = '';
+function lepasMaster() { MASTER = false; MASTER_TOKEN = ''; document.body.classList.remove('master'); document.getElementById('selMaster').innerHTML = '<option value="">Masuk sebagai…</option>'; document.getElementById('btnHarian').hidden = true; }
+function cekMaster() {
+  if (MASTER_TOKEN === TOKEN) return; MASTER_TOKEN = TOKEN;
+  google.script.run.withSuccessHandler(j => {
+    MASTER = !!JSON.parse(j).master; document.body.classList.toggle('master', MASTER);
+    if (!MASTER) return;
+    const bh = document.getElementById('btnHarian');
+    if (bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian(AKUN ? AKUN.peran : 'PUSAT');
+    const sm = document.getElementById('selMaster');
+    if (sm.options.length > 1) return;
+    google.script.run.withSuccessHandler(t => {
+      const L = JSON.parse(t), o = (u, x) => `<option value="${lgEsc(u)}">${lgEsc(x)}</option>`;
+      sm.innerHTML = '<option value="">Masuk sebagai…</option>'
+        + `<optgroup label="RTC">${(L.pusat || []).map(a => o(a.u, a.nama)).join('')}</optgroup>`
+        + `<optgroup label="Command Center">${(L.area || []).map(a => o(a.u, 'Command Center ' + rn(a.area))).join('')}</optgroup>`
+        + `<optgroup label="Control Room">${(L.lokasi || []).map(a => o(a.u, 'Control Room ' + a.lok)).join('')}</optgroup>`;
+    }).withFailureHandler(() => {}).daftarAkunMaster(TOKEN);
+  }).withFailureHandler(() => {}).akunSaya(TOKEN);
+}
+document.getElementById('selMaster').onchange = e => {
+  const u = e.target.value; e.target.value = ''; if (!u) return;
+  muatLayar(1, 'Pindah akun…');
+  google.script.run.withSuccessHandler(j => {
+    muatLayar(-1); const a = JSON.parse(j); TOKEN = a.token; MASTER_TOKEN = TOKEN; simpanToken(TOKEN);
+    WKEY = ''; WIN = null; tgl = tgl2 = 0; shift = 0; jam = -1; EVT = '';
+    muat();
+  }).withFailureHandler(err => { muatLayar(-1); if (perluLogin(err)) return; document.getElementById('akunNama').textContent = 'Gagal pindah akun: ' + (err && err.message ? err.message : err); }).masukSebagai(TOKEN, u);
+};
 // akun Area / Lokasi: filter dikunci pada cakupannya
 function kunciCakupan() {
   if (!AKUN || AKUN.peran === 'PUSAT') return;
@@ -1607,7 +1641,7 @@ lgEl('loginForm').onsubmit = e => {
 document.getElementById('btnKeluar').onclick = () => {
   if (TOKEN) google.script.run.withSuccessHandler(() => {}).withFailureHandler(() => {}).logout(TOKEN);
   TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null; sel = 'ALL'; selLok = -1; tgl = tgl2 = 0; shift = 0; jam = -1;
-  tampilLogin('');
+  lepasMaster(); tampilLogin('');
 };
 // pengukur waktu muat (ditampilkan di samping "Data s/d ..."), untuk mencari langkah yang lambat
 function waktuMuat(t0, t1, t2, t3, n) {

@@ -273,7 +273,7 @@ function sidikPw_(u, p) {
 function cakupanAkun_(r) {
   const u = teks(r[0]).toLowerCase(), nama = teks(r[2]) || u, peran = teks(r[3]).toUpperCase(), area = areaNorm(r[4]), lok = teks(r[5]).toUpperCase();
   if (peran === 'PUSAT') return { u: u, nama: nama, peran: peran };
-  if (peran === 'MASTER') return { u: u, nama: nama, peran: 'PUSAT' };   // akun induk: login sendiri = RTC; password-nya juga membuka akun lain (lihat login)
+  if (peran === 'MASTER') return { u: u, nama: nama, peran: 'PUSAT', master: true };   // akun induk: login sendiri = RTC; password-nya juga membuka akun lain (lihat login)
   if (peran === 'AREA' && area) return { u: u, nama: nama, peran: peran, area: area };
   if (peran === 'LOKASI' && lok) return { u: u, nama: nama, peran: peran, area: area, lok: ALIAS_LOKASI[lok] || lok };
   return null;
@@ -281,6 +281,34 @@ function cakupanAkun_(r) {
 
 const aktifAkun_ = r => !/^(TIDAK|NO|FALSE|0|NONAKTIF)$/i.test(teks(r[6]));
 const pwCocok_ = (r, p) => { const pw = teks(r[1]); return !!pw && (pw.indexOf('sha256:') === 0 ? pw === sidikPw_(teks(r[0]).toLowerCase(), p) : pw === p); };
+
+/** Isi token sesi {u, c, t, m?} (tanpa memeriksa akun). */
+function isiToken_(token) {
+  const m = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(String(token || ''));
+  if (!m || tandaSesi_(m[1]) !== m[2]) throw new Error('LOGIN');
+  try { return JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(m[1])).getDataAsString()); } catch (e) { throw new Error('LOGIN'); }
+}
+/** Dipanggil dashboard: apakah sesi ini dibuka dengan akun MASTER (boleh pindah ke akun lain). */
+function akunSaya(token) { return JSON.stringify({ master: !!sesi_(token).master }); }
+/** Akun MASTER: daftar semua akun (RTC, Command Center, Control Room) untuk pilihan "Masuk sebagai". */
+function daftarAkunMaster(token) {
+  if (!sesi_(token).master) throw new Error('Hanya untuk akun master.');
+  return daftarLogin();
+}
+/** Akun MASTER: pindah ke akun lain tanpa password akun itu. Mengembalikan token baru (bentuk sama dengan login). */
+function masukSebagai(token, username) {
+  if (!sesi_(token).master) throw new Error('Hanya untuk akun master.');
+  const o = isiToken_(token), mu = o.m || o.u, u = teks(username).toLowerCase();
+  const v = sheetAkun_().getDataRange().getValues().slice(1), cari = x => v.filter(r => teks(r[0]).toLowerCase() === x)[0];
+  const mr = cari(mu), r = cari(u);
+  if (!mr || teks(mr[3]).toUpperCase() !== 'MASTER' || !aktifAkun_(mr)) throw new Error('LOGIN');
+  if (!r || !aktifAkun_(r)) throw new Error('Akun ' + username + ' tidak ditemukan atau tidak aktif.');
+  const ses = cakupanAkun_(r); if (!ses) throw new Error('Akun ' + username + ' belum lengkap di sheet Akun.');
+  ses.master = true;
+  const c = 'm' + capPw_(teks(mr[1])), isi = b64_(Utilities.newBlob(JSON.stringify({ u: u, c: c, t: Date.now(), m: mu })).getBytes());
+  CacheService.getScriptCache().put('AK_' + u + '_' + c, JSON.stringify(ses), CEK_AKUN_DETIK);
+  return JSON.stringify(Object.assign({ token: isi + '.' + tandaSesi_(isi) }, ses));
+}
 
 /** Dipanggil halaman masuk. Mengembalikan token sesi + cakupan akun. */
 function login(username, password) {
@@ -297,6 +325,7 @@ function login(username, password) {
   if (!cocok && !master) { cache.put(kg, String(gagal + 1), 900); Utilities.sleep(600); throw new Error('Username atau password salah.'); }
   const ses = cakupanAkun_(r);
   if (!ses) throw new Error('Akun belum lengkap: isi Peran (PUSAT / AREA / LOKASI) beserta Area atau Lokasinya di sheet Akun.');
+  if (master) ses.master = true;
   const c = master ? 'm' + capPw_(teks(master[1])) : capPw_(pw), isiSesi = { u: u, c: c, t: Date.now() };
   if (master) isiSesi.m = teks(master[0]).toLowerCase();
   const isi = b64_(Utilities.newBlob(JSON.stringify(isiSesi)).getBytes()), token = isi + '.' + tandaSesi_(isi);
@@ -342,6 +371,7 @@ function sesi_(token) {
     : r && teks(r[1]) && capPw_(teks(r[1])) === o.c;
   const ses = r && aktifAkun_(r) && pwOk ? cakupanAkun_(r) : null;
   if (!ses) throw new Error('LOGIN');
+  if (o.m) ses.master = true;
   cache.put(kunci, JSON.stringify(ses), CEK_AKUN_DETIK);
   return ses;
 }
