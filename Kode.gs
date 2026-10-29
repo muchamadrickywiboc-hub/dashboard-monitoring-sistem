@@ -506,21 +506,23 @@ const diShift = (j, s) => SHIFT[s][0] < SHIFT[s][1] ? j >= SHIFT[s][0] && j < SH
 
 /**
  * Data satu jendela waktu di bulan m (0-11) untuk filter Tanggal / Shift / Jam, dibaca dari sheet "Event Jam" & "AMT Jam" file Tarikan.
- *   d = tanggal (0 = semua tanggal), s = shift (0 = semua, 1-3), h = jam (-1 = semua).
- * Bentuknya sama dengan hitung_(): "bulan" 0 = jendela terpilih, 1 = pembanding (tanggal sebelumnya, shift/jam yang sama);
+ *   d = tanggal (0 = semua tanggal), s = shift (0 = semua, 1-3), h = jam (-1 = semua), d2 = tanggal akhir rentang (kosong = d saja).
+ * Bentuknya sama dengan hitung_(): "bulan" 0 = jendela terpilih, 1 = pembanding (rentang sepanjang itu tepat sebelumnya, shift/jam yang sama);
  * kolom "tanggal" di harian berisi jam + 1, jadi harian = event per jam.
  */
-function getDataWaktu(token, m, d, s, h) {
+function getDataWaktu(token, m, d, s, h, d2) {
   const ses = sesi_(token);
-  return potongJson_(dataWaktu_(m, d, s, h), ses, 'SW_' + versiData_() + '_' + [m, d, s, h].join('_') + '_');
+  return potongJson_(dataWaktu_(m, d, s, h, d2), ses, 'SW_' + versiData_() + '_' + [m, d, s, h, +d2 || 0].join('_') + '_');
 }
-function dataWaktu_(m, d, s, h) {
+function dataWaktu_(m, d, s, h, d2) {
   m = +m; d = +d || 0; s = +s || 0; h = (h === undefined || h === null || h === '') ? -1 : +h;
-  const kunci = 'WKT1_' + versiData_() + '_' + [m, d, s, h].join('_');
+  d2 = d ? Math.max(d, +d2 || d) : 0;
+  const L = d2 - d + 1, diJendela = t => t >= d && t <= d2, diPrev = t => t >= d - L && t < d;   // pembanding: L hari tepat sebelum rentang
+  const kunci = 'WKT2_' + versiData_() + '_' + [m, d, s, h, d2].join('_');
+  const kosongW = (pesan) => JSON.stringify(Object.assign(kosong([pesan]), { waktu: { m: m, d: d, d2: d2, s: s, h: h, adaPrev: false } }));
   const ada = ambilCache_(kunci);
   if (ada) return ada;
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID), S = sumberBulan_(folder), src = S.perBulan[m] || [];
-  const kosongW = (pesan) => JSON.stringify(Object.assign(kosong([pesan]), { waktu: { m: m, d: d, s: s, h: h, adaPrev: false } }));
   if (!S.atur || !src.length) return kosongW('Data jam ' + BULAN[m] + ' belum ada.');
   const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(S.atur), 'Pemetaan') || []);
   const J = jamBulan_(folder, m, src, peta);   // Sum_Jam & Sum_AMT_Jam di file Summary bulan itu
@@ -528,16 +530,16 @@ function dataWaktu_(m, d, s, h) {
   const okJam = j => (h < 0 || j === h) && (!s || diShift(j, s));
   // shift yang melewati tengah malam (Shift 3) ikut tanggal mulainya: jam 00.00-07.00 dihitung ke tanggal sebelumnya
   const jendela = (t0, j) => { if (!okJam(j)) return -1; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? t0 - 1 : t0;
-    if (!d) return t >= 1 ? 0 : -1; if (t === d) return 0; return t === d - 1 ? 1 : -1; };
+    if (!d) return t >= 1 ? 0 : -1; return diJendela(t) ? 0 : diPrev(t) ? 1 : -1; };
   // w: 0 = jendela terpilih, 1 = pembanding, 2 = event tanpa jam di tanggal terpilih (tidak bisa disaring per jam)
   const tanpa = !s && h < 0;   // hanya filter tanggal: event tanpa jam tetap dihitung
-  const w = (t0, j) => { if (j >= 0) return jendela(t0, j); const x = !d ? 0 : t0 === d ? 0 : t0 === d - 1 ? 1 : -1; return x < 0 ? -1 : tanpa ? x : (x === 0 ? 2 : -1); };
+  const w = (t0, j) => { if (j >= 0) return jendela(t0, j); const x = !d ? 0 : diJendela(t0) ? 0 : diPrev(t0) ? 1 : -1; return x < 0 ? -1 : tanpa ? x : (x === 0 ? 2 : -1); };
   const kat = {}; peta.urut.forEach(o => { kat[o.p] = o.k; });
   const EV = [], AM = [];
   J.EJ.forEach(e => { const x = w(e[0], e[1]); if (x >= 0) EV.push([x, e[1] < 0 ? 0 : e[1] + 1, e[2], e[3], e[4], kat[e[4]], e[5]]); });
   J.AJ.forEach(r => { const x = w(r[0], r[1]); if (x >= 0) AM.push([x, r[2], r[3], r[4], r[5], kat[r[5]], r[6]]); });
   const hasil = hitung_(EV, AM, peta, [], []);
-  hasil.waktu = { m: m, d: d, s: s, h: h, adaPrev: d > 1 };
+  hasil.waktu = { m: m, d: d, d2: d2, s: s, h: h, adaPrev: d > 1 };
   const json = JSON.stringify(hasil);
   simpanCache_(json, kunci, CFG.CACHE_DETIK);   // kunci ikut versi data: berganti setiap tarikan / summary baru
   return json;

@@ -414,15 +414,15 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
     <div class="ctrlrow" id="bulanRow">
       <div class="seg" role="tablist" aria-label="Periode grafik"><button type="button" role="tab" id="perBln" aria-selected="true">Bulan</button><button type="button" role="tab" id="perThn" aria-selected="false">Tahun</button></div>
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
-      <label class="pick" for="inTgl">Tanggal <input type="date" id="inTgl"></label><button type="button" class="sebulan" id="btnSebulan" hidden>Sebulan penuh</button><span class="tglket" id="tglKet"></span>
+      <label class="pick" for="inTgl">Tanggal <input type="date" id="inTgl"></label><label class="pick" for="inTgl2">s/d <input type="date" id="inTgl2"></label><button type="button" class="sebulan" id="btnSebulan" hidden>Sebulan penuh</button>
+      <label class="pick" for="selShift">Shift <select id="selShift"></select></label>
+      <label class="pick" for="selJam">Jam <select id="selJam"></select></label><span class="tglket" id="tglKet"></span>
       <label class="pick" for="selCmp">Dibanding <select id="selCmp"></select></label>
       <label class="pick" for="selEvt">Event <select id="selEvt"><option value="">Pilih event…</option></select></label>
     </div>
     <div class="ctrlrow" id="waktuRow">
       <span class="flabel">Waktu:</span>
       <label class="pick" for="selTgl">Tanggal <select id="selTgl"></select></label>
-      <label class="pick" for="selShift">Shift <select id="selShift"></select></label>
-      <label class="pick" for="selJam">Jam <select id="selJam"></select></label>
       <span class="winfo" id="waktuInfo"></span>
     </div>
     <nav class="filters" aria-label="Filter area dan lokasi">
@@ -515,7 +515,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
 </footer>
 <div id="tip" role="tooltip"></div>
 <script>
-let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, tgl = 0, shift = 0, jam = -1, WIN = null, WKEY = '', ERRW = '', PERIODE = 'bulan', TOKEN = '', AKUN = null, KC = 0, KP = null, showAllLok = false, showAllDelta = false;
+let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, tgl = 0, tgl2 = 0, shift = 0, jam = -1, WIN = null, WKEY = '', ERRW = '', PERIODE = 'bulan', TOKEN = '', AKUN = null, KC = 0, KP = null, showAllLok = false, showAllDelta = false;
 // urutan tabel rekap (klik judul kolom Total / pembanding / Persentase): k = t | p | n, d = -1 besar ke kecil, 1 kecil ke besar
 const URUT = {a: {k: 't', d: -1}, l: {k: 't', d: -1}};
 const rn = r => String(r || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\b(Ii|Iii|Iv)\b/g, x => x.toUpperCase());
@@ -636,7 +636,7 @@ function drawJamKat(host, HS, arr, prev, cat) {
   if (prev) { if (n > 1) svgEl('path', {d: prev.map((v, i) => (i ? 'L' : 'M') + cx(i).toFixed(1) + ',' + y(v).toFixed(1)).join(''), style: 'fill:none;stroke:#1b1f1d;stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none'}, svg);
     else svgEl('line', {x1: cx(0) - bw, x2: cx(0) + bw, y1: y(prev[0]), y2: y(prev[0]), style: 'stroke:#1b1f1d;stroke-width:1.5;stroke-dasharray:5 4'}, svg); }
   arr.forEach((v, i) => { const hit = svgEl('rect', {x: ox + slot*i, y: m.t, width: slot, height: ih, class: 'hit'}, svg), h = HS[i];
-    bindTip(hit, () => `<b>${jj(h)}–${jj(h + 1)}</b><br>${cat.name}: ${nf(v)} event${prev ? `<br>${tgl - 1} ${BLN[mon]}: ${nf(prev[i])} ${pctTxt(v, prev[i]).replace(/<[^>]+>/g, '')}` : ''}`); });
+    bindTip(hit, () => `<b>${jj(h)}–${jj(h + 1)}</b><br>${cat.name}: ${nf(v)} event${prev ? `<br>${tPv()} ${BLN[mon]}: ${nf(prev[i])} ${pctTxt(v, prev[i]).replace(/<[^>]+>/g, '')}` : ''}`); });
   host.appendChild(svg);
 }
 
@@ -655,16 +655,20 @@ const jamShift = s => { const a = SHIFT[s][0], n = (SHIFT[s][1] - a + 24) % 24; 
 const lintas = () => shift && SHIFT[shift][0] > SHIFT[shift][1];
 const jj = h => String(h).padStart(2, '0') + '.00';
 const adaJam = () => (RAW.jamAda || []).indexOf(mon) >= 0;
+// rentang tanggal: tgl..tgl2 (tgl2 = tgl bila satu tanggal); pembanding = rentang sepanjang itu tepat sebelumnya
+const tA = () => tgl2 > tgl ? `${tgl}–${tgl2}` : `${tgl}`;
+const tPv = () => { const L = tgl2 - tgl + 1; return L > 1 ? `${Math.max(1, tgl - L)}–${tgl - 1}` : `${tgl - 1}`; };
+const kunciW = () => [mon, tgl, shift, jam, tgl2].join('_');
 const modeWaktu = () => adaJam() && (tgl > 0 || shift > 0 || jam >= 0);
 const labelJam = () => jam >= 0 ? `jam ${jj(jam)}–${jj(jam + 1)}` : shift ? `Shift ${shift} (${jj(SHIFT[shift][0])}–${jj(SHIFT[shift][1])})` : '';
 function labelWaktu(prev) {
-  const t = tgl ? `${prev ? tgl - 1 : tgl} ${BLN[mon]} ${D.tahun}` : `${BLN[mon]} ${D.tahun}`, j = labelJam();
+  const t = tgl ? `${prev ? tPv() : tA()} ${BLN[mon]} ${D.tahun}` : `${BLN[mon]} ${D.tahun}`, j = labelJam();
   return j ? `${t} · ${j}` : t;
 }
 // kunci periode: angka bulan (tampilan bulanan) atau 'W' / 'P' (jendela waktu terpilih / tanggal sebelumnya)
 const namaK = k => k === 'W' ? labelWaktu() : k === 'P' ? labelWaktu(true) : BLN[k];
 const judulK = k => k === 'W' || k === 'P' ? namaK(k) : BLN[k] + ' ' + D.tahun;
-const pendekK = k => k === 'W' ? (tgl ? `${tgl} ${B3[mon]}` : 'Terpilih') : k === 'P' ? `${tgl - 1} ${B3[mon]}` : B3[k];
+const pendekK = k => k === 'W' ? (tgl ? `${tA()} ${B3[mon]}` : 'Terpilih') : k === 'P' ? `${tPv()} ${B3[mon]}` : B3[k];
 const nHari = m => new Date(D.tahun, m + 1, 0).getDate();
 const perHari = (v, m) => v === null || v === undefined ? '–' : d1(v / nHari(m));
 const cocokReg = r => sel === 'ALL' || r === sel;
@@ -741,7 +745,7 @@ function kontrol() {
   st.value = String(tgl); ss.value = String(shift); sj.value = String(jam);
   [st, ss, sj].forEach(e => e.disabled = !jOk);
   document.getElementById('waktuInfo').textContent = !jOk ? ((RAW.jamAda || []).length ? `Filter waktu hanya tersedia untuk bulan yang punya data jam kejadian: ${RAW.jamAda.map(m => BLN[m]).join(', ')}.` : 'Filter waktu belum aktif karena data jam kejadian belum diproses.')
-    : ERRW ? ERRW : modeWaktu() && !(WIN && WKEY === [mon, tgl, shift, jam].join('_')) ? 'Memuat data…' : '';
+    : ERRW ? ERRW : modeWaktu() && !(WIN && WKEY === kunciW()) ? 'Memuat data…' : '';
   document.getElementById('tSrc').textContent = BLN[ADA[0]] + '–' + BLN[LAST] + ' ' + D.tahun;
   kontrolTanggal();
 }
@@ -829,8 +833,8 @@ function muatWaktu(key) {
   WKEY = key; WIN = null; ERRW = '';
   muatLayar(1, 'Memuat data tanggal…');
   google.script.run.withSuccessHandler(j => { muatLayar(-1); if (WKEY !== key) return; WIN = siapkanWin(JSON.parse(j)); render(); })
-    .withFailureHandler(e => { muatLayar(-1); if (WKEY !== key) return; if (perluLogin(e)) return; ERRW = 'Data waktu gagal dimuat: ' + (e && e.message ? e.message : e); tgl = 0; shift = 0; jam = -1; WKEY = ''; render(); })
-    .getDataWaktu(TOKEN, mon, tgl, shift, jam);
+    .withFailureHandler(e => { muatLayar(-1); if (WKEY !== key) return; if (perluLogin(e)) return; ERRW = 'Data waktu gagal dimuat: ' + (e && e.message ? e.message : e); tgl = tgl2 = 0; shift = 0; jam = -1; WKEY = ''; render(); })
+    .getDataWaktu(TOKEN, mon, tgl, shift, jam, tgl2);
 }
 function deriveWaktu() {
   const A = RAW.areas, w = WIN, kp = w.waktu.adaPrev, okLok = li => selLok < 0 || li === selLok;
@@ -865,14 +869,14 @@ function renderJam() {
   document.getElementById('bdayH').textContent = `Event per jam — ${labelWaktu()}`;
   const HS = jam >= 0 ? [jam] : shift ? jamShift(shift) : Array.from({length: 24}, (_, i) => i);
   const cur = HS.map(h => D.jamW[h]), tot = sum(cur.map(o => o.t));
-  const tglJam = h => lintas() && h < SHIFT[shift][1] ? tgl + 1 : tgl;   // Shift 3: jam 00.00-07.00 jatuh di tanggal berikutnya
+  const tglJam = h => lintas() && h < SHIFT[shift][1] ? tgl + 1 : tgl, satuTgl = tgl > 0 && tgl2 <= tgl;   // Shift 3: jam 00.00-07.00 jatuh di tanggal berikutnya
   document.getElementById('bdayLeg').hidden = !tot;
   const TJ = D.tanpaJam || {}, catJam = TJ.grafik ? ` · <span class="small" style="display:inline">${nf(TJ.grafik)} event tanpa jam (data GPS) tidak tampil di grafik ini</span>` : TJ.t ? ` · <span class="small" style="display:inline">${nf(TJ.t)} event tanpa jam (data GPS) tidak ikut filter shift/jam</span>` : '';
   if (!tot) { sub.innerHTML = scope() + catJam; host.innerHTML = `<div class="emptyamt">Tidak ada event untuk ${labelWaktu()}${sel === 'ALL' ? '' : ' · ' + scope()}.</div>`; return; }
   document.getElementById('bdayCmpLeg').hidden = !kp;
-  document.getElementById('bdayCmpName').textContent = kp ? `${tgl - 1} ${BLN[mon]} (jam yang sama)` : '';
+  document.getElementById('bdayCmpName').textContent = kp ? `${tPv()} ${BLN[mon]} (jam yang sama)` : '';
   const mx = cur.reduce((a, o) => o.t > a.t ? o : a, cur[0]), hm = HS[cur.indexOf(mx)], ptot = kp ? sum(cur.map(o => o.p)) : null;
-  sub.innerHTML = `${scope()} · total <b>${nf(tot)}</b> event${kp ? ` vs ${nf(ptot)} pada ${tgl - 1} ${B3[mon]} ${pctTxt(tot, ptot)}` : ''} · jam tersibuk <b>${jj(hm)}–${jj(hm + 1)}</b> (${nf(mx.t)})${tgl ? (lintas() && jam < 0 ? ` · ${jj(SHIFT[shift][0])} ${tgl} ${B3[mon]} s/d ${jj(SHIFT[shift][1])} ${tgl + 1} ${B3[mon]}` : '') : ' · dijumlah dari semua tanggal di ' + BLN[mon]}${catJam}`;
+  sub.innerHTML = `${scope()} · total <b>${nf(tot)}</b> event${kp ? ` vs ${nf(ptot)} pada ${tPv()} ${B3[mon]} ${pctTxt(tot, ptot)}` : ''} · jam tersibuk <b>${jj(hm)}–${jj(hm + 1)}</b> (${nf(mx.t)})${tgl ? (lintas() && jam < 0 ? (satuTgl ? ` · ${jj(SHIFT[shift][0])} ${tgl} ${B3[mon]} s/d ${jj(SHIFT[shift][1])} ${tgl + 1} ${B3[mon]}` : ` · tiap tanggal ${jj(SHIFT[shift][0])} s/d ${jj(SHIFT[shift][1])} hari berikutnya`) : satuTgl ? '' : ' · dijumlah dari tanggal ' + tA() + ' ' + BLN[mon]) : ' · dijumlah dari semua tanggal di ' + BLN[mon]}${catJam}`;
   const W = 1180, H = 250, m = {l: 50, r: 12, t: 26, b: 26}, iw = W - m.l - m.r, ih = H - m.t - m.b, n = cur.length, slot = iw / Math.max(n, 8), bw = Math.min(40, slot * .62);
   const ox = m.l + (iw - slot * n) / 2, cx = i => ox + slot * i + slot / 2;
   const ymax = niceMax(Math.max(1, ...cur.map(o => Math.max(o.t, kp ? o.p : 0))) * 1.05), y = v => m.t + ih - v / ymax * ih, NT = nTicks(ymax);
@@ -891,7 +895,7 @@ function renderJam() {
   if (kp && n > 1) svgEl('path', {d: cur.map((o, i) => (i ? 'L' : 'M') + cx(i).toFixed(1) + ',' + y(o.p).toFixed(1)).join(''), style: 'fill:none;stroke:#1b1f1d;stroke-width:1.6;stroke-dasharray:5 4;pointer-events:none'}, svg);
   cur.forEach((o, i) => {
     const hit = svgEl('rect', {x: ox + slot * i, y: m.t, width: slot, height: ih, class: 'hit'}, svg), h = HS[i];
-    bindTip(hit, () => `<b>${jj(h)}–${jj(h + 1)}${tgl ? ' · ' + tglJam(h) + ' ' + BLN[mon] : ''}</b><br>${CATS.map(c => `${c.name}: ${nf(o[c.key])}`).join('<br>')}<br><b>Total ${nf(o.t)}</b>${kp ? `<br>${tglJam(h) - 1} ${BLN[mon]}: ${nf(o.p)}` : ''}`);
+    bindTip(hit, () => `<b>${jj(h)}–${jj(h + 1)}${satuTgl ? ' · ' + tglJam(h) + ' ' + BLN[mon] : ''}</b><br>${CATS.map(c => `${c.name}: ${nf(o[c.key])}`).join('<br>')}<br><b>Total ${nf(o.t)}</b>${kp ? `<br>${satuTgl ? tglJam(h) - 1 : tPv()} ${BLN[mon]}: ${nf(o.p)}` : ''}`);
   });
   host.appendChild(svg);
 }
@@ -936,8 +940,8 @@ function renderBulan() {
   // filter tanggal saja, tapi sebagian besar event bulan ini tidak punya jam kejadian: grafik per jam kosong, jadi tampilkan event per tanggal
   const keHari = W && !shift && jam < 0 && tgl > 0 && D.tanpaJam && D.tanpaJam.grafik > sum(HS.map(h => D.jamW[h].t)) && !!hariBulan(mon);
   const TJ = W && D.tanpaJam && D.tanpaJam.t ? ' · tanpa jam (data GPS, tidak ikut filter shift/jam): ' + CATS.filter(c => D.tanpaJam[c.key]).map(c => `${c.name} ${nf(D.tanpaJam[c.key])}`).join(', ') : '';
-  document.getElementById('trendSub').textContent = keHari ? `${scope()} · ${labelWaktu()} · data ${BLN[mon]} tidak punya jam kejadian, jadi grafik menampilkan event per tanggal (batang gelap = tanggal ${tgl}) · garis merah = tren`
-    : W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tgl - 1} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
+  document.getElementById('trendSub').textContent = keHari ? `${scope()} · ${labelWaktu()} · data ${BLN[mon]} tidak punya jam kejadian, jadi grafik menampilkan event per tanggal (batang gelap = tanggal ${tA()}) · garis merah = tren`
+    : W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tPv()} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
     : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis merah = tren`
     : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis merah = tren`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
@@ -1023,22 +1027,35 @@ function renderRekap() {
 const isoTgl = (m, d) => `${D.tahun}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 document.getElementById('inTgl').onchange = e => {
   const v = e.target.value, x = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
-  if (!x) { tgl = 0; ERRW = ''; showAllLok = false; render(); return; }
+  if (!x) { tgl = tgl2 = 0; ERRW = ''; showAllLok = false; render(); return; }
   const m = +x[2] - 1, d = +x[3];
   if (ADA.indexOf(m) < 0) { render(); return; }   // bulan tanpa data: kembali ke pilihan sebelumnya
-  if (m !== mon) { mon = m; if (cmp === mon) cmp = -1; showAllDelta = false; }
-  tgl = d; ERRW = ''; showAllLok = false; render();
+  if (m !== mon) { mon = m; if (cmp === mon) cmp = -1; showAllDelta = false; tgl2 = 0; }
+  tgl = d; if (tgl2 < tgl) tgl2 = tgl; ERRW = ''; showAllLok = false; render();
 };
-document.getElementById('btnSebulan').onclick = () => { tgl = 0; ERRW = ''; showAllLok = false; render(); };
+// s/d: rentang dalam bulan yang sama dengan tanggal awal; kosong = satu tanggal saja
+document.getElementById('inTgl2').onchange = e => {
+  const x = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e.target.value);
+  if (!x) { tgl2 = tgl; } else {
+    const m = +x[2] - 1, d = +x[3];
+    if (!tgl || m !== mon) { if (ADA.indexOf(m) < 0) { render(); return; } if (m !== mon) { mon = m; if (cmp === mon) cmp = -1; showAllDelta = false; } tgl = 1; }
+    if (d < tgl) { tgl2 = tgl; tgl = d; } else tgl2 = d;
+  }
+  ERRW = ''; showAllLok = false; render();
+};
+document.getElementById('btnSebulan').onclick = () => { tgl = tgl2 = 0; ERRW = ''; showAllLok = false; render(); };
 function kontrolTanggal() {
   const it = document.getElementById('inTgl'), akhir = LAST >= 0 ? Math.max(0, ...(RAW.harian || []).filter(h => h[0] === LAST).map(h => h[1])) || nHari(LAST) : 1;
   it.min = isoTgl(ADA[0] || 0, 1); it.max = isoTgl(LAST, akhir);
   it.value = tgl > 0 ? isoTgl(mon, tgl) : '';
+  const it2 = document.getElementById('inTgl2');
+  it2.min = isoTgl(mon, 1); it2.max = mon === LAST ? isoTgl(LAST, akhir) : isoTgl(mon, nHari(mon));
+  it2.value = tgl > 0 && tgl2 > tgl ? isoTgl(mon, tgl2) : '';
   document.getElementById('btnSebulan').hidden = !(tgl > 0);
-  document.querySelector('.pick[for=selCmp]').style.display = tgl > 0 && adaJam() ? 'none' : '';   // per tanggal: pembanding = tanggal sebelumnya
-  document.getElementById('tglKet').textContent = ERRW ? ERRW : tgl > 0 ? (!adaJam() ? `Data per tanggal ${BLN[mon]} belum tersedia; ditampilkan sebulan.` : modeWaktu() && !(WIN && WKEY === [mon, tgl, shift, jam].join('_')) ? 'Memuat data tanggal…' : `Menampilkan ${tgl} ${BLN[mon]} ${D.tahun}`) : `Menampilkan sebulan penuh ${BLN[mon]} ${D.tahun}`;
+  document.querySelector('.pick[for=selCmp]').style.display = modeWaktu() ? 'none' : '';   // per tanggal: pembanding = tanggal sebelumnya
+  document.getElementById('tglKet').textContent = ERRW ? ERRW : tgl > 0 ? (!adaJam() ? `Data per tanggal ${BLN[mon]} belum tersedia; ditampilkan sebulan.` : modeWaktu() && !(WIN && WKEY === kunciW()) ? 'Memuat data tanggal…' : `Menampilkan ${tgl2 > tgl ? 'tanggal ' : ''}${tA()} ${BLN[mon]} ${D.tahun}${labelJam() ? ' · ' + labelJam() : ''}`) : `Menampilkan sebulan penuh ${BLN[mon]} ${D.tahun}${modeWaktu() && labelJam() ? ' · ' + labelJam() : ''}`;
 }
-document.getElementById('selMon').onchange = e => { mon = +e.target.value; tgl = 0; ERRW = ''; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
+document.getElementById('selMon').onchange = e => { mon = +e.target.value; tgl = tgl2 = 0; ERRW = ''; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
 document.getElementById('selEvt').onchange = e => { EVT = e.target.value; render(); if (EVT) document.getElementById('panelEvt').scrollIntoView({behavior: 'smooth', block: 'nearest'}); };
 document.getElementById('evtTutup').onclick = () => { EVT = ''; render(); };
@@ -1048,14 +1065,14 @@ function aturPeriode(p) { PERIODE = p; try { localStorage.setItem('dashb_periode
 try { if (false && localStorage.getItem('dashb_periode') === 'tahun') { PERIODE = 'tahun'; document.getElementById('perBln').setAttribute('aria-selected', false); document.getElementById('perThn').setAttribute('aria-selected', true); } } catch (e) { /* bawaan Bulan */ }
 document.getElementById('perBln').onclick = () => aturPeriode('bulan');
 document.getElementById('perThn').onclick = () => aturPeriode('tahun');
-document.getElementById('selTgl').onchange = e => { tgl = +e.target.value; ERRW = ''; showAllLok = false; render(); };
+document.getElementById('selTgl').onchange = e => { tgl = tgl2 = +e.target.value; ERRW = ''; showAllLok = false; render(); };
 document.getElementById('selShift').onchange = e => { shift = +e.target.value; ERRW = ''; if (jam >= 0 && shift && jamShift(shift).indexOf(jam) < 0) jam = -1; showAllLok = false; render(); };
 document.getElementById('selJam').onchange = e => { jam = +e.target.value; ERRW = ''; showAllLok = false; render(); };
 document.getElementById('selLok').onchange = e => setLok(+e.target.value);
 function render() {
   if (!D || LAST < 0) return;
   derive(); kontrol(); chips(); pilihanLokasi();
-  const mw = modeWaktu(), key = [mon, tgl, shift, jam].join('_');
+  const mw = modeWaktu(), key = kunciW();
   if (mw && WKEY !== key) muatWaktu(key);
   const siap = mw && WIN && WKEY === key;
   document.getElementById('view-bulan').classList.toggle('memuat', mw && !siap);
@@ -1135,7 +1152,7 @@ function renderEvent() {
   const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${p.label} per tanggal ${BLN[mon]}`});
   for (let i = 0; i <= NT; i++) { const v = ymax * i / NT; svgEl('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: i ? 'gl' : 'base'}, svg); const t = svgEl('text', {x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'tick'}, svg); t.textContent = ax(v); }
   cur.v.forEach((v, i) => {
-    const pilih = tgl && i + 1 === tgl;
+    const pilih = tgl && i + 1 >= tgl && i + 1 <= Math.max(tgl, tgl2);
     if (cur.ada[i] && v > 0) svgEl('path', {d: topRound(cx(i) - bw / 2, y(v), bw, y(0) - y(v), 3), style: `fill:${pilih || i === iAkhir ? c.dark : c.color};opacity:${tgl && !pilih ? .45 : 1}`}, svg);
     const t = svgEl('text', {x: cx(i), y: H - 8, 'text-anchor': 'middle', class: 'tick', style: i === iMax || pilih ? 'font-weight:700;fill:#1b1f1d' : ''}, svg); t.textContent = i + 1;
   });
@@ -1589,7 +1606,7 @@ lgEl('loginForm').onsubmit = e => {
 };
 document.getElementById('btnKeluar').onclick = () => {
   if (TOKEN) google.script.run.withSuccessHandler(() => {}).withFailureHandler(() => {}).logout(TOKEN);
-  TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null; sel = 'ALL'; selLok = -1; tgl = 0; shift = 0; jam = -1;
+  TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null; sel = 'ALL'; selLok = -1; tgl = tgl2 = 0; shift = 0; jam = -1;
   tampilLogin('');
 };
 // pengukur waktu muat (ditampilkan di samping "Data s/d ..."), untuk mencari langkah yang lambat
@@ -1637,7 +1654,7 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => tvPa
 if (window.ResizeObserver) new ResizeObserver(() => { if (!TV) return; clearTimeout(tvPas.r); tvPas.r = setTimeout(() => { if ( Math.abs(document.getElementById('view-bulan').getBoundingClientRect().bottom - innerHeight) > 2) tvPas(); }, 200); }).observe(document.body);
 function aturTv(on) {
   TV = on; try { localStorage.setItem(TV_SIMPAN, on ? '1' : '0'); } catch (e) { /* tanpa penyimpanan */ }
-  if (on) { mon = Math.max(0, LAST); tgl = 0; shift = 0; jam = -1; sel = 'ALL'; selLok = -1; TVV = 'tren'; }   // TV: bulan terakhir, semua area, mulai dari tren
+  if (on) { mon = Math.max(0, LAST); tgl = tgl2 = 0; shift = 0; jam = -1; sel = 'ALL'; selLok = -1; TVV = 'tren'; }   // TV: bulan terakhir, semua area, mulai dari tren
   if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
   if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
   if (D) render(); else tvPas();
