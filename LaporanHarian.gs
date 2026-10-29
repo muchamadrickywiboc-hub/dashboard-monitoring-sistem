@@ -13,7 +13,7 @@
  *     disimpan di spreadsheet LH.INPUT_NAMA di folder data (dibuat otomatis).
  *   - Logo: file gambar di folder data yang namanya diawali "Logo" (mis. "Logo Pertamina Patra Niaga.png").
  *     Tanpa file itu dipakai logo bawaan di HalamanHarian.html.
- * Camera Covering dan Illegal Shutdown tetap dihitung di laporan ini walau di sheet Pemetaan ditandai "tidak dihitung".
+ * Camera Covering dan Illegal Shutdown tidak dimasukkan ke laporan. SOS, Seat Belt, Microsleep, Driver Distracted dan Driving > 4 hrs hanya untuk akun RTC.
  */
 const LH = {
   INPUT_NAMA: 'Input Harian GPS Dashcam RTC',
@@ -28,26 +28,26 @@ const LH = {
   },
   ABSEN_DETIK: 600,
 };
-/** 14 jenis event laporan: judul tabel, judul grafik, teks Case yang masuk, dan nama parameter Pemetaan (cadangan). */
+/** 14 jenis event laporan (akun RTC; Command Center & Control Room 9 jenis): judul tabel, judul grafik, teks Case yang masuk, dan nama parameter Pemetaan (cadangan). */
 const LH_PANEL = [
-  { k: 'HC', tabel: 'Harsh Cornering', grafik: 'Harsh Cornering', kasus: ['HARSH TURN', 'HARSH CORNERING', 'HARSH TURN / CORNERING', 'HARSH CORNERING ALARM', 'HARSH TURN ALARM'], param: ['HARSH TURN / CORNERING'] },
   { k: 'OS', tabel: 'Over Speed', grafik: 'Over Speed', kasus: ['OVERSPEED', 'OVER SPEED', 'OVERSPEED INSTANT', 'OVER SPEED ALARM'], param: ['OVER SPEED'] },
+  { k: 'HC', tabel: 'Harsh Cornering', grafik: 'Harsh Cornering', kasus: ['HARSH TURN', 'HARSH CORNERING', 'HARSH TURN / CORNERING', 'HARSH CORNERING ALARM', 'HARSH TURN ALARM'], param: ['HARSH TURN / CORNERING'] },
   { k: 'HB', tabel: 'Harsh Brake', grafik: 'Harsh Brake', kasus: ['HARSH BREAKING', 'HARSH BRAKING', 'HARSH BRAKE', 'HARSH BRAKING ALARM', 'HARSH BRAKE ALARM', 'HARSH BREAKING ALARM'], param: ['HARSH BRAKING'] },
+  { k: 'BZ', tabel: 'Blackzone', grafik: 'Blackzone', kasus: ['BLACKZONE', 'BLACKZONE ALARM', 'BLACK ZONE'], param: ['BLACK ZONE'] },
   { k: 'HA', tabel: 'Harsh Acceleration', grafik: 'Harsh Acceleration', kasus: ['HARSH ACCELERATION', 'HARSH ACCELERATION ALARM'], param: ['HARSH ACCELERATION'] },
   { k: 'ID', tabel: 'Idle', grafik: 'Idle', kasus: ['IDLE', 'IDLE REPORT', 'IDLING'], param: ['IDLING'] },
-  { k: 'D4', tabel: 'Driving > 4 hrs', grafik: 'Driving > 4 hrs', kasus: ['DRIVING > 4 HOURS', 'OVER DRIVING (4 HOURS)'], param: ['DRIVING > 4 HOURS'] },
-  { k: 'BZ', tabel: 'Blackzone', grafik: 'Blackzone', kasus: ['BLACKZONE', 'BLACKZONE ALARM', 'BLACK ZONE'], param: ['BLACK ZONE'] },
-  { k: 'FT', tabel: 'Driver Behavior - Fatigue', grafik: 'Fatigue', kasus: ['DRIVER FATIGUE', 'FATIGUE', 'MICROSLEEP'], param: ['MICROSLEEP'] },
   { k: 'MG', tabel: 'Driver Behavior - Menguap', grafik: 'Menguap', kasus: ['YAWNING DETECTION', 'DRIVER HAS BEEN YAWNING'], param: ['MENGUAP'] },
   { k: 'MR', tabel: 'Driver Behavior - Merokok', grafik: 'Merokok', kasus: ['SMOKING DETECTION', 'DRIVER HAS BEEN SMOKING'], param: ['MEROKOK / VAPE'] },
   { k: 'TL', tabel: 'Driver Behavior - Telepon', grafik: 'Menggunakan Telepon', kasus: ['PHONE DETECTION', 'DRIVER IS USING PHONE'], param: ['MENGGUNAKAN TELEPON'] },
-  { k: 'CC', tabel: 'Camera Covering', grafik: 'Camera Covering', kasus: ['CAMERA COVERING ALARM', 'CAMERA COVERING'], param: ['CAMERA COVERING'] },
-  { k: 'IS', tabel: 'Illegal Shutdown', grafik: 'Illegal Shutdown', kasus: ['ILLEGAL SHUTDOWN'], param: ['ILLEGAL SHUTDOWN'] },
-  { k: 'DS', tabel: 'Distraction Mengemudi', grafik: 'Distraction Mengemudi', kasus: ['DRIVER DISTRACTION', 'DRIVER ATTENTION HAS BEEN DISTRACTED'], param: ['DISTRACTION MENGEMUDI'] },
+  { k: 'FT', tabel: 'Driver Behavior - Microsleep', grafik: 'Microsleep', kasus: ['DRIVER FATIGUE', 'FATIGUE', 'MICROSLEEP'], param: ['MICROSLEEP'] },
+  { k: 'DS', tabel: 'Driver Distracted', grafik: 'Driver Distracted', kasus: ['DRIVER DISTRACTION', 'DRIVER ATTENTION HAS BEEN DISTRACTED'], param: ['DISTRACTION MENGEMUDI'] },
+  { k: 'SO', tabel: 'SOS', grafik: 'SOS', kasus: ['SOS', 'SOS ALARM'], param: ['SOS'] },
+  { k: 'SB', tabel: 'Seat Belt', grafik: 'Seat Belt', kasus: ['SEAT BELT', 'SEATBELT', 'NO SEAT BELT'], param: ['SEAT BELT'] },
+  { k: 'D4', tabel: 'Driving > 4 hrs', grafik: 'Driving > 4 hrs', kasus: ['DRIVING > 4 HOURS', 'OVER DRIVING (4 HOURS)'], param: ['DRIVING > 4 HOURS'] },
 ];
 
-/** Panel yang tidak ditampilkan untuk akun Area (Command Center) & Lokasi (Control Room): Illegal Shutdown, Camera Covering, Fatigue, Driving > 4 hrs, Distraction Mengemudi. */
-const LH_SEMBUNYI_LOKASI = ['IS', 'CC', 'FT', 'D4', 'DS'];
+/** Panel yang hanya untuk akun RTC (Pusat): Microsleep, Driver Distracted, SOS, Seat Belt, Driving > 4 hrs. */
+const LH_SEMBUNYI_LOKASI = ['FT', 'DS', 'SO', 'SB', 'D4'];
 
 function halamanLaporanHarian_() {
   return HtmlService.createHtmlOutputFromFile('HalamanHarian')
@@ -400,15 +400,16 @@ function kehadiranLH_(jenis) {
   try { cache.put(kunci, JSON.stringify(out), LH.ABSEN_DETIK); } catch (e) { /* terlalu besar: tanpa cache */ }
   return out;
 }
-/** Jumlah personel (tanpa status OFF) dan yang hadir (HADIR / TELAT); satu orang dihitung sekali per tanggal. */
+/** Hadir = HADIR / TELAT, Tidak Hadir = SAKIT / CUTI; status lain tidak dihitung. Satu orang dihitung sekali per tanggal (hadir menang). */
 function hitungHadir_(rows) {
   const per = {};
   rows.forEach(r => {
-    const id = r.tanggal + '|' + (r.nip || r.nama) + '|' + r.lokasi, hadir = /^(HADIR|TELAT)/.test(r.status);
-    if (/^(OFF|LIBUR)/.test(r.status)) { if (!(id in per)) per[id] = null; return; }
+    const hadir = /^(HADIR|TELAT)/.test(r.status), absen = /^(SAKIT|CUTI)/.test(r.status);
+    if (!hadir && !absen) return;
+    const id = r.tanggal + '|' + (r.nip || r.nama);
     per[id] = per[id] || hadir;
   });
-  const v = Object.keys(per).map(k => per[k]).filter(x => x !== null);
+  const v = Object.keys(per).map(k => per[k]);
   return { terpasang: v.length, online: v.filter(Boolean).length };
 }
 const lokasiCC_ = area => 'COMMAND CENTER ' + areaNorm(area);   // baris nama untuk akun Area (bukan lokasi sungguhan)

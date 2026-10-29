@@ -55,8 +55,8 @@ const PARAM_SEMBUNYI_LOKASI = ['ILLEGAL SHUTDOWN', 'CAMERA COVERING', 'MICROSLEE
 const LABEL_EVENT = {
   'OVER SPEED': 'Overspeed', 'HARSH BRAKING': 'Harsh Brake', 'HARSH ACCELERATION': 'Harsh Acceleration', 'HARSH TURN / CORNERING': 'Harsh Cornering',
   'IDLING': 'Idle', 'DRIVING > 4 HOURS': 'Drive > 4 Hr', 'BLACK ZONE': 'Blackzone',
-  'MICROSLEEP': 'Fatigue', 'MENGUAP': 'Menguap', 'MEROKOK / VAPE': 'Merokok', 'MENGGUNAKAN TELEPON': 'Menggunakan Telepon',
-  'DISTRACTION MENGEMUDI': 'Distraction Mengemudi', 'SEAT BELT': 'Seat Belt Detection',
+  'MICROSLEEP': 'Microsleep', 'MENGUAP': 'Menguap', 'MEROKOK / VAPE': 'Merokok', 'MENGGUNAKAN TELEPON': 'Menggunakan Telepon',
+  'DISTRACTION MENGEMUDI': 'Driver Distracted', 'SEAT BELT': 'Seat Belt Detection',
 };
 
 /* ============================== MENU ============================== */
