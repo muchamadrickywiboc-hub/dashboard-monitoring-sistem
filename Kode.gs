@@ -99,7 +99,7 @@ function onOpen() {
 
 /** Menu: membangun ulang data dashboard di sini (bukan menghapus cache), jadi pengunjung tidak ikut menunggu. */
 function hapusCache() {
-  CacheService.getScriptCache().removeAll(['LGLIST', 'DASHB4_N']);   // DASHB4 = cache JSON lama (tidak dipakai lagi)
+  CacheService.getScriptCache().removeAll(['LGLIST2', 'DASHB4_N']);   // DASHB4 = cache JSON lama (tidak dipakai lagi)
   gantiVersiData_();
   panaskanCache();
   try { SpreadsheetApp.getActiveSpreadsheet().toast('Data dashboard sudah diperbarui. Muat ulang dashboard.', 'Dashboard', 5); } catch (e) { Logger.log('Data dashboard diperbarui.'); }
@@ -347,22 +347,23 @@ function login(username, password) {
  * Hanya username, nama, area, lokasi yang dikirim; password tidak pernah keluar dari server.
  */
 function daftarLogin() {
-  const cache = CacheService.getScriptCache(), ada = cache.get('LGLIST');
+  const cache = CacheService.getScriptCache(), ada = cache.get('LGLIST2');
   if (ada) return ada;
   const sh = sheetAkun_(), v = sh && sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, AKUN_HDR.length).getValues() : [];
-  const out = { pusat: [], area: [], lokasi: [] };
+  const out = { pusat: [], area: [], lokasi: [], master: [] };
   v.forEach(r => {
     const u = teks(r[0]).toLowerCase();
     if (!u || u === 'contoh.lokasi' || !teks(r[1]) || /^(TIDAK|NO|FALSE|0|NONAKTIF)$/i.test(teks(r[6]))) return;
     const c = cakupanAkun_(r); if (!c) return;
-    if (c.peran === 'PUSAT') out.pusat.push({ u: u, nama: c.nama });
+    if (c.master) out.master.push({ u: u, nama: c.nama });
+    else if (c.peran === 'PUSAT') out.pusat.push({ u: u, nama: c.nama });
     else if (c.peran === 'AREA') out.area.push({ u: u, nama: c.nama, area: c.area });
     else out.lokasi.push({ u: u, lok: c.lok, area: c.area || '' });
   });
   out.area.sort((a, b) => AREAS.indexOf(a.area) - AREAS.indexOf(b.area));
   out.lokasi.sort((a, b) => a.lok < b.lok ? -1 : a.lok > b.lok ? 1 : 0);
   const json = JSON.stringify(out);
-  cache.put('LGLIST', json, 600);
+  cache.put('LGLIST2', json, 600);
   return json;
 }
 function logout(token) { /* token tidak disimpan di server; halaman menghapus token dari perangkat */ }
@@ -446,7 +447,7 @@ function seragamkanNamaAkun() {
     if (baru && teks(nama[i][0]) !== baru) { nama[i][0] = baru; n++; }
   });
   if (n) rg.setValues(nama);
-  CacheService.getScriptCache().remove('LGLIST');
+  CacheService.getScriptCache().remove('LGLIST2');
   Logger.log(n + ' nama akun diseragamkan.');
   return n;
 }
@@ -475,7 +476,7 @@ function buatSheetAkun() {
     .sort((a, b) => AREAS.indexOf(a.area) - AREAS.indexOf(b.area) || (a.nama < b.nama ? -1 : 1))
     .forEach(o => { const k = kunciLok(o.nama); if (lokSudah[k]) return; lokSudah[k] = 1; tambah('LOKASI|' + k, slug(o.nama), 'Control Room ' + o.nama, 'LOKASI', o.area, o.nama); });
   if (baru.length) sh.getRange(sh.getLastRow() + 1, 1, baru.length, AKUN_HDR.length).setValues(baru);
-  CacheService.getScriptCache().remove('LGLIST');
+  CacheService.getScriptCache().remove('LGLIST2');
   sh.autoResizeColumns(1, AKUN_HDR.length);
   const pesan = baru.length ? baru.length + ' akun baru ditambahkan dengan password acak. Catat/bagikan password-nya, lalu jalankan menu "Amankan password akun".' : 'Semua akun sudah ada, tidak ada yang ditambahkan.';
   try { SpreadsheetApp.getUi().alert(pesan); } catch (e) { Logger.log(pesan); }
@@ -538,7 +539,7 @@ function rapikanAkunGanda() {
     ii.filter(i => i !== pakai).forEach(i => { hapus.push(i); pesan.push(teks(v[i][0]) + ' -> ' + teks(v[pakai][0])); });
   });
   hapus.sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
-  CacheService.getScriptCache().remove('LGLIST');
+  CacheService.getScriptCache().remove('LGLIST2');
   const t = hapus.length ? hapus.length + ' akun ganda dihapus (dipakai akun sebelah kanan): ' + pesan.join(', ') : 'Tidak ada akun ganda.';
   try { SpreadsheetApp.getUi().alert(t); } catch (e) { Logger.log(t); }
 }
