@@ -28,6 +28,11 @@ const CFG = {
   MULAI_TARIKAN: '2026-10-29',   // mulai tanggal ini data HANYA dari tarikan (link Tarikan Sistem); tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..."
   // area yang mulai dari tarikan pada tanggal lain: file rekap Sumbagut 1 & 2 di "Data 10 Oktober 2026" hanya sampai tanggal 26, jadi 27-28 dari tarikan
   MULAI_TARIKAN_AREA: { SUMBAGUT: '2026-10-27' },
+  // folder "4. Report Data alert Per 4 Jam": subfolder per regional ("7. Malupa"), isinya file alert mentah sebulan (MALUPA_OKTOBER 2026.xlsx) yang diperbarui tiap 4 jam.
+  // Mulai MULAI_4JAM event area yang filenya sudah terbaca dari folder ini HANYA diambil dari sini (tarikan harian di Tarikan Sistem tidak dipakai lagi untuk area itu).
+  ALERT4JAM_ID: '1ZLTierdGgXgpA2BwFszLnGfLa1fHRF0F',
+  MULAI_4JAM: '2026-10-29',
+  MAKS_MB_4JAM: 40,   // file lebih besar dari ini tidak bisa diubah ke Google Sheet (batas 10 juta sel) -> dicatat di Log Tarikan, minta dipecah per hari
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
   JEDA_GABUNG_DETIK: 0,   // (mis. 10) alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
@@ -1170,11 +1175,14 @@ function prosesTarikan() {
     const logSh = logSs.getSheetByName(LOG_NAMA);
     let diimpor = 0;
     try { diimpor = imporTarikan_(folder, logSh, mulai); } catch (e) { Logger.log('Impor tarikan gagal: ' + e.message); }
-    const daftar = daftarTarikan_(), ada = {};
-    daftar.forEach(o => { ada[o.id] = 1; });
-    // baris log file yang sudah tidak ada di folder (dihapus / diganti file baru) dibuang, supaya peringatan "gagal dibaca" lama tidak muncul terus
     let logV = logSh.getDataRange().getValues(), dibuang = 0;
+    const statusLog = {}; logV.slice(1).forEach(r => { statusLog[teks(r[0])] = teks(r[7]); });
+    const daftar = daftarTarikan_(statusLog), ada = {};
+    daftar.forEach(o => { ada[o.id] = 1; });
+    // baris log file yang sudah tidak ada di folder (dihapus / diganti file baru / tanggal 29+ yang sekarang dari folder per 4 jam) dibuang,
+    // begitu juga hasilnya di file Tarikan, supaya tidak terhitung dobel dan peringatan "gagal dibaca" lama tidak muncul terus
     if (daftar.length) for (let i = logV.length - 1; i >= 1; i--) if (!ada[teks(logV[i][0])]) { logSh.deleteRow(i + 1); dibuang++; }
+    if (dibuang) try { buangSumberHilang_(folder, ada); } catch (e) { Logger.log('Membuang baris file lama gagal: ' + e.message); }
     logV = logSh.getDataRange().getValues();
     const sudah = {};
     logV.slice(1).forEach((r, i) => { sudah[r[0]] = { baris: i + 2, diubah: Number(r[4]) || 0, status: teks(r[7]) }; });
@@ -1185,6 +1193,11 @@ function prosesTarikan() {
     antre.sort((a, b) => gagal(a) - gagal(b) || (a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0));
     let n = 0;
     for (const o of antre) {
+      if (o.besar) {   // file per 4 jam yang terlalu besar: tidak dikonversi, cukup dicatat (dicoba lagi saat filenya berubah)
+        const row = [o.id, o.nama, o.area, o.tgl, o.diubah, 0, new Date(), 'TERLALU BESAR: ' + o.besar + ' MB, Google Sheet maks. 10 juta sel; minta file dipecah per hari'];
+        if (sudah[o.id]) logSh.getRange(sudah[o.id].baris, 1, 1, row.length).setValues([row]); else logSh.appendRow(row);
+        n++; continue;
+      }
       if (Date.now() - mulai > BATAS_MS) break;
       let status = 'OK', baris = 0;
       // ditandai dulu: kalau Apps Script menghentikan proses di tengah file ini, jalan berikutnya tahu file ini gagal
@@ -1211,14 +1224,20 @@ function prosesTarikan() {
  * Area = nama subfolder bila berupa nama area ("1. Sumbagut 1"), selain itu kolom Area di Tarikan Sistem.
  * Hasil: [{id, nama, area, tgl, diubah, mime, file}].
  */
-function daftarTarikan_() {
+function daftarTarikan_(statusLog) {
   const v = SpreadsheetApp.openById(CFG.TARIKAN_ID).getSheets()[0].getDataRange().getValues();
   const out = [], lihat = {};
+  // folder per 4 jam dulu: area yang filenya sudah pernah terbaca OK tidak lagi mengambil tarikan harian mulai MULAI_4JAM
+  const empat = daftar4Jam_(), tercakup = {};
+  if (!statusLog) { const it = DriveApp.getFolderById(CFG.FOLDER_ID).getFilesByName(LOG_NAMA); statusLog = {};
+    if (it.hasNext()) (nilaiSheet(SpreadsheetApp.open(it.next()), LOG_NAMA) || []).slice(1).forEach(r => { statusLog[teks(r[0])] = teks(r[7]); }); }
+  empat.forEach(o => { lihat[o.id] = 1; out.push(o); if (/^OK/.test(statusLog[o.id] || '')) tercakup[areaNorm(o.area)] = 1; });
   const baca = (folder, area, dalam) => {   // dalam = sisa tingkat subfolder yang dibaca
     const it = folder.getFiles();
     while (it.hasNext()) {
       const f = it.next(), nama = f.getName(), tgl = tanggalNama_(nama);
       if (!tgl || lihat[f.getId()] || +tgl.slice(0, 4) !== CFG.TAHUN || tgl < mulaiTarikan_(area)) continue;
+      if (CFG.MULAI_4JAM && tgl >= CFG.MULAI_4JAM && tercakup[areaNorm(area)]) continue;   // sudah dari folder per 4 jam
       const mime = f.getMimeType();
       if (mime !== MimeType.MICROSOFT_EXCEL && mime !== MimeType.GOOGLE_SHEETS) continue;
       lihat[f.getId()] = 1;
@@ -1233,6 +1252,51 @@ function daftarTarikan_() {
     baca(DriveApp.getFolderById(id), area, 2);
   });
   return out;
+}
+
+/**
+ * File di folder "4. Report Data alert Per 4 Jam" (CFG.ALERT4JAM_ID) dan subfolder regionalnya ("7. Malupa", "6. Sulawesi").
+ * Satu file memuat banyak tanggal (mis. sebulan), jadi ditandai multi: barisnya dikelompokkan per tanggal dan hanya tanggal >= MULAI_4JAM yang dipakai.
+ * Area = nama subfolder, selain itu awal nama file ("MALUPA_OKTOBER 2026.xlsx"). Tanggal di log = tanggal 1 bulan di nama file (atau MULAI_4JAM).
+ */
+function daftar4Jam_() {
+  if (!CFG.ALERT4JAM_ID) return [];
+  const out = [];
+  const baca = (folder, area, dalam) => {
+    const it = folder.getFiles();
+    while (it.hasNext()) {
+      const f = it.next(), nama = f.getName(), mime = f.getMimeType();
+      if (mime !== MimeType.MICROSOFT_EXCEL && mime !== MimeType.GOOGLE_SHEETS) continue;
+      const a = area || areaNorm(teks(nama).split(/[_\-]/)[0]);
+      if (!a) continue;
+      const bl = teks(nama).toUpperCase().match(/(JANUARI|FEBRUARI|MARET|APRIL|MEI|JUNI|JULI|AGUSTUS|SEPTEMBER|OKTOBER|NOVEMBER|DESEMBER)\s*(\d{4})/);
+      const tgl = tanggalNama_(nama) || (bl ? bl[2] + '-' + ('0' + (BULAN.indexOf(bl[1]) + 1)).slice(-2) + '-01' : CFG.MULAI_4JAM);
+      if (bl && +bl[2] !== CFG.TAHUN) continue;
+      const mb = Math.round(f.getSize() / 1048576);
+      out.push({ id: f.getId(), nama: nama, area: a, tgl: tgl, diubah: f.getLastUpdated().getTime(), mime: mime, file: f, multi: true,
+                 besar: mime === MimeType.MICROSOFT_EXCEL && mb > (CFG.MAKS_MB_4JAM || 40) ? mb : 0 });
+    }
+    if (dalam) { const sub = folder.getFolders(); while (sub.hasNext()) { const f = sub.next(), nm = areaNorm(teks(f.getName()).replace(/^\d+\s*[.)]\s*/, '')); baca(f, nm || area, dalam - 1); } }
+  };
+  baca(DriveApp.getFolderById(CFG.ALERT4JAM_ID), '', 2);
+  return out;
+}
+
+/** Membuang baris di semua file "Tarikan <nn> ..." yang sumbernya (kolom terakhir = File ID) sudah tidak ada di daftar file. */
+function buangSumberHilang_(folder, ada) {
+  const it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+  while (it.hasNext()) {
+    const f = it.next(); if (!/^TARIKAN\s+\d{1,2}\b/i.test(teks(f.getName()))) continue;
+    const ss = SpreadsheetApp.open(f);
+    Object.keys(HDR_TARIKAN).forEach(n => {
+      const sh = ss.getSheetByName(n); if (!sh || sh.getLastRow() < 2) return;
+      const v = sh.getDataRange().getValues(), w = v[0].length, sisa = v.slice(1).filter(r => ada[teks(r[w - 1])]);
+      if (sisa.length === v.length - 1) return;
+      sh.getRange(2, 1, v.length - 1, w).clearContent();
+      if (sisa.length) sh.getRange(2, 1, sisa.length, w).setValues(sisa);
+      Logger.log(f.getName() + ' / ' + n + ': ' + (v.length - 1 - sisa.length) + ' baris dari file yang sudah tidak dipakai dibuang.');
+    });
+  }
 }
 
 /**
@@ -1313,36 +1377,49 @@ function prosesSatuTarikan(folder, o, batas) {
     if (!tb || !al) throw new Error('kolom TBBM / Alarm Status tidak ditemukan');
     const ev = {}, evj = {}, amt = {}, amj = {}, lihat = {}, akhir = {};
     // urut waktu supaya alert beruntun per nopol bisa digabung
-    const ms = wk ? wk.map(r => waktuMs(r[0])) : [], urut = [];
+    const ms = wk ? wk.map(r => waktuMs(r[0], o.multi)) : [], urut = [];
     for (let i = 0; i < nr; i++) urut.push(i);
     if (jeda && pl && wk) urut.sort((a, b) => (ms[a] || 0) - (ms[b] || 0));
     // baris yang kolom Time-nya bukan tanggal file (mis. file "20 Oktober" ikut memuat baris 22 Oktober) dilewati:
     // baris itu milik file tanggalnya sendiri, jadi kalau ikut dihitung akan dobel
     const tglMs = t => { const x = new Date(t); return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
+    // file per 4 jam (o.multi) memuat banyak tanggal: setiap baris ikut tanggalnya sendiri, hanya mulai MULAI_4JAM / mulai tarikan areanya
+    const awalMulti = [CFG.MULAI_4JAM || '', mulaiTarikan_(o.area)].sort()[1];
     let n = 0, diluar = 0;
     for (const i of urut) {
       const c = normKasus(al[i][0]); if (!c) continue;
-      if (wk && ms[i] !== null && ms[i] !== undefined && tglMs(ms[i]) !== o.tgl) { diluar++; continue; }
+      let tg = o.tgl;
+      if (o.multi) {
+        if (ms[i] === null || ms[i] === undefined) { diluar++; continue; }
+        tg = tglMs(ms[i]);
+        if (tg < awalMulti || +tg.slice(0, 4) !== CFG.TAHUN) { diluar++; continue; }
+      } else if (wk && ms[i] !== null && ms[i] !== undefined && tglMs(ms[i]) !== o.tgl) { diluar++; continue; }
       const g = gid ? teks(gid[i][0]) : '';
       if (g) { if (lihat[g]) continue; lihat[g] = 1; }   // baris dobel (Alert Group ID sama) dihitung sekali
       // alert yang sama dari kendaraan yang sama berulang tiap 1-10 detik (mis. Yawning) = satu kejadian
       const kp = pl ? teks(pl[i][0]).toUpperCase() + '\u0001' + c : '', t = ms[i];
       if (jeda && kp && t !== null && t !== undefined) { const s = akhir[kp]; akhir[kp] = t; if (s !== undefined && t - s <= jeda) continue; }
       const lok = teks(tb[i][0]).toUpperCase();
-      const ke = lok + '\u0001' + c; ev[ke] = (ev[ke] || 0) + 1; n++;
-      const jam = wk ? jamDari(wk[i][0]) : null;
-      if (jam !== null) { const kj = jam + '\u0001' + ke; evj[kj] = (evj[kj] || 0) + 1; }
+      const jam = wk ? jamDari(wk[i][0]) : null, ke = lok + '\u0001' + c, kt = tg + '\u0001' + ke;
+      ev[kt] = (ev[kt] || 0) + 1; n++;
+      if (jam !== null) { const kj = tg + '\u0001' + jam + '\u0001' + ke; evj[kj] = (evj[kj] || 0) + 1; }
       const nama = am ? namaAmt(am[i][0]) : '';
-      if (nama) { const ka = lok + '\u0001' + nama + '\u0001' + c; amt[ka] = (amt[ka] || 0) + 1; if (jam !== null) { const kj = jam + '\u0001' + ka; amj[kj] = (amj[kj] || 0) + 1; } }
+      if (nama) { const ka = lok + '\u0001' + nama + '\u0001' + c, kb = tg.slice(0, 7) + '\u0001' + ka; amt[kb] = (amt[kb] || 0) + 1; if (jam !== null) { const kj = tg + '\u0001' + jam + '\u0001' + ka; amj[kj] = (amj[kj] || 0) + 1; } }
     }
-    if (diluar) Logger.log(o.nama + ' (' + o.area + '): ' + diluar + ' baris bertanggal lain dilewati.');
-    const ss = bukaTarikan_(folder, +o.tgl.slice(5, 7));
-    gantiBaris(ss.getSheetByName('Event'), o.id, Object.keys(ev).map(x => { const p = x.split('\u0001'); return [o.tgl, o.area, p[0], p[1], ev[x], o.id]; }));
-    gantiBaris(sheetAtauBuat(ss, 'Event Jam', HDR_TARIKAN['Event Jam']), o.id,
-      Object.keys(evj).map(x => { const p = x.split('\u0001'); return [o.tgl, +p[0], o.area, p[1], p[2], evj[x], o.id]; }));
-    gantiBaris(sheetAtauBuat(ss, 'AMT Jam', HDR_TARIKAN['AMT Jam']), o.id,
-      Object.keys(amj).map(x => { const p = x.split('\u0001'); return [o.tgl, +p[0], o.area, p[1], p[2], p[3], amj[x], o.id]; }));
-    gantiBaris(ss.getSheetByName('AMT'), o.id, Object.keys(amt).map(x => { const p = x.split('\u0001'); return [o.area, p[0], p[1], p[2], amt[x], o.id]; }));
+    if (diluar) Logger.log(o.nama + ' (' + o.area + '): ' + diluar + ' baris ' + (o.multi ? 'sebelum ' + awalMulti + ' / tanpa waktu' : 'bertanggal lain') + ' dilewati.');
+    // ditulis ke file Tarikan bulan masing-masing; file per 4 jam yang belum punya baris >= MULAI_4JAM tetap membersihkan hasil lamanya di bulan file itu
+    const bulan = {}; bulan[+o.tgl.slice(5, 7)] = 1;
+    Object.keys(ev).forEach(x => { bulan[+x.slice(5, 7)] = 1; });
+    Object.keys(bulan).forEach(m => {
+      const diBulan = x => +x.slice(5, 7) === +m, bagi = x => x.split('\u0001');
+      const ss = bukaTarikan_(folder, +m);
+      gantiBaris(ss.getSheetByName('Event'), o.id, Object.keys(ev).filter(diBulan).map(x => { const p = bagi(x); return [p[0], o.area, p[1], p[2], ev[x], o.id]; }));
+      gantiBaris(sheetAtauBuat(ss, 'Event Jam', HDR_TARIKAN['Event Jam']), o.id,
+        Object.keys(evj).filter(diBulan).map(x => { const p = bagi(x); return [p[0], +p[1], o.area, p[2], p[3], evj[x], o.id]; }));
+      gantiBaris(sheetAtauBuat(ss, 'AMT Jam', HDR_TARIKAN['AMT Jam']), o.id,
+        Object.keys(amj).filter(diBulan).map(x => { const p = bagi(x); return [p[0], +p[1], o.area, p[2], p[3], p[4], amj[x], o.id]; }));
+      gantiBaris(ss.getSheetByName('AMT'), o.id, Object.keys(amt).filter(diBulan).map(x => { const p = bagi(x); return [o.area, p[1], p[2], p[3], amt[x], o.id]; }));
+    });
     return n;
   } finally {
     if (sementara) try { DriveApp.getFileById(sementara).setTrashed(true); } catch (e) { /* abaikan */ }
@@ -1413,10 +1490,13 @@ function imporTarikan_(folder, logSh, mulai) {
 }
 
 /** Waktu (ms) dari kolom Time: nilai tanggal-jam Sheets atau teks "yyyy-mm-dd hh:mm:ss"; null bila tidak terbaca. */
-function waktuMs(x) {
+function waktuMs(x, bulanDulu) {
   if (x instanceof Date) return x.getTime();
   const t = teks(x).match(/^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/);
-  return t ? new Date(+t[1], +t[2] - 1, +t[3], +t[4], +t[5], +(t[6] || 0)).getTime() : null;
+  if (t) return new Date(+t[1], +t[2] - 1, +t[3], +t[4], +t[5], +(t[6] || 0)).getTime();
+  // file per 4 jam: teks "10/29/2026 13:05" (bulan/tanggal/tahun) bila kolom Time tidak terbaca sebagai tanggal
+  const u = bulanDulu && teks(x).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  return u ? new Date(+u[3], +u[1] - 1, +u[2], +u[4], +u[5], +(u[6] || 0)).getTime() : null;
 }
 /** Jam kejadian (0-23) dari kolom Time: nilai tanggal-jam Sheets atau teks "yyyy-mm-ddThh:mm:ss". */
 function jamDari(x) {
@@ -1538,7 +1618,9 @@ function bacaLogTarikan(folder) {
   const it = folder.getFilesByName(LOG_NAMA), out = { gagal: [], proses: 0 };   // proses = file yang kehabisan waktu dan dicoba lagi otomatis
   if (!it.hasNext()) return out;
   const v = nilaiSheet(SpreadsheetApp.open(it.next()), LOG_NAMA) || [];
-  v.slice(1).forEach(r => { const st = teks(r[7]); if (!/^GAGAL/.test(st)) return;
+  v.slice(1).forEach(r => { const st = teks(r[7]);
+    if (/^TERLALU BESAR/.test(st)) { out.gagal.push(teks(r[1]) + ' (' + st.toLowerCase().slice(0, 100) + ')'); return; }
+    if (!/^GAGAL/.test(st)) return;
     if (/waktu habis/i.test(st)) out.proses++; else out.gagal.push(teks(r[1]) + ' (' + st.slice(7, 80) + ')'); });
   return out;
 }
