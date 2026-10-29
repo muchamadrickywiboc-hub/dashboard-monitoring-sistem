@@ -106,7 +106,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-10-29e';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-10-29f';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE; }
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -1123,7 +1123,7 @@ function anomali_(area, m, d) {
   return !!L && L.indexOf(CFG.TAHUN + '-' + ('0' + (m + 1)).slice(-2) + '-' + ('0' + d).slice(-2)) >= 0;
 }
 function tandaSumber_(src, peta) {
-  const isi = ['amt2', CFG.MULAI_TARIKAN, JSON.stringify(CFG.MULAI_TARIKAN_AREA || {}), JSON.stringify(CFG.TANGGAL_ANOMALI || {}), JSON.stringify(peta.kasus)]
+  const isi = ['amt3', CFG.MULAI_TARIKAN, JSON.stringify(CFG.MULAI_TARIKAN_AREA || {}), JSON.stringify(CFG.TANGGAL_ANOMALI || {}), JSON.stringify(peta.kasus)]
     .concat(src.map(o => o.f.getId() + '@' + o.f.getLastUpdated().getTime())).join('|');
   return 'v1-' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, isi, Utilities.Charset.UTF_8)).slice(0, 22);
 }
@@ -1823,12 +1823,12 @@ function namaAmt(x) {
 function rapikanNamaAmt_(s) {
   const r = s.replace(/,.*$/, '').replace(/\s+(PT|CV)\b.*$/, '').replace(/(\s+\d+)+$/, '')
     .replace(/[^A-Z '&\/]/g, '').replace(/\s*([&\/])\s*/g, ' $1 ').replace(/\s+/g, ' ').trim();
-  return bukanNamaAmt_(r) ? s : r;
+  return bukanNamaAmt_(r) ? '' : r;
 }
 /** "0", "0.0", "-", "N/A", satu huruf, nomor polisi (B 9577 SEI), "CONTOH 1", "TV6" dll. bukan nama Driver. */
 function bukanNamaAmt_(s) {
   return s.replace(/[^A-Z]/g, '').length < 2
-    || /^(NAN|NULL|NONE|N ?\/ ?A|#N\/A|NA|TIDAK ADA|KOSONG|UNKNOWN|NO NAME|NONAME|DRIVER|AMT ?\d*|SUPIR|SOPIR|TV ?\d*|CONTOH\b.*|TEST\b.*)$/.test(s)
+    || /^(NAN|NULL|NONE|N ?\/ ?A|#N\/A|NA|TIDAK ADA|KOSONG|UNKNOWN|NO NAME|NONAME|DRIVER|AMT ?\d*|SUPIR|SOPIR|CADANGAN|SPARE|STAND ?BY|PENGGANTI|BELUM ADA|TANPA NAMA|TV ?\d*|CONTOH\b.*|TEST\b.*|(PT|CV)\b.*)$/.test(s)
     || /^[A-Z]{1,2} ?\d{1,4} ?[A-Z]{0,3}$/.test(s);
 }
 
