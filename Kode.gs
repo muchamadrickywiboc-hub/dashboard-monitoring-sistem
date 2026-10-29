@@ -868,7 +868,7 @@ function bacaSumberBulan_(src, peta, belum, hanyaEvent) {
       const tg = tanggalTeks(r[0]);
       if (!tg || tg.m !== o.m || dariTarikan_(tg, r[1]) !== o.tarikan) return;
       if (o.tarikan) sumberOk[teks(r[5])] = 1;
-      if (!c) belum[kc] = 1;
+      if (!c && !KASUS_ABAIKAN[kc]) belum[kc] = 1;
       const p = c && c.k !== 'LAIN' ? c.p : lh[kc];   // case di luar dashboard tetap disimpan bila dipakai Laporan Harian
       if (p) EV.push([tg.d, areaNorm(r[1]), teks(r[2]).toUpperCase(), p, n]);
     });
@@ -1074,6 +1074,9 @@ function konversiXlsx(folder, peringatan) {
     } catch (e) { peringatan.push('Gagal mengonversi ' + f.getName() + ': ' + e.message); }
   });
 }
+
+/** Alarm yang memang bukan event dashboard: tidak dihitung dan tidak dimunculkan di peringatan. */
+const KASUS_ABAIKAN = { 'PARKING': 1, 'MAX PARKING': 1 };
 
 /** Pemetaan bawaan untuk teks "Alarm Status" di file tarikan; baris di sheet Pemetaan menimpa ini. */
 const KASUS_TARIKAN = {
