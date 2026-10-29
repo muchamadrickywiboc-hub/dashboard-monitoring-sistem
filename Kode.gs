@@ -1219,6 +1219,7 @@ function prosesTarikan() {
     }
     Logger.log('File tarikan diproses: ' + n + ' dari ' + antre.length + ' yang menunggu.');
     if (n || dibuang || diimpor) gantiVersiData_();
+    if (n || diimpor) try { cekLokasiTanpaAkun(); } catch (e) { Logger.log('Cek lokasi tanpa akun gagal: ' + e.message); }
     if ((n || dibuang || diimpor) && Date.now() - mulai < BATAS_CACHE_MS) { try { panaskanCache(); } catch (e) { /* dicoba lagi oleh pemicu */ } }   // cache lama ditimpa, tidak dikosongkan dulu
   } finally { cache.remove('TARIKAN_JALAN'); }
 }
@@ -1284,6 +1285,42 @@ function daftar4Jam_() {
   };
   baca(DriveApp.getFolderById(CFG.ALERT4JAM_ID), '', 2);
   return out;
+}
+
+/**
+ * Sheet "Lokasi Tanpa Akun" di file Pengaturan Dashboard: lokasi (kolom TBBM) di file Tarikan bulan ini yang belum punya akun LOKASI di sheet Akun.
+ * Diperbarui setiap kali ada file tarikan / per 4 jam yang dibaca; bisa juga dijalankan langsung dari editor.
+ */
+function cekLokasiTanpaAkun() {
+  const ss = SpreadsheetApp.open(fileAtur_()), akun = {};
+  (nilaiSheet(ss, 'Akun') || []).slice(1).forEach(r => { const c = cakupanAkun_(r); if (c && c.peran === 'LOKASI' && teks(r[6]).toUpperCase() !== 'TIDAK') akun[kunciLok(c.lok)] = 1; });
+  const sekarang = new Date(Date.now() + 7 * 36e5), m = sekarang.getUTCMonth() + 1, folder = DriveApp.getFolderById(CFG.FOLDER_ID);
+  const it = folder.getFilesByName('Tarikan ' + ('0' + m).slice(-2) + ' ' + BULAN[m - 1].charAt(0) + BULAN[m - 1].slice(1).toLowerCase() + ' ' + CFG.TAHUN);
+  const per = {};
+  while (it.hasNext()) {
+    const f = it.next(); if (f.getMimeType() !== MimeType.GOOGLE_SHEETS) continue;
+    (nilaiSheet(SpreadsheetApp.open(f), 'Event') || []).slice(1).forEach(r => {
+      const lok = teks(r[2]).toUpperCase(), area = areaNorm(r[1]) || teks(r[1]).toUpperCase(); if (!lok || akun[kunciLok(lok)]) return;
+      const kk = area + '\u0001' + (ALIAS_LOKASI[lok] || lok), tg = teks(r[0]);
+      const x = per[kk] = per[kk] || { n: 0, awal: tg, akhir: tg };
+      x.n += Number(r[4]) || 0; if (tg < x.awal) x.awal = tg; if (tg > x.akhir) x.akhir = tg;
+    });
+  }
+  const rows = Object.keys(per).sort().map(kk => { const p = kk.split('\u0001'), x = per[kk]; return [p[0], p[1], x.n, x.awal, x.akhir]; });
+  let sh = ss.getSheetByName('Lokasi Tanpa Akun');
+  if (!sh) sh = ss.insertSheet('Lokasi Tanpa Akun');
+  sh.clearContents();
+  sh.getRange(1, 1, 1, 5).setValues([['Area', 'Lokasi (TBBM)', 'Jumlah event', 'Tanggal pertama', 'Tanggal terakhir']]).setFontWeight('bold');
+  sh.getRange('D:E').setNumberFormat('@');
+  if (rows.length) sh.getRange(2, 1, rows.length, 5).setValues(rows);
+  sh.getRange(rows.length + 3, 1).setValue('Diperbarui ' + Utilities.formatDate(new Date(), 'Asia/Jakarta', 'dd MMM yyyy HH.mm') + ' WIB dari file Tarikan bulan ini. Kosong = semua lokasi sudah punya akun.');
+  return rows;
+}
+
+/** File tanpa baris yang dipakai: hasil lamanya di file Tarikan bulan file itu dibuang. */
+function bersihkanSumber_(folder, o) {
+  const ss = bukaTarikan_(folder, +o.tgl.slice(5, 7));
+  Object.keys(HDR_TARIKAN).forEach(n => { const sh = ss.getSheetByName(n); if (sh) gantiBaris(sh, o.id, []); });
 }
 
 /** Membuang baris di semua file "Tarikan <nn> ..." yang sumbernya (kolom terakhir = File ID) sudah tidak ada di daftar file. */
@@ -1372,23 +1409,34 @@ function prosesSatuTarikan(folder, o, batas) {
   }
   try {
     const sh = SpreadsheetApp.openById(ssId).getSheets()[0];
-    const nr = sh.getLastRow() - 1, nc = sh.getLastColumn();
-    if (nr < 1) return 0;
+    const nr0 = sh.getLastRow() - 1, nc = sh.getLastColumn();
+    if (nr0 < 1) return 0;
     const k = petaKolom(sh.getRange(1, 1, 1, nc).getValues()[0]);
-    const kol = h => { if (k[h] === undefined) return null; return sh.getRange(2, k[h] + 1, nr, 1).getValues(); };
-    const tb = kol('TBBM'), al = kol('ALARM STATUS'), am = kol('AMT 1'), gid = kol('ALERT GROUP ID') || kol('UNIQ CODE'), wk = kol('TIME') || kol('START ALERT');
+    const kolDari = (h, dari) => { if (k[h] === undefined) return null; return sh.getRange(2 + dari, k[h] + 1, nr0 - dari, 1).getValues(); };
+    // file per 4 jam (o.multi) memuat banyak tanggal: setiap baris ikut tanggalnya sendiri, hanya mulai MULAI_4JAM / mulai tarikan areanya
+    const awalMulti = [CFG.MULAI_4JAM || '', mulaiTarikan_(o.area)].sort()[1];
+    const tglMs = t => { const x = new Date(t); return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
+    // kolom waktu dibaca dulu; untuk file per 4 jam kolom lain hanya dibaca mulai baris pertama yang bertanggal >= awalMulti
+    // (file sebulan bisa ratusan ribu baris, sebagian besar tanggal lama yang tidak dipakai)
+    let wk = kolDari('TIME', 0) || kolDari('START ALERT', 0), ms = wk ? wk.map(r => waktuMs(r[0], o.multi)) : [], dari = 0;
+    if (o.multi && wk) {
+      dari = ms.findIndex(t => t !== null && t !== undefined && tglMs(t) >= awalMulti);
+      if (dari < 0) dari = nr0;
+      wk = wk.slice(dari); ms = ms.slice(dari);
+    }
+    const nr = nr0 - dari;
+    if (nr < 1) { bersihkanSumber_(folder, o); return 0; }
+    const kol = h => kolDari(h, dari);
+    const tb = kol('TBBM'), al = kol('ALARM STATUS'), am = kol('AMT 1'), gid = kol('ALERT GROUP ID') || kol('UNIQ CODE');
     const pl = kol('PLATE') || kol('IMEI'), jeda = (CFG.JEDA_GABUNG_DETIK || 0) * 1000;
     if (!tb || !al) throw new Error('kolom TBBM / Alarm Status tidak ditemukan');
     const ev = {}, evj = {}, amt = {}, amj = {}, lihat = {}, akhir = {};
     // urut waktu supaya alert beruntun per nopol bisa digabung
-    const ms = wk ? wk.map(r => waktuMs(r[0], o.multi)) : [], urut = [];
+    const urut = [];
     for (let i = 0; i < nr; i++) urut.push(i);
     if (jeda && pl && wk) urut.sort((a, b) => (ms[a] || 0) - (ms[b] || 0));
     // baris yang kolom Time-nya bukan tanggal file (mis. file "20 Oktober" ikut memuat baris 22 Oktober) dilewati:
     // baris itu milik file tanggalnya sendiri, jadi kalau ikut dihitung akan dobel
-    const tglMs = t => { const x = new Date(t); return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
-    // file per 4 jam (o.multi) memuat banyak tanggal: setiap baris ikut tanggalnya sendiri, hanya mulai MULAI_4JAM / mulai tarikan areanya
-    const awalMulti = [CFG.MULAI_4JAM || '', mulaiTarikan_(o.area)].sort()[1];
     let n = 0, diluar = 0;
     for (const i of urut) {
       const c = normKasus(al[i][0]); if (!c) continue;
@@ -1498,9 +1546,9 @@ function waktuMs(x, bulanDulu) {
   if (x instanceof Date) return x.getTime();
   const t = teks(x).match(/^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (t) return new Date(+t[1], +t[2] - 1, +t[3], +t[4], +t[5], +(t[6] || 0)).getTime();
-  // file per 4 jam: teks "10/29/2026 13:05" (bulan/tanggal/tahun) bila kolom Time tidak terbaca sebagai tanggal
-  const u = bulanDulu && teks(x).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/);
-  return u ? new Date(+u[3], +u[1] - 1, +u[2], +u[4], +u[5], +(u[6] || 0)).getTime() : null;
+  // file per 4 jam: teks "10/29/2026 13:05" / "10/29/26 13:05" (bulan/tanggal/tahun) bila kolom Time tidak terbaca sebagai tanggal
+  const u = bulanDulu && teks(x).match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  return u ? new Date(+u[3] < 100 ? 2000 + +u[3] : +u[3], +u[1] - 1, +u[2], +u[4], +u[5], +(u[6] || 0)).getTime() : null;
 }
 /** Jam kejadian (0-23) dari kolom Time: nilai tanggal-jam Sheets atau teks "yyyy-mm-ddThh:mm:ss". */
 function jamDari(x) {
@@ -1597,6 +1645,14 @@ function bukanNamaAmt_(s) {
 
 /** Mengganti semua baris milik satu file sumber (kolom terakhir = File ID) dengan baris baru. */
 function gantiBaris(sh, sumber, baru) {
+  // cepat: hanya kolom sumber yang dibaca; baris file ini biasanya satu blok (selalu ditulis di bawah), jadi cukup blok itu yang dihapus
+  const n = sh.getLastRow() - 1, w0 = sh.getLastColumn(), idx = [];
+  if (n > 0) sh.getRange(2, w0, n, 1).getValues().forEach((r, i) => { if (r[0] === sumber) idx.push(i); });
+  if (!idx.length || (idx[idx.length - 1] - idx[0] + 1 === idx.length && idx.length < n)) {
+    if (idx.length) sh.deleteRows(idx[0] + 2, idx.length);
+    if (baru.length) sh.getRange(sh.getLastRow() + 1, 1, baru.length, baru[0].length).setValues(baru);
+    return;
+  }
   const v = sh.getDataRange().getValues(), w = v[0].length;
   const sisa = v.slice(1).filter(r => r[w - 1] !== sumber).concat(baru);
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, w).clearContent();
