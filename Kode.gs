@@ -77,6 +77,7 @@ function onOpen() {
       .addSeparator()
       .addItem('Buat / lengkapi akun (Pusat, Area, Lokasi)', 'buatSheetAkun')
       .addItem('Rapikan akun ganda (lokasi sama)', 'rapikanAkunGanda')
+      .addItem('Seragamkan nama akun (Control Room / Command Center)', 'seragamkanNamaAkun')
       .addItem('Lengkapi sheet Pemetaan (case tarikan)', 'lengkapiPemetaan')
       .addItem('Amankan password akun', 'amankanPasswordAkun')
       .addItem('Buat ulang semua password (format pendek)', 'buatUlangPasswordAkun')
@@ -381,6 +382,25 @@ function potongJson_(json, ses, awalan) {
   return out;
 }
 
+/** Menu: kolom Nama di sheet Akun diseragamkan: akun Lokasi = "Control Room <lokasi>", akun Area = "Command Center <Area>". Kolom lain tidak diubah. */
+function seragamkanNamaAkun() {
+  const sh = sheetAkun_(); if (!sh || sh.getLastRow() < 2) return 0;
+  const judul = x => teks(x).toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
+  const rg = sh.getRange(2, 3, sh.getLastRow() - 1, 1), nama = rg.getValues();
+  const v = sh.getRange(2, 1, sh.getLastRow() - 1, AKUN_HDR.length).getValues();
+  let n = 0;
+  v.forEach((r, i) => {
+    if (teks(r[0]).toLowerCase() === 'contoh.lokasi') return;
+    const c = cakupanAkun_(r); if (!c) return;
+    const baru = c.peran === 'LOKASI' ? 'Control Room ' + teks(r[5]).toUpperCase() : c.peran === 'AREA' ? 'Command Center ' + judul(c.area) : null;
+    if (baru && teks(nama[i][0]) !== baru) { nama[i][0] = baru; n++; }
+  });
+  if (n) rg.setValues(nama);
+  CacheService.getScriptCache().remove('LGLIST');
+  Logger.log(n + ' nama akun diseragamkan.');
+  return n;
+}
+
 /**
  * Menu: membuat / melengkapi sheet Akun. Akun yang belum ada ditambahkan dengan password pendek (username + 2 angka):
  * 1 akun Pusat, 1 akun per Area, dan 1 akun per Lokasi yang ada di data dashboard. Baris yang sudah ada tidak diubah,
@@ -464,7 +484,7 @@ function rapikanAkunGanda() {
     const ii = grup[k], lok = teks(v[ii[0]][5]).toUpperCase(), baku = ALIAS_LOKASI[lok] || lok;
     const simpan = ii.filter(i => teks(v[i][5]).toUpperCase() === baku)[0];
     const pakai = simpan !== undefined ? simpan : ii[0];
-    if (teks(v[pakai][5]).toUpperCase() !== baku) { sh.getRange(pakai + 2, 6).setValue(baku); sh.getRange(pakai + 2, 3).setValue('Lokasi ' + baku); }
+    if (teks(v[pakai][5]).toUpperCase() !== baku) { sh.getRange(pakai + 2, 6).setValue(baku); sh.getRange(pakai + 2, 3).setValue('Control Room ' + baku); }
     ii.filter(i => i !== pakai).forEach(i => { hapus.push(i); pesan.push(teks(v[i][0]) + ' -> ' + teks(v[pakai][0])); });
   });
   hapus.sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
