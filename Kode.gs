@@ -40,6 +40,7 @@ const CFG = {
     'SUMBAGUT': ['2026-10-01'],   // 1 baris area "SUMBAGUT" tanpa nomor
     'JABALINUS': ['2026-10-04', '2026-10-25'],
     'MALUPA': ['2026-10-01'],
+    'SULAWESI': ['2026-09-17', '2026-09-20'],
   },
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
