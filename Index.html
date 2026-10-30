@@ -1422,7 +1422,7 @@ document.getElementById('btnPdf').onclick = async () => {
     const nama = `${perEvent ? 'Event' : 'Ringkasan'} ${(document.getElementById('akunNama').textContent || 'RTC')} ${KC === 'W' ? labelWaktu().replace(/[·:]/g, '') : BLN[mon] + ' ' + D.tahun}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
     try { pdf.save(nama); } catch (e) { window.open(pdf.output('bloburl'), '_blank'); }
     google.script.run.withFailureHandler(() => {}).catatEkspor(TOKEN, {area: sel === 'ALL' ? 'Semua area' : sel, lokasi: selLok >= 0 ? RAW.lok[selLok][0] : 'Semua lokasi',
-      jenis: 'Dashboard ' + (perEvent ? 'Event' : 'Ringkasan'), tanggalData: KC === 'W' ? labelWaktu() : D.tahun + '-' + ('0' + (mon + 1)).slice(-2)});
+      jenis: 'Dashboard ' + (perEvent ? 'Event' : 'Ringkasan'), tanggalData: KC === 'W' ? labelWaktu() : D.tahun + '-' + ('0' + (mon + 1)).slice(-2), ...zonaPerangkat()});
   } catch (e) { alertPdf(e && e.message ? e.message : String(e)); }
   finally { if (pg) pg.remove(); b.disabled = false; b.textContent = 'Export PDF'; }
 };
@@ -1460,6 +1460,8 @@ const SIMPAN = 'dashb_token';
 const simpanToken = t => { try { t ? localStorage.setItem(SIMPAN, t) : localStorage.removeItem(SIMPAN); } catch (e) { /* tanpa penyimpanan */ } };
 try { TOKEN = localStorage.getItem(SIMPAN) || ''; } catch (e) { TOKEN = ''; }
 const LG_ICO = {PUSAT: document.querySelector('.lg-role[data-peran="PUSAT"] .lg-ico').innerHTML, AREA: document.querySelector('.lg-role[data-peran="AREA"] .lg-ico').innerHTML, LOKASI: document.querySelector('.lg-role[data-peran="LOKASI"] .lg-ico').innerHTML, MASTER: document.querySelector('.lg-master .lg-ico').innerHTML};
+/** Zona waktu perangkat, dicatat di Log Export sebagai pembanding zona resmi lokasi. */
+const zonaPerangkat = () => { let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {} return {zonaPerangkat: -new Date().getTimezoneOffset() / 60, tzPerangkat: tz}; };
 // logo Elnusa Petrofin & RTC di setiap tampilan memuat (kotak dengan spinner, kotak proses login)
 const logoMuat_ = () => [...document.querySelectorAll('.brandbar .lg-eln, .brandbar .lg-rtc')].map(im => `<img src="${im.src}" alt="${im.alt}">`).join('<i></i>');
 function pasangLogoMuat() {

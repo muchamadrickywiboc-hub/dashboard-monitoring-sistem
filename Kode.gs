@@ -243,7 +243,7 @@ function UJI_KECEPATAN() {
  * Password boleh diketik biasa, lalu jalankan menu "Amankan password akun" supaya disimpan sebagai sidik SHA-256.
  * Data dipotong di server sesuai cakupan akun, jadi akun Area / Lokasi tidak menerima data area / lokasi lain.
  */
-const AKUN_HDR = ['Username', 'Password', 'Nama', 'Peran', 'Area', 'Lokasi', 'Aktif'];
+const AKUN_HDR = ['Username', 'Password', 'Nama', 'Peran', 'Area', 'Lokasi', 'Aktif', 'Zona Waktu'];   // Zona Waktu: WIB / WITA / WIT (kosong = bawaan area), untuk Log Export
 // Sesi login tanpa batas waktu (dashboard juga dipakai di layar monitor besar).
 // Token = data akun + tanda tangan HMAC dengan kunci rahasia di Script Properties, jadi tidak perlu disimpan di cache.
 // Sesi berhenti bila akun dinonaktifkan atau password diganti di sheet Akun (dicek ulang paling lama tiap 10 menit),
@@ -463,7 +463,7 @@ function buatSheetAkun() {
   const unik = u => { let v = u, i = 2; while (adaU[v]) v = u + i++; adaU[v] = 1; return v; };
   const judul = x => teks(x).toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
   const baru = [];
-  const tambah = (k, u, nama, peran, area, lok) => { if (adaK[k]) return; adaK[k] = 1; const v = unik(u); baru.push([v, pwPendek_(v), nama, peran, area, lok, 'YA']); };
+  const tambah = (k, u, nama, peran, area, lok) => { if (adaK[k]) return; adaK[k] = 1; const v = unik(u); baru.push([v, pwPendek_(v), nama, peran, area, lok, 'YA', '']); };
   tambah('PUSAT|', 'pusat', 'RTC', 'PUSAT', '', '');
   AREAS.forEach(a => tambah('AREA|' + a, slug(a), 'Command Center ' + judul(a), 'AREA', a, ''));
   const d = JSON.parse(dataUtama_()), lokSudah = {};
@@ -478,18 +478,52 @@ function buatSheetAkun() {
 }
 /* ============================== LOG EXPORT ============================== */
 const LOG_EKSPOR = 'Log Export';
-const LOG_EKSPOR_HDR = ['ID_Log', 'Area', 'Lokasi', 'Jenis Laporan', 'Tanggal Data', 'Target Pelaporan', 'Realisasi Pelaporan', 'Zona Waktu', 'Status'];
+const LOG_EKSPOR_HDR = ['ID_Log', 'Area', 'Lokasi', 'Jenis Laporan', 'Tanggal Data', 'Target Pelaporan', 'Realisasi Pelaporan', 'Zona Waktu', 'Status', 'Zona Perangkat'];
 const TARGET_LAPOR_JAM = 7;   // Daily: H+1 pukul 07.00; Monthly: tanggal 1 bulan berikutnya pukul 07.00 (jam setempat lokasi)
-/** Zona waktu per area (selisih jam dari UTC); lokasi yang berbeda dari areanya ditulis di ZONA_WAKTU_LOKASI. RTC / Semua area = WIB. */
+/**
+ * Zona waktu resmi (selisih jam dari UTC) untuk batas pelaporan:
+ *   1. kolom "Zona Waktu" sheet Akun pada akun Control Room lokasi itu (atau akun Command Center area itu), isi WIB / WITA / WIT;
+ *   2. bila kosong: bawaan area (ZONA_WAKTU_AREA) / lokasi (ZONA_WAKTU_LOKASI). RTC / Semua area = WIB.
+ */
 const ZONA_WAKTU_AREA = { SUMBAGUT: 7, SUMBAGSEL: 7, JABALINUS: 8, KALIMANTAN: 8, SULAWESI: 8, MALUPA: 9 };
 const ZONA_WAKTU_LOKASI = { 'IT PONTIANAK': 7 };
 const NAMA_ZONA = { 7: 'WIB', 8: 'WITA', 9: 'WIT' };
-function zonaWaktu_(area, lokasi) {
-  const l = teks(lokasi).toUpperCase(), lb = ALIAS_LOKASI[l] || l;
-  if (ZONA_WAKTU_LOKASI[lb] !== undefined) return ZONA_WAKTU_LOKASI[lb];
-  const a = areaNorm(area), z = ZONA_WAKTU_AREA[a] !== undefined ? ZONA_WAKTU_AREA[a] : ZONA_WAKTU_AREA[teks(area).toUpperCase().replace(/\s+(I|II|III|\d)$/, '')];
-  return z !== undefined ? z : 7;
+/** "WITA" / "GMT+8" / "UTC+08:00" / "+8" / 8 -> 8; tidak dikenal -> null. */
+function bacaZona_(x) {
+  const s = teks(x).toUpperCase().replace(/\s+/g, '');
+  if (!s) return null;
+  if (s === 'WIB') return 7; if (s === 'WITA') return 8; if (s === 'WIT') return 9;
+  const m = s.match(/^(?:GMT|UTC)?([+-]?\d{1,2})(?:[:.]?00)?$/);
+  return m && Math.abs(+m[1]) <= 14 ? +m[1] : null;
 }
+/** Zona dari sheet Akun: { lok: {LOKASI: jam}, area: {AREA: jam} }; header kolom Zona Waktu ditambahkan bila belum ada. Disimpan 10 menit. */
+function petaZonaAkun_() {
+  const cache = CacheService.getScriptCache(), ada = cache.get('ZONA_AKUN');
+  if (ada) return JSON.parse(ada);
+  const out = { lok: {}, area: {} }, sh = sheetAkun_();
+  if (sh) {
+    const k = AKUN_HDR.length;
+    if (teks(sh.getRange(1, k).getValue()) !== AKUN_HDR[k - 1]) sh.getRange(1, k).setValue(AKUN_HDR[k - 1]).setFontWeight('bold');
+    const v = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, k).getValues() : [];
+    v.forEach(r => {
+      const z = bacaZona_(r[k - 1]), c = z === null ? null : cakupanAkun_(r);
+      if (!c) return;
+      if (c.peran === 'LOKASI') out.lok[c.lok] = z; else if (c.peran === 'AREA') out.area[c.area] = z;
+    });
+  }
+  cache.put('ZONA_AKUN', JSON.stringify(out), 600);
+  return out;
+}
+function zonaWaktu_(area, lokasi) {
+  const l = teks(lokasi).toUpperCase(), lb = ALIAS_LOKASI[l] || l, a = areaNorm(area) || areaNorm(teks(area).replace(/^COMMAND CENTER\s+/i, ''));
+  let P = { lok: {}, area: {} };
+  try { P = petaZonaAkun_(); } catch (e) { /* sheet Akun tidak terbaca: pakai bawaan */ }
+  if (P.lok[lb] !== undefined) return P.lok[lb];
+  if (ZONA_WAKTU_LOKASI[lb] !== undefined) return ZONA_WAKTU_LOKASI[lb];
+  if (a && P.area[a] !== undefined) return P.area[a];
+  return a && ZONA_WAKTU_AREA[a] !== undefined ? ZONA_WAKTU_AREA[a] : 7;
+}
+const namaZona_ = z => NAMA_ZONA[z] || 'UTC' + (z >= 0 ? '+' : '') + z;
 /** Lama terlambat, mis. "Terlambat 2 jam 15 menit". */
 function lamaTerlambat_(ms) {
   const m = Math.round(ms / 60000), h = Math.floor(m / 1440), j = Math.floor(m % 1440 / 60), mn = m % 60;
@@ -497,9 +531,11 @@ function lamaTerlambat_(ms) {
 }
 /**
  * Dipanggil halaman setelah PDF diunduh: satu baris di spreadsheet "Log Export" (folder data), terbaru di paling atas.
- * o: { area, lokasi, jenis ('Daily' / 'Monthly' / 'Dashboard ...'), tanggalData ('yyyy-mm-dd' / 'yyyy-mm' / teks), waktuPdf (ISO) }
+ * o: { area, lokasi, jenis ('Daily' / 'Monthly' / 'Dashboard ...'), tanggalData ('yyyy-mm-dd' / 'yyyy-mm' / teks), waktuPdf (ISO),
+ *      zonaPerangkat (jam dari UTC menurut perangkat), tzPerangkat (mis. 'Asia/Makassar') }
  * Target & realisasi ditulis dalam jam setempat lokasi (WIB / WITA / WIT, kolom Zona Waktu), supaya batas 07.00 berlaku menurut waktu lokasi itu.
  * Realisasi memakai jam server (jam perangkat bisa salah); waktuPdf hanya dipakai bila selisihnya dengan jam server < 10 menit.
+ * Zona perangkat hanya pembanding: bila berbeda dengan zona resmi, Status diberi tanda supaya bisa dicek.
  */
 function catatEkspor(token, o) {
   const ses = sesi_(token); o = o || {};
@@ -511,13 +547,15 @@ function catatEkspor(token, o) {
   if (d && d[3]) { tgl = new Date(+d[1], +d[2] - 1, +d[3]); fmtTgl = 'dd/MM/yyyy'; if (jenis === 'Daily') target = new Date(Date.UTC(+d[1], +d[2] - 1, +d[3] + 1, TARGET_LAPOR_JAM - zona)); }
   else if (d) { tgl = new Date(+d[1], +d[2] - 1, 1); fmtTgl = 'MMMM yyyy'; if (jenis === 'Monthly') target = new Date(Date.UTC(+d[1], +d[2], 1, TARGET_LAPOR_JAM - zona)); }
   const w = o.waktuPdf ? new Date(o.waktuPdf) : null, realisasi = w && !isNaN(w) && Math.abs(w - Date.now()) < 10 * 60 * 1000 ? w : new Date();
-  const status = !target ? '' : realisasi <= target ? 'Tepat waktu' : lamaTerlambat_(realisasi - target);
+  const zp = typeof o.zonaPerangkat === 'number' && isFinite(o.zonaPerangkat) ? Math.round(o.zonaPerangkat * 4) / 4 : null;
+  const zPer = zp === null ? '' : t(namaZona_(zp) + (o.tzPerangkat ? ' (' + o.tzPerangkat + ')' : ''));
+  const status = (!target ? '' : realisasi <= target ? 'Tepat waktu' : lamaTerlambat_(realisasi - target)) + (zp !== null && zp !== zona ? (target ? ' · ' : '') + 'zona perangkat berbeda' : '');
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     const ss = bukaAtauBuat(DriveApp.getFolderById(CFG.FOLDER_ID), LOG_EKSPOR, [[LOG_EKSPOR, LOG_EKSPOR_HDR]]);
     let sh = ss.getSheetByName(LOG_EKSPOR);
     const n = LOG_EKSPOR_HDR.length, hdr = sh.getRange(1, 1, 1, n).getValues()[0].map(teks);
-    if (hdr.slice(0, 7).join('|') === LOG_EKSPOR_HDR.slice(0, 7).join('|') && hdr.join('|') !== LOG_EKSPOR_HDR.join('|')) {   // format 7 kolom: tambah Zona Waktu & Status, baris lama tetap
+    if (hdr.slice(0, 7).join('|') === LOG_EKSPOR_HDR.slice(0, 7).join('|') && hdr.join('|') !== LOG_EKSPOR_HDR.join('|')) {   // format lama 7 / 9 kolom: tambah kolom baru, baris lama tetap
       sh.getRange(1, 1, 1, n).setValues([LOG_EKSPOR_HDR]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#4a7a53');
     } else if (hdr.join('|') !== LOG_EKSPOR_HDR.join('|')) {   // format kolom lain -> disimpan, buat sheet baru
       sh.setName(LOG_EKSPOR + ' (format lama)');
@@ -529,10 +567,10 @@ function catatEkspor(token, o) {
     const no = ids.reduce((m, r) => Math.max(m, +(teks(r[0]).match(/(\d+)$/) || [0, 0])[1]), 0) + 1;
     sh.insertRowAfter(1);
     sh.getRange(2, 6, 1, 2).setNumberFormat('@');   // jam setempat sebagai teks (tidak diubah zona waktu spreadsheet)
-    sh.getRange(2, 1, 1, n).setValues([['LOG-' + ('00000' + no).slice(-6), area, lokasi, jenis, tgl, target ? fmt(target) : '', fmt(realisasi), NAMA_ZONA[zona] || 'GMT+' + zona, status]])
+    sh.getRange(2, 1, 1, n).setValues([['LOG-' + ('00000' + no).slice(-6), area, lokasi, jenis, tgl, target ? fmt(target) : '', fmt(realisasi), namaZona_(zona), status, zPer]])
       .setFontWeight('normal').setFontColor('#000000').setBackground(null);
     sh.getRange(2, 5).setNumberFormat(fmtTgl);
-    if (status) sh.getRange(2, 9).setFontColor(status === 'Tepat waktu' ? '#2e7d32' : '#c62828');
+    if (status) sh.getRange(2, 9).setFontColor(status === 'Tepat waktu' ? '#2e7d32' : /^Terlambat/.test(status) ? '#c62828' : '#b26a00');
   } finally { lock.releaseLock(); }
   return true;
 }

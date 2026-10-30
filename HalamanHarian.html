@@ -1026,6 +1026,8 @@ function blnPanjang(t) { const m = /^(\d{4})-(\d{2})/.exec(t || ''); return m ? 
 const persen = b => b.terpasang ? b.online / b.terpasang * 100 : null;
 const fp = v => v === null ? '–' : (v >= 99.95 || v === 0 ? Math.round(v) : v.toFixed(1).replace('.', ',')) + '%';
 const kelas = v => v === null ? 'na' : v >= 95 ? 'ok' : v >= 80 ? 'mid' : 'bad';
+/** Zona waktu perangkat, dicatat di Log Export sebagai pembanding zona resmi lokasi. */
+const zonaPerangkat = () => { let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {} return {zonaPerangkat: -new Date().getTimezoneOffset() / 60, tzPerangkat: tz}; };
 // logo Elnusa Petrofin & RTC di setiap tampilan memuat (kotak dengan spinner)
 function pasangLogoMuat() {
   document.querySelectorAll('.loading').forEach(el => {
@@ -1374,7 +1376,7 @@ $('btnPdf').onclick = async () => {
     try { pdf.save(nama); } catch (e) { window.open(pdf.output('bloburl'), '_blank'); }
     if (!pertama) run('lhCatatEkspor', TOKEN, kunci, waktu.toISOString()).catch(() => {});
     run('catatEkspor', TOKEN, {area: LAP.area || '', lokasi: LAP.baris === 'Area' ? 'Semua lokasi' : LAP.lokasi,
-      jenis: LAP.mode === 'bulanan' ? 'Monthly' : 'Daily', tanggalData: LAP.periode, waktuPdf: waktu.toISOString()}).catch(() => {});
+      jenis: LAP.mode === 'bulanan' ? 'Monthly' : 'Daily', tanggalData: LAP.periode, waktuPdf: waktu.toISOString(), ...zonaPerangkat()}).catch(() => {});
   } catch (e) { const d = document.createElement('div'); d.className = 'errbar'; d.textContent = 'Export PDF gagal: ' + pesan(e); $('isi').prepend(d); }
   finally { if (box) box.remove(); b.disabled = !LAP; b.textContent = 'Export PDF'; }
 };
