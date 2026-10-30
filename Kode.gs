@@ -478,38 +478,61 @@ function buatSheetAkun() {
 }
 /* ============================== LOG EXPORT ============================== */
 const LOG_EKSPOR = 'Log Export';
-const LOG_EKSPOR_HDR = ['ID_Log', 'Area', 'Lokasi', 'Jenis Laporan', 'Tanggal Data', 'Target Pelaporan', 'Realisasi Pelaporan'];
-const TARGET_LAPOR_JAM = 7;   // Daily: H+1 pukul 07.00; Monthly: tanggal 1 bulan berikutnya pukul 07.00
+const LOG_EKSPOR_HDR = ['ID_Log', 'Area', 'Lokasi', 'Jenis Laporan', 'Tanggal Data', 'Target Pelaporan', 'Realisasi Pelaporan', 'Zona Waktu', 'Status'];
+const TARGET_LAPOR_JAM = 7;   // Daily: H+1 pukul 07.00; Monthly: tanggal 1 bulan berikutnya pukul 07.00 (jam setempat lokasi)
+/** Zona waktu per area (selisih jam dari UTC); lokasi yang berbeda dari areanya ditulis di ZONA_WAKTU_LOKASI. RTC / Semua area = WIB. */
+const ZONA_WAKTU_AREA = { SUMBAGUT: 7, SUMBAGSEL: 7, JABALINUS: 8, KALIMANTAN: 8, SULAWESI: 8, MALUPA: 9 };
+const ZONA_WAKTU_LOKASI = { 'IT PONTIANAK': 7 };
+const NAMA_ZONA = { 7: 'WIB', 8: 'WITA', 9: 'WIT' };
+function zonaWaktu_(area, lokasi) {
+  const l = teks(lokasi).toUpperCase(), lb = ALIAS_LOKASI[l] || l;
+  if (ZONA_WAKTU_LOKASI[lb] !== undefined) return ZONA_WAKTU_LOKASI[lb];
+  const a = areaNorm(area), z = ZONA_WAKTU_AREA[a] !== undefined ? ZONA_WAKTU_AREA[a] : ZONA_WAKTU_AREA[teks(area).toUpperCase().replace(/\s+(I|II|III|\d)$/, '')];
+  return z !== undefined ? z : 7;
+}
+/** Lama terlambat, mis. "Terlambat 2 jam 15 menit". */
+function lamaTerlambat_(ms) {
+  const m = Math.round(ms / 60000), h = Math.floor(m / 1440), j = Math.floor(m % 1440 / 60), mn = m % 60;
+  return 'Terlambat ' + [h ? h + ' hari' : '', j ? j + ' jam' : '', mn || (!h && !j) ? mn + ' menit' : ''].filter(Boolean).join(' ');
+}
 /**
  * Dipanggil halaman setelah PDF diunduh: satu baris di spreadsheet "Log Export" (folder data), terbaru di paling atas.
  * o: { area, lokasi, jenis ('Daily' / 'Monthly' / 'Dashboard ...'), tanggalData ('yyyy-mm-dd' / 'yyyy-mm' / teks), waktuPdf (ISO) }
+ * Target & realisasi ditulis dalam jam setempat lokasi (WIB / WITA / WIT, kolom Zona Waktu), supaya batas 07.00 berlaku menurut waktu lokasi itu.
+ * Realisasi memakai jam server (jam perangkat bisa salah); waktuPdf hanya dipakai bila selisihnya dengan jam server < 10 menit.
  */
 function catatEkspor(token, o) {
   const ses = sesi_(token); o = o || {};
   const t = x => { const v = teks(x).slice(0, 200); return /^[=+\-@]/.test(v) ? "'" + v : v; };   // cegah teks dibaca sebagai rumus
   const area = t(o.area || ses.area || ''), lokasi = t(o.lokasi || ses.lok || ''), jenis = t(o.jenis);
+  const zona = zonaWaktu_(area, lokasi), tz = 'GMT+' + zona, fmt = x => Utilities.formatDate(x, tz, 'dd/MM/yyyy HH:mm:ss');
   const d = teks(o.tanggalData).match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/);
-  let tgl = t(o.tanggalData), target = '', fmtTgl = '@';
-  if (d && d[3]) { tgl = new Date(+d[1], +d[2] - 1, +d[3]); fmtTgl = 'dd/MM/yyyy'; if (jenis === 'Daily') target = new Date(+d[1], +d[2] - 1, +d[3] + 1, TARGET_LAPOR_JAM); }
-  else if (d) { tgl = new Date(+d[1], +d[2] - 1, 1); fmtTgl = 'MMMM yyyy'; if (jenis === 'Monthly') target = new Date(+d[1], +d[2], 1, TARGET_LAPOR_JAM); }
-  const w = o.waktuPdf ? new Date(o.waktuPdf) : null, realisasi = w && !isNaN(w) && Math.abs(w - Date.now()) < 864e5 * 400 ? w : new Date();
+  let tgl = t(o.tanggalData), target = null, fmtTgl = '@';
+  if (d && d[3]) { tgl = new Date(+d[1], +d[2] - 1, +d[3]); fmtTgl = 'dd/MM/yyyy'; if (jenis === 'Daily') target = new Date(Date.UTC(+d[1], +d[2] - 1, +d[3] + 1, TARGET_LAPOR_JAM - zona)); }
+  else if (d) { tgl = new Date(+d[1], +d[2] - 1, 1); fmtTgl = 'MMMM yyyy'; if (jenis === 'Monthly') target = new Date(Date.UTC(+d[1], +d[2], 1, TARGET_LAPOR_JAM - zona)); }
+  const w = o.waktuPdf ? new Date(o.waktuPdf) : null, realisasi = w && !isNaN(w) && Math.abs(w - Date.now()) < 10 * 60 * 1000 ? w : new Date();
+  const status = !target ? '' : realisasi <= target ? 'Tepat waktu' : lamaTerlambat_(realisasi - target);
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     const ss = bukaAtauBuat(DriveApp.getFolderById(CFG.FOLDER_ID), LOG_EKSPOR, [[LOG_EKSPOR, LOG_EKSPOR_HDR]]);
     let sh = ss.getSheetByName(LOG_EKSPOR);
-    if (sh.getRange(1, 1, 1, LOG_EKSPOR_HDR.length).getValues()[0].join('|') !== LOG_EKSPOR_HDR.join('|')) {   // format kolom lama -> disimpan, buat sheet baru
+    const n = LOG_EKSPOR_HDR.length, hdr = sh.getRange(1, 1, 1, n).getValues()[0].map(teks);
+    if (hdr.slice(0, 7).join('|') === LOG_EKSPOR_HDR.slice(0, 7).join('|') && hdr.join('|') !== LOG_EKSPOR_HDR.join('|')) {   // format 7 kolom: tambah Zona Waktu & Status, baris lama tetap
+      sh.getRange(1, 1, 1, n).setValues([LOG_EKSPOR_HDR]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#4a7a53');
+    } else if (hdr.join('|') !== LOG_EKSPOR_HDR.join('|')) {   // format kolom lain -> disimpan, buat sheet baru
       sh.setName(LOG_EKSPOR + ' (format lama)');
       sh = ss.insertSheet(LOG_EKSPOR, 0);
-      sh.getRange(1, 1, 1, LOG_EKSPOR_HDR.length).setValues([LOG_EKSPOR_HDR]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#4a7a53');
+      sh.getRange(1, 1, 1, n).setValues([LOG_EKSPOR_HDR]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#4a7a53');
       sh.setFrozenRows(1);
     }
     const ids = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues() : [];
     const no = ids.reduce((m, r) => Math.max(m, +(teks(r[0]).match(/(\d+)$/) || [0, 0])[1]), 0) + 1;
     sh.insertRowAfter(1);
-    sh.getRange(2, 1, 1, 7).setValues([['LOG-' + ('00000' + no).slice(-6), area, lokasi, jenis, tgl, target, realisasi]])
+    sh.getRange(2, 6, 1, 2).setNumberFormat('@');   // jam setempat sebagai teks (tidak diubah zona waktu spreadsheet)
+    sh.getRange(2, 1, 1, n).setValues([['LOG-' + ('00000' + no).slice(-6), area, lokasi, jenis, tgl, target ? fmt(target) : '', fmt(realisasi), NAMA_ZONA[zona] || 'GMT+' + zona, status]])
       .setFontWeight('normal').setFontColor('#000000').setBackground(null);
     sh.getRange(2, 5).setNumberFormat(fmtTgl);
-    sh.getRange(2, 6, 1, 2).setNumberFormat('dd/MM/yyyy HH:mm:ss');
+    if (status) sh.getRange(2, 9).setFontColor(status === 'Tepat waktu' ? '#2e7d32' : '#c62828');
   } finally { lock.releaseLock(); }
   return true;
 }
