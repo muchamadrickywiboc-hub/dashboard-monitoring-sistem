@@ -32,16 +32,10 @@ const CFG = {
   // Mulai MULAI_4JAM event area yang filenya sudah terbaca dari folder ini HANYA diambil dari sini (tarikan harian di Tarikan Sistem tidak dipakai lagi untuk area itu).
   ALERT4JAM_ID: '1ZLTierdGgXgpA2BwFszLnGfLa1fHRF0F',
   MULAI_4JAM: '2026-11-01',
-  // tanggal anomali di file Data / Jam (total event satu area < 20% median hariannya bulan itu, data rekap tidak lengkap): tidak dihitung.
-  // Kunci = nama Area persis seperti di file Data (sebelum digabung, mis. "SUMBAGUT I").
-  TANGGAL_ANOMALI: {
-    'SUMBAGUT I': ['2026-10-01', '2026-10-02', '2026-10-23'],
-    'SUMBAGUT II': ['2026-10-01', '2026-10-02', '2026-10-22'],
-    'SUMBAGUT': ['2026-10-01'],   // 1 baris area "SUMBAGUT" tanpa nomor
-    'JABALINUS': ['2026-10-04', '2026-10-25'],
-    'MALUPA': ['2026-10-01'],
-    'SULAWESI': ['2026-09-17', '2026-09-20'],
-  },
+  // tanggal anomali = tanggal yang belum terjadi (sesudah hari ini, mis. jam perangkat salah): tidak dihitung, otomatis (lihat anomali_).
+  // Bila perlu, tanggal tertentu bisa disingkirkan manual per Area (nama persis seperti di file Data, mis. "SUMBAGUT I"): { 'SUMBAGUT I': ['2026-10-01'] }
+  TANGGAL_ANOMALI: {},
+
   TAHUN: 2026,
   CACHE_DETIK: 21600,   // 6 jam (batas maksimum CacheService)
   JEDA_GABUNG_DETIK: 0,   // (mis. 10) alert yang sama (nopol + case) berulang dengan jeda <= ini dihitung 1 event; 0 = setiap baris dihitung
@@ -107,8 +101,8 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-10-29f';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
-function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE; }
+const VERSI_KODE = '2026-10-30a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
 /** DIAGNOSA: jalankan dari editor, lihat hasilnya di View > Logs. */
@@ -856,7 +850,7 @@ function sumberBulan_(folder) {
 
 /** File Summary bulan m beserta tanda sumber sekarang; segar = tandanya cocok (isinya boleh dipakai). */
 function cariSummary_(folder, m, src, peta, buat) {
-  const o = { tanda: tandaSumber_(src, peta), sf: folderSummary_(folder, buat), f: null, ss: null, info: {}, segar: false };
+  const o = { tanda: tandaSumber_(src, peta, m), sf: folderSummary_(folder, buat), f: null, ss: null, info: {}, segar: false };
   if (o.sf) { const it = o.sf.getFilesByName(namaBulan_('Summary', m)); while (it.hasNext()) { const x = it.next(); if (x.getMimeType() === MimeType.GOOGLE_SHEETS) o.f = terbaru_(o.f, x); } }
   if (o.f) {
     o.ss = SpreadsheetApp.open(o.f);
@@ -922,11 +916,11 @@ function bacaJamSumber_(folder, m, src, peta) {
     const ss = SpreadsheetApp.open(o.f);
     (nilaiSheet(ss, 'Event Jam') || []).slice(1).forEach(r => {
       const tg = tanggalTeks(r[0]), p = kasus(r[4]), n = angka(r[5]) || 0;
-      if (tg && tg.m === m && p && n && dariTarikan_(tg, r[2])) EJ.push([tg.d, +r[1], areaNorm(r[2]), teks(r[3]).toUpperCase(), p, n]);
+      if (tg && tg.m === m && p && n && dariTarikan_(tg, r[2]) && !anomali_(r[2], tg.m, tg.d)) EJ.push([tg.d, +r[1], areaNorm(r[2]), teks(r[3]).toUpperCase(), p, n]);
     });
     (nilaiSheet(ss, 'AMT Jam') || []).slice(1).forEach(r => {
       const tg = tanggalTeks(r[0]), p = kasus(r[5]), n = angka(r[6]) || 0, nama = namaAmt(r[4]);
-      if (tg && tg.m === m && p && n && nama && dariTarikan_(tg, r[2])) AJ.push([tg.d, +r[1], areaNorm(r[2]), teks(r[3]).toUpperCase(), nama, p, n]);
+      if (tg && tg.m === m && p && n && nama && dariTarikan_(tg, r[2]) && !anomali_(r[2], tg.m, tg.d)) AJ.push([tg.d, +r[1], areaNorm(r[2]), teks(r[3]).toUpperCase(), nama, p, n]);
     });
   });
   return { EJ: EJ, AJ: AJ };
@@ -941,7 +935,7 @@ function bacaSumberBulan_(src, peta, belum, hanyaEvent) {
       const kc = normKasus(r[3]), c = peta.kasus[kc], n = angka(r[4]) || 0;
       if (!kc || !n) return;
       const tg = tanggalTeks(r[0]);
-      if (!tg || tg.m !== o.m || dariTarikan_(tg, r[1]) !== o.tarikan || (!o.tarikan && anomali_(r[1], tg.m, tg.d))) return;
+      if (!tg || tg.m !== o.m || dariTarikan_(tg, r[1]) !== o.tarikan || anomali_(r[1], tg.m, tg.d)) return;
       if (o.tarikan) sumberOk[teks(r[5])] = 1;
       if (!c && !KASUS_ABAIKAN[kc]) belum[kc] = 1;
       const p = c && c.k !== 'LAIN' ? c.p : lh[kc];   // case di luar dashboard tetap disimpan bila dipakai Laporan Harian
@@ -1119,13 +1113,17 @@ function tulisSummary_(ss, sf, m, x, j, peta, src, tanda) {
 }
 
 /** Tanda sumber: berubah bila file sumber, sheet Pemetaan, atau tanggal mulai tarikan berubah. */
-/** true bila baris file Data / Jam (area mentah, bulan 0-11, tanggal) termasuk CFG.TANGGAL_ANOMALI. */
+/** Hari ini (Asia/Jakarta) sebagai yyyy-mm-dd. */
+const hariIni_ = () => Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
+/** true bila tanggal (bulan 0-11, tanggal) belum terjadi (sesudah hari ini) atau termasuk CFG.TANGGAL_ANOMALI area itu. */
 function anomali_(area, m, d) {
-  const L = (CFG.TANGGAL_ANOMALI || {})[teks(area).toUpperCase()];
-  return !!L && L.indexOf(CFG.TAHUN + '-' + ('0' + (m + 1)).slice(-2) + '-' + ('0' + d).slice(-2)) >= 0;
+  const t = CFG.TAHUN + '-' + ('0' + (m + 1)).slice(-2) + '-' + ('0' + d).slice(-2), L = (CFG.TANGGAL_ANOMALI || {})[teks(area).toUpperCase()];
+  return t > hariIni_() || (!!L && L.indexOf(t) >= 0);
 }
-function tandaSumber_(src, peta) {
-  const isi = ['amt3', CFG.MULAI_TARIKAN, JSON.stringify(CFG.MULAI_TARIKAN_AREA || {}), JSON.stringify(CFG.TANGGAL_ANOMALI || {}), JSON.stringify(peta.kasus)]
+function tandaSumber_(src, peta, m) {
+  // bulan berjalan / akan datang: Summary dibangun ulang tiap hari, karena tanggal yang belum terjadi tidak dihitung (lihat anomali_)
+  const hi = hariIni_(), bln = CFG.TAHUN + '-' + ('0' + (m + 1)).slice(-2);
+  const isi = ['amt4', bln >= hi.slice(0, 7) ? hi : '', CFG.MULAI_TARIKAN, JSON.stringify(CFG.MULAI_TARIKAN_AREA || {}), JSON.stringify(CFG.TANGGAL_ANOMALI || {}), JSON.stringify(peta.kasus)]
     .concat(src.map(o => o.f.getId() + '@' + o.f.getLastUpdated().getTime())).join('|');
   return 'v1-' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, isi, Utilities.Charset.UTF_8)).slice(0, 22);
 }
