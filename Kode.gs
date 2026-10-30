@@ -101,7 +101,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-10-30b';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-10-30c';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -644,8 +644,10 @@ function getDataWaktu(token, m, d, s, h, d2) {
 function dataWaktu_(m, d, s, h, d2) {
   m = +m; d = +d || 0; s = +s || 0; h = (h === undefined || h === null || h === '') ? -1 : +h;
   d2 = d ? Math.max(d, +d2 || d) : 0;
-  const L = d2 - d + 1, diJendela = t => t >= d && t <= d2, diPrev = t => t >= d - L && t < d;   // pembanding: L hari tepat sebelum rentang
-  const kunci = 'WKT3_' + versiData_() + '_' + [m, d, s, h, d2].join('_');
+  // pembanding: bulan sebelumnya, tanggal dan jam/shift yang sama (tanpa filter tanggal: sebulan penuh bulan sebelumnya)
+  let tMaks = 31;   // tanpa filter tanggal: pembanding sampai tanggal terakhir yang sudah ada datanya bulan ini
+  const diJendela = (t, b) => d ? t >= d && t <= d2 : t >= 1 && (!b || t <= tMaks);
+  const kunci = 'WKT4_' + versiData_() + '_' + [m, d, s, h, d2].join('_');
   const kosongW = (pesan) => JSON.stringify(Object.assign(kosong([pesan]), { waktu: { m: m, d: d, d2: d2, s: s, h: h, adaPrev: false } }));
   const ada = ambilCache_(kunci);
   if (ada) return ada;
@@ -654,20 +656,23 @@ function dataWaktu_(m, d, s, h, d2) {
   const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(S.atur), 'Pemetaan') || []);
   const J = jamBulan_(folder, m, src, peta);   // Sum_Jam & Sum_AMT_Jam di file Summary bulan itu
   if (!J.EJ.length) return kosongW('Data jam ' + BULAN[m] + ' belum ada.');
+  tMaks = J.EJ.reduce((a, e) => Math.max(a, e[0]), 1);
+  const srcP = m > 0 ? (S.perBulan[m - 1] || []) : [], JP = srcP.length ? jamBulan_(folder, m - 1, srcP, peta) : { EJ: [], AJ: [] };
   const okJam = j => (h < 0 || j === h) && (!s || diShift(j, s));
   // shift yang melewati tengah malam (Shift 3) ikut tanggal mulainya: jam 00.00-07.00 dihitung ke tanggal sebelumnya
-  const jendela = (t0, j) => { if (!okJam(j)) return -1; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? t0 - 1 : t0;
-    if (!d) return t >= 1 ? 0 : -1; return diJendela(t) ? 0 : diPrev(t) ? 1 : -1; };
-  // w: 0 = jendela terpilih, 1 = pembanding, 2 / 3 = event tanpa jam di tanggal terpilih / pembanding (tidak bisa disaring per jam;
+  const jendela = (t0, j, b) => { if (!okJam(j)) return false; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? t0 - 1 : t0; return diJendela(t, b); };
+  // kode: 0 = jendela terpilih, 1 = pembanding, 2 / 3 = event tanpa jam di tanggal terpilih / pembanding (tidak bisa disaring per jam;
   // dashboard memakainya bila data cakupannya tidak punya jam kejadian)
   const tanpa = !s && h < 0;   // hanya filter tanggal: event tanpa jam tetap dihitung
-  const w = (t0, j) => { if (j >= 0) return jendela(t0, j); const x = !d ? 0 : diJendela(t0) ? 0 : diPrev(t0) ? 1 : -1; return x < 0 ? -1 : tanpa ? x : x + 2; };
+  const w = (t0, j, b) => j >= 0 ? (jendela(t0, j, b) ? b : -1) : !diJendela(t0, b) ? -1 : tanpa ? b : b + 2;
   const kat = {}; peta.urut.forEach(o => { kat[o.p] = o.k; });
   const EV = [], AM = [];
-  J.EJ.forEach(e => { const x = w(e[0], e[1]); if (x >= 0) EV.push([x, e[1] < 0 ? 0 : e[1] + 1, e[2], e[3], e[4], kat[e[4]], e[5]]); });
-  J.AJ.forEach(r => { const x = w(r[0], r[1]); if (x >= 0) AM.push([x, r[2], r[3], r[4], r[5], kat[r[5]], r[6]]); });
+  [[J, 0], [JP, 1]].forEach(([X, b]) => {
+    X.EJ.forEach(e => { const x = w(e[0], e[1], b); if (x >= 0) EV.push([x, e[1] < 0 ? 0 : e[1] + 1, e[2], e[3], e[4], kat[e[4]], e[5]]); });
+    X.AJ.forEach(r => { const x = w(r[0], r[1], b); if (x >= 0) AM.push([x, r[2], r[3], r[4], r[5], kat[r[5]], r[6]]); });
+  });
   const hasil = hitung_(EV, AM, peta, [], []);
-  hasil.waktu = { m: m, d: d, d2: d2, s: s, h: h, adaPrev: d > 1 };
+  hasil.waktu = { m: m, d: d, d2: d2, s: s, h: h, adaPrev: JP.EJ.length > 0, pm: m - 1, tMaks: tMaks };
   const json = JSON.stringify(hasil);
   simpanCache_(json, kunci, CFG.CACHE_DETIK);   // kunci ikut versi data: berganti setiap tarikan / summary baru
   return json;
