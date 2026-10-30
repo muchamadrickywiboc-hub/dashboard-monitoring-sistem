@@ -876,9 +876,18 @@ function deriveWaktu() {
   const A = RAW.areas, w = WIN, kp = w.waktu.adaPrev, okLok = li => selLok < 0 || li === selLok;
   A.forEach(a => { const o = D.regional[a]; o.total.W = 0; o.total.P = kp ? 0 : null; o.kat.W = {DB: 0, DD: 0, FM: 0}; o.lokasi = 0; });
   const L = {}, NW = {}, TJ = {t: 0, DB: 0, DD: 0, FM: 0, grafik: 0};
+  // filter shift/jam, tapi data cakupan ini (hampir) semuanya tanpa jam kejadian: filter jam tidak berlaku, event tanpa jam dihitung per tanggal
+  // (dinilai per area: area yang datanya berjam tetap disaring per jam)
+  const nJam = A.map(() => 0), nTanpa = A.map(() => 0);
+  w.fakta.forEach(([b, ai, wl, pi, n]) => { if (!okLok(w.lokMap[wl])) return; if (b === 0) nJam[ai] += n; else if (b === 2) nTanpa[ai] += n; });
+  const tak = A.map((a, i) => (!!shift || jam >= 0) && nTanpa[i] > nJam[i]);
+  const dlm = A.map((a, i) => cocokReg(a) && (nJam[i] || nTanpa[i]));
+  D.jamTakArea = A.filter((a, i) => tak[i] && dlm[i]);
+  D.jamTak = D.jamTakArea.length > 0 && A.every((a, i) => !dlm[i] || tak[i] || !nJam[i]);   // semua data cakupan ini tanpa jam
   w.fakta.forEach(([b, ai, wl, pi, n]) => {
     const li = w.lokMap[wl], o = D.regional[A[ai]];
-    if (!okLok(li) || !o || (b === 1 && !kp)) return;
+    if (tak[ai] && b >= 2) b -= 2;   // 2 = tanpa jam di rentang terpilih, 3 = tanpa jam di pembanding
+    if (!okLok(li) || !o || (b === 1 && !kp) || b === 3) return;
     if (b === 2) { if (cocokReg(A[ai])) { TJ.t += n; TJ[w.params[pi].kat] += n; } return; }   // event tanpa jam (tidak bisa disaring per jam)
     const k = w.params[pi].kat, x = L[wl] || (L[wl] = {i: li, l: w.lok[wl][0], r: A[ai], W: {DB: 0, DD: 0, FM: 0, t: 0}, P: 0});
     if (b) { o.total.P += n; x.P += n; } else { o.total.W += n; o.kat.W[k] += n; x.W[k] += n; x.W.t += n; }
@@ -891,7 +900,7 @@ function deriveWaktu() {
   const X = w.driver;
   D.drvNama = X ? X.nama : [];
   D.drv = !X ? null : (selLok >= 0 ? X.lok.filter(r => w.lokMap[r[2]] === selLok) : sel !== 'ALL' ? X.area.filter(r => A[r[1]] === sel) : X.all)
-    .filter(r => r[0] === 0 && namaDriverOk(D.drvNama[r[4]])).map(r => ['W', r[1], w.lokMap[r[2]], w.pMap[r[3]], r[4], r[5]]);
+    .filter(r => (r[0] === 0 || (tak[r[1]] && r[0] === 2)) && namaDriverOk(D.drvNama[r[4]])).map(r => ['W', r[1], w.lokMap[r[2]], w.pMap[r[3]], r[4], r[5]]);
   const J = Array.from({length: 24}, () => ({DB: 0, DD: 0, FM: 0, t: 0, p: 0, pDB: 0, pDD: 0, pFM: 0}));
   w.harian.forEach(([b, d, ai, wl, x, y, z]) => { if (!okLok(w.lokMap[wl]) || !cocokReg(A[ai])) return;
     if (!d && !b) { TJ.grafik += x + y + z; return; }   // hanya filter tanggal: event tanpa jam ikut dihitung tapi tidak punya posisi di grafik
@@ -907,7 +916,7 @@ function renderJam() {
   const cur = HS.map(h => D.jamW[h]), tot = sum(cur.map(o => o.t));
   const tglJam = h => lintas() && h < SHIFT[shift][1] ? tgl + 1 : tgl, satuTgl = tgl > 0 && tgl2 <= tgl;   // Shift 3: jam 00.00-07.00 jatuh di tanggal berikutnya
   document.getElementById('bdayLeg').hidden = !tot;
-  const TJ = D.tanpaJam || {}, catJam = TJ.grafik ? ` · <span class="small" style="display:inline">${nf(TJ.grafik)} event tanpa jam (data GPS) tidak tampil di grafik ini</span>` : TJ.t ? ` · <span class="small" style="display:inline">${nf(TJ.t)} event tanpa jam (data GPS) tidak ikut filter shift/jam</span>` : '';
+  const TJ = D.tanpaJam || {}, catJam = !D.jamTak && D.jamTakArea && D.jamTakArea.length ? ` · <span class="small" style="display:inline">data ${D.jamTakArea.map(rn).join(', ')} tidak punya jam kejadian (data GPS), jadi tidak tampil di grafik per jam</span>` : D.jamTak ? ` · <span class="small" style="display:inline">data ${BLN[mon]} untuk cakupan ini tidak punya jam kejadian (data GPS), jadi tidak bisa ditampilkan per jam; lihat grafik per kategori (per tanggal)</span>` : TJ.grafik ? ` · <span class="small" style="display:inline">${nf(TJ.grafik)} event tanpa jam (data GPS) tidak tampil di grafik ini</span>` : TJ.t ? ` · <span class="small" style="display:inline">${nf(TJ.t)} event tanpa jam (data GPS) tidak ikut filter shift/jam</span>` : '';
   if (!tot) { sub.innerHTML = scope() + catJam; host.innerHTML = `<div class="emptyamt">Tidak ada event untuk ${labelWaktu()}${sel === 'ALL' ? '' : ' · ' + scope()}.</div>`; return; }
   document.getElementById('bdayCmpLeg').hidden = !kp;
   document.getElementById('bdayCmpName').textContent = kp ? `${tPv()} ${BLN[mon]} (jam yang sama)` : '';
@@ -974,10 +983,14 @@ function renderBulan() {
 
   // kartu per kategori: donut, kotak, tren, tabel parameter
   // filter tanggal saja, tapi sebagian besar event bulan ini tidak punya jam kejadian: grafik per jam kosong, jadi tampilkan event per tanggal
-  const keHari = W && !shift && jam < 0 && tgl > 0 && D.tanpaJam && D.tanpaJam.grafik > sum(HS.map(h => D.jamW[h].t)) && !!hariBulan(mon);
+  // filter shift/jam, tapi data cakupan ini tidak punya jam kejadian (D.jamTak): filter jam tidak berlaku, grafik juga per tanggal
+  const keHari = W && tgl > 0 && !!hariBulan(mon) && (D.jamTak || (!shift && jam < 0 && D.tanpaJam && D.tanpaJam.grafik > sum(HS.map(h => D.jamW[h].t))));
+  const jamTakBln = W && D.jamTak && !tgl, HBJ = jamTakBln ? hariBulan(mon) : null;   // filter jam tanpa tanggal: tampil seperti per bulan
+  const ketJamTak = `data ${BLN[mon]} untuk cakupan ini tidak punya jam kejadian (data GPS): filter ${jam >= 0 ? 'jam' : 'shift'} tidak berlaku, angka dihitung sehari penuh`;
   keHariAktif = () => keHari;
-  const TJ = W && D.tanpaJam && D.tanpaJam.t ? ' · tanpa jam (data GPS, tidak ikut filter shift/jam): ' + CATS.filter(c => D.tanpaJam[c.key]).map(c => `${c.name} ${nf(D.tanpaJam[c.key])}`).join(', ') : '';
-  document.getElementById('trendSub').textContent = keHari ? `${scope()} · ${labelWaktu()} · data ${BLN[mon]} tidak punya jam kejadian, jadi grafik menampilkan event per tanggal (batang gelap = tanggal ${tA()}) · garis merah = tren · garis putus-putus = tanggal ${tPv()} (pembanding)`
+  const TJ = (W && !D.jamTak && D.jamTakArea && D.jamTakArea.length ? ` · data ${D.jamTakArea.map(rn).join(', ')} tidak punya jam kejadian: dihitung sehari penuh di tabel, tidak tampil di grafik per jam` : '') + (W && D.tanpaJam && D.tanpaJam.t ? ' · tanpa jam (data GPS, tidak ikut filter shift/jam): ' + CATS.filter(c => D.tanpaJam[c.key]).map(c => `${c.name} ${nf(D.tanpaJam[c.key])}`).join(', ') : '');
+  document.getElementById('trendSub').textContent = jamTakBln ? `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · ${ketJamTak} · garis merah = tren${prevM() !== null ? ` · garis putus-putus = ${BLN[prevM()]} (tanggal yang sama)` : ''}`
+    : keHari ? `${scope()} · ${labelWaktu()} · ${D.jamTak ? ketJamTak : `data ${BLN[mon]} tidak punya jam kejadian`}, jadi grafik menampilkan event per tanggal (batang gelap = tanggal ${tA()}) · garis merah = tren · garis putus-putus = tanggal ${tPv()} (pembanding)`
     : W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tPv()} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
     : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis merah = tren`
     : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis merah = tren${prevM() !== null ? ` · garis putus-putus = ${BLN[prevM()]} (tanggal yang sama)` : ''}`;
@@ -985,7 +998,7 @@ function renderBulan() {
   // keterangan tabel parameter: periode ini dibanding apa
   const pjg = k => W ? namaK(k) : `${BLN[k]} ${D.tahun}`;
   const ketTabel = pm === null ? `Tabel: <b>${pjg(W ? 'W' : mon)}</b> · belum ada periode pembanding${W ? ' (pilih tanggal untuk membandingkan dengan hari sebelumnya)' : ''}.`
-    : `Tabel: <b>${pjg(W ? 'W' : mon)}</b> dibanding <b>${pjg(pm)}</b>.`;
+    : `Tabel: <b>${pjg(W ? 'W' : mon)}</b> dibanding <b>${pjg(pm)}</b>${W && D.jamTak ? ' · data tanpa jam kejadian, dihitung sehari penuh' : ''}.`;
   const HB = W || PERIODE === 'tahun' ? null : hariBulan(mon);
   CATS.forEach(cat => {
     const ps = catParams(cat.key), arr = W ? null : BLN.map((_, m) => nilaiKat(cat.key, m)), kc = W ? 'W' : mon;
@@ -1006,6 +1019,7 @@ function renderBulan() {
       <tr class="tot"><td>TOTAL</td><td>${prv === null ? '–' : nf(prv)}</td><td>${cur === null ? '–' : nf(cur)}</td><td>${pctTxt(cur || 0, prv)}</td></tr></tbody></table></div></div>`;
     te.appendChild(card);
     if (keHari) drawHarianKat(card.querySelector('.anachart'), hariBulan(mon), cat, [tgl - 1, Math.max(tgl2, tgl) - 1], bandingHari(cat.key, nHari(mon)));
+    else if (HBJ) drawHarianKat(card.querySelector('.anachart'), HBJ, cat, -1, bandingHari(cat.key, HBJ.length));
     else if (W) drawJamKat(card.querySelector('.anachart'), HS, HS.map(h => D.jamW[h][cat.key]), KP ? HS.map(h => D.jamW[h]['p' + cat.key]) : null, cat);
     else if (PERIODE === 'tahun') drawBulanan(card.querySelector('.anachart'), arr, cat);
     else drawHarianKat(card.querySelector('.anachart'), HB, cat, -1, HB ? bandingHari(cat.key, HB.length) : null);

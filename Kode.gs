@@ -101,7 +101,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-10-30a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-10-30b';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -645,7 +645,7 @@ function dataWaktu_(m, d, s, h, d2) {
   m = +m; d = +d || 0; s = +s || 0; h = (h === undefined || h === null || h === '') ? -1 : +h;
   d2 = d ? Math.max(d, +d2 || d) : 0;
   const L = d2 - d + 1, diJendela = t => t >= d && t <= d2, diPrev = t => t >= d - L && t < d;   // pembanding: L hari tepat sebelum rentang
-  const kunci = 'WKT2_' + versiData_() + '_' + [m, d, s, h, d2].join('_');
+  const kunci = 'WKT3_' + versiData_() + '_' + [m, d, s, h, d2].join('_');
   const kosongW = (pesan) => JSON.stringify(Object.assign(kosong([pesan]), { waktu: { m: m, d: d, d2: d2, s: s, h: h, adaPrev: false } }));
   const ada = ambilCache_(kunci);
   if (ada) return ada;
@@ -658,9 +658,10 @@ function dataWaktu_(m, d, s, h, d2) {
   // shift yang melewati tengah malam (Shift 3) ikut tanggal mulainya: jam 00.00-07.00 dihitung ke tanggal sebelumnya
   const jendela = (t0, j) => { if (!okJam(j)) return -1; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? t0 - 1 : t0;
     if (!d) return t >= 1 ? 0 : -1; return diJendela(t) ? 0 : diPrev(t) ? 1 : -1; };
-  // w: 0 = jendela terpilih, 1 = pembanding, 2 = event tanpa jam di tanggal terpilih (tidak bisa disaring per jam)
+  // w: 0 = jendela terpilih, 1 = pembanding, 2 / 3 = event tanpa jam di tanggal terpilih / pembanding (tidak bisa disaring per jam;
+  // dashboard memakainya bila data cakupannya tidak punya jam kejadian)
   const tanpa = !s && h < 0;   // hanya filter tanggal: event tanpa jam tetap dihitung
-  const w = (t0, j) => { if (j >= 0) return jendela(t0, j); const x = !d ? 0 : diJendela(t0) ? 0 : diPrev(t0) ? 1 : -1; return x < 0 ? -1 : tanpa ? x : (x === 0 ? 2 : -1); };
+  const w = (t0, j) => { if (j >= 0) return jendela(t0, j); const x = !d ? 0 : diJendela(t0) ? 0 : diPrev(t0) ? 1 : -1; return x < 0 ? -1 : tanpa ? x : x + 2; };
   const kat = {}; peta.urut.forEach(o => { kat[o.p] = o.k; });
   const EV = [], AM = [];
   J.EJ.forEach(e => { const x = w(e[0], e[1]); if (x >= 0) EV.push([x, e[1] < 0 ? 0 : e[1] + 1, e[2], e[3], e[4], kat[e[4]], e[5]]); });
