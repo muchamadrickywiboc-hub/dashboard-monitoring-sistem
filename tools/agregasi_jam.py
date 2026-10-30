@@ -109,7 +109,11 @@ for p in FILES:
             jm = tojam(r, idt, ibl, ij, igps)
             k = (ds, jm, area, lok, case, a1)
             raw = ((ds, area, lok, case, a1), T(V(inp)), str(V(ila)), str(V(ilo))) + tuple(str(V(i)) for i in itm)
-            hh = hash(raw); fc[hh] += 1; keyof[hh] = k
+            hh = hash(raw); keyof[hh] = k
+            # baris yang sama persis sampai jam (detik), nomor polisi & koordinat dalam satu file = tempel ganda: dihitung sekali.
+            # Tanpa jam (mis. Sumbagut) baris sama bisa kejadian berbeda, jadi tetap dihitung semua.
+            if jm >= 0 and fc[hh]: info['kembar_dibuang'] = info.get('kembar_dibuang', 0) + 1
+            else: fc[hh] += 1
         fi['sheets'].append([sn, n])
     for hh, c in fc.items():
         if c > merged[hh]: info['dup_removed'] += merged[hh]; merged[hh] = c
