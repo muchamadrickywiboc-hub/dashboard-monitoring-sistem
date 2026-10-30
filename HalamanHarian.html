@@ -53,6 +53,9 @@ h1{margin:2px 0 4px;font-size:clamp(22px,3vw,34px);font-weight:700;letter-spacin
 .loading{background:var(--surface);border-radius:16px;box-shadow:0 8px 24px rgba(30,60,40,.10);padding:16px 20px;color:var(--ink-2);display:flex;align-items:center;gap:12px}
 .spin{display:inline-block;width:18px;height:18px;border-radius:50%;border:3px solid var(--grid);border-top-color:var(--forest);animation:sp .8s linear infinite;flex:none}
 @keyframes sp{to{transform:rotate(360deg)}}
+.loading{flex-wrap:wrap}
+.muat-logo{flex-basis:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--grid)}
+.muat-logo img{height:30px;width:auto;display:block}.muat-logo i{width:1px;height:24px;background:var(--grid)}
 .warnbar{display:flex;flex-direction:column;gap:4px;background:#fdf0cf;color:var(--warn-ink);border-radius:12px;padding:10px 14px;font-size:13.5px}
 .errbar{background:#fbe9e7;color:var(--serious-ink);border-radius:12px;padding:10px 14px;font-size:13.5px}
 .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
@@ -1023,6 +1026,15 @@ function blnPanjang(t) { const m = /^(\d{4})-(\d{2})/.exec(t || ''); return m ? 
 const persen = b => b.terpasang ? b.online / b.terpasang * 100 : null;
 const fp = v => v === null ? '–' : (v >= 99.95 || v === 0 ? Math.round(v) : v.toFixed(1).replace('.', ',')) + '%';
 const kelas = v => v === null ? 'na' : v >= 95 ? 'ok' : v >= 80 ? 'mid' : 'bad';
+// logo Elnusa Petrofin & RTC di setiap tampilan memuat (kotak dengan spinner)
+function pasangLogoMuat() {
+  document.querySelectorAll('.loading').forEach(el => {
+    if (el.querySelector('.spin') && !el.querySelector(':scope > .muat-logo'))
+      el.insertAdjacentHTML('afterbegin', `<div class="muat-logo"><img src="${LOGO_ELNUSA}" alt="Elnusa Petrofin"><i></i><img src="${LOGO_RTC}" alt="Road Traffic Control"></div>`);
+  });
+}
+new MutationObserver(pasangLogoMuat).observe(document.body, {childList: true, subtree: true});
+pasangLogoMuat();
 function pasangLogo() { ['lgLogo', 'hdLogo'].forEach(id => { $(id).src = LOGO; }); ['lgLogo2', 'hdLogo2'].forEach(id => { $(id).src = LOGO_ELNUSA; }); ['lgLogo3', 'hdLogo3'].forEach(id => { $(id).src = LOGO_RTC; }); }
 pasangLogo();
 

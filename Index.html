@@ -154,6 +154,9 @@ body:not(.master) #selMaster{display:none}
 #pageLoad .kartu{background:var(--surface);border-radius:16px;box-shadow:0 8px 24px rgba(30,60,40,.16);padding:18px 24px;display:flex;align-items:center;gap:12px;font-size:15px;color:var(--ink-2)}
 .spin{width:18px;height:18px;border-radius:50%;border:3px solid var(--grid);border-top-color:var(--forest);animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
+.muat-logo{flex-basis:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--grid)}
+.muat-logo img{height:30px;width:auto;display:block}.muat-logo i{width:1px;height:24px;background:var(--grid)}
+#pageLoad .kartu{flex-wrap:wrap;justify-content:center}.lg-kosong:has(.muat-logo){display:flex;flex-wrap:wrap;justify-content:center;gap:12px}.lg-load-box .muat-logo{width:100%;margin-bottom:6px}
 .status{display:flex;flex-direction:column;gap:10px;width:100%}
 .status h3{margin:0;font-size:17px}
 .status .bar{height:10px;border-radius:5px;background:var(--surface-2);overflow:hidden}
@@ -1457,6 +1460,15 @@ const SIMPAN = 'dashb_token';
 const simpanToken = t => { try { t ? localStorage.setItem(SIMPAN, t) : localStorage.removeItem(SIMPAN); } catch (e) { /* tanpa penyimpanan */ } };
 try { TOKEN = localStorage.getItem(SIMPAN) || ''; } catch (e) { TOKEN = ''; }
 const LG_ICO = {PUSAT: document.querySelector('.lg-role[data-peran="PUSAT"] .lg-ico').innerHTML, AREA: document.querySelector('.lg-role[data-peran="AREA"] .lg-ico').innerHTML, LOKASI: document.querySelector('.lg-role[data-peran="LOKASI"] .lg-ico').innerHTML, MASTER: document.querySelector('.lg-master .lg-ico').innerHTML};
+// logo Elnusa Petrofin & RTC di setiap tampilan memuat (kotak dengan spinner, kotak proses login)
+const logoMuat_ = () => [...document.querySelectorAll('.brandbar .lg-eln, .brandbar .lg-rtc')].map(im => `<img src="${im.src}" alt="${im.alt}">`).join('<i></i>');
+function pasangLogoMuat() {
+  document.querySelectorAll('.loading, #pageLoad .kartu, .lg-kosong, .lg-load-box').forEach(el => {
+    if ((el.classList.contains('lg-load-box') || el.querySelector('.spin')) && !el.querySelector(':scope > .muat-logo')) el.insertAdjacentHTML('afterbegin', `<div class="muat-logo">${logoMuat_()}</div>`);
+  });
+}
+new MutationObserver(pasangLogoMuat).observe(document.body, {childList: true, subtree: true});
+pasangLogoMuat();
 const LG_WARNA = ['var(--r0)', 'var(--r1)', 'var(--r2)', 'var(--r3)', 'var(--r4)', 'var(--r5)', 'var(--r6)'];
 let LGD = null, LGMUAT = false, LGPERAN = '', LGU = '';
 const lgEl = id => document.getElementById(id);
