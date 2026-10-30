@@ -607,24 +607,34 @@ function drawBulanan(host, arr, cat) {
 }
 
 // tren satu kategori per tanggal dalam bulan terpilih (periode Bulan)
-function drawHarianKat(host, hari, cat, pilih = -1) {
+// pilih: tanggal (indeks) yang ditebalkan, atau [awal, akhir]; banding: {v: nilai pembanding per tanggal (null = tidak ada), lbl: i => keterangan tanggal pembanding} -> garis putus-putus
+function drawHarianKat(host, hari, cat, pilih = -1, banding = null) {
   const W = 640, H = 250, m = {l: 50, r: 16, t: 40, b: 28}, iw = W - m.l - m.r, ih = H - m.t - m.b;
   const svg = svgEl('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Event per tanggal ' + cat.name});
   if (!hari) { const t = svgEl('text', {x: W/2, y: H/2, 'text-anchor': 'middle', class: 'tick'}, svg); t.textContent = `Data per tanggal ${BLN[mon]} belum ada`; host.appendChild(svg); return; }
   const n = hari.length, arr = hari.map(o => o.ada ? o[cat.key] : null), isi = arr.filter(v => v !== null), avg = isi.length ? sum(isi)/isi.length : 0;
-  const slot = iw/n, bw = Math.min(24, slot*.7), mxv = Math.max(0, ...isi);
+  const bv = banding ? banding.v : null, slot = iw/n, bw = Math.min(24, slot*.7), mxv = Math.max(0, ...isi, ...(bv || []).filter(v => v !== null));
+  const gelap = i => Array.isArray(pilih) ? i >= pilih[0] && i <= pilih[1] : i === pilih;
   const ymax = niceMax(Math.max(1, mxv)*1.15), y = v => m.t + ih - v/ymax*ih, NT = nTicks(ymax), tegak = slot < 30;   // label nilai tegak bila batang rapat
   for (let i = 0; i <= NT; i++) { const v = ymax*i/NT; svgEl('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: i ? 'gl' : 'base'}, svg); const t = svgEl('text', {x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'tick'}, svg); t.textContent = ax(v); }
   const akhir = arr.reduce((a, v, i) => v !== null ? i : a, -1);
   arr.forEach((v, i) => { const cx = m.l + slot*i + slot/2;
     // semua tanggal tampil sama (tanpa penanda tertinggi), masing-masing dengan angkanya
-    if (v) { svgEl('path', {d: topRound(cx - bw/2, y(v), bw, y(0) - y(v), 3), style: 'fill:' + (i === pilih ? '#2e7d4f' : '#8cc49a')}, svg);
+    if (v) { svgEl('path', {d: topRound(cx - bw/2, y(v), bw, y(0) - y(v), 3), style: 'fill:' + (gelap(i) ? '#2e7d4f' : '#8cc49a')}, svg);
       const lb = svgEl('text', tegak ? {x: cx + 3.5, y: y(v) - 4, 'text-anchor': 'start', transform: 'rotate(-90 ' + (cx + 3.5) + ' ' + (y(v) - 4) + ')', style: 'fill:#1b1f1d;font-size:10px;font-weight:600;paint-order:stroke;stroke:#fff;stroke-width:3px'}
         : {x: cx, y: y(v) - 5, 'text-anchor': 'middle', style: 'fill:#1b1f1d;font-size:11px;font-weight:600;paint-order:stroke;stroke:#fff;stroke-width:3px'}, svg); lb.textContent = ax(v); }
     if (n <= 16 || i % 2 === 0) { const t = svgEl('text', {x: cx, y: H - 10, 'text-anchor': 'middle', class: 'tick'}, svg); t.textContent = String(i + 1); }
     const hit = svgEl('rect', {x: m.l + slot*i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
-    bindTip(hit, () => `<b>${i + 1} ${BLN[mon]} ${D.tahun}</b><br>${cat.name}: ${v === null ? 'belum ada data' : nf(v) + ' event'}${avg && v !== null ? '<br>' + pctTxt(v, avg).replace(/<[^>]+>/g, '') + ' vs rata-rata harian' : ''}`); });
+    const b = bv ? bv[i] : null;
+    bindTip(hit, () => `<b>${i + 1} ${BLN[mon]} ${D.tahun}</b><br>${cat.name}: ${v === null ? 'belum ada data' : nf(v) + ' event'}${b !== null && b !== undefined ? `<br>${banding.lbl(i)}: ${nf(b)} event${v !== null ? ' ' + pctTxt(v, b).replace(/<[^>]+>/g, '') : ''}` : avg && v !== null ? '<br>' + pctTxt(v, avg).replace(/<[^>]+>/g, '') + ' vs rata-rata harian' : ''}`); });
   garisTren(svg, arr, i => m.l + slot*i + slot/2, y, '#d64541');
+  if (bv) {   // pembanding: garis putus-putus, terputus di tanggal tanpa data
+    let d = '', pen = false;
+    bv.forEach((v, i) => { if (v === null || v === undefined) { pen = false; return; } d += (pen ? 'L' : 'M') + (m.l + slot*i + slot/2).toFixed(1) + ',' + y(v).toFixed(1); pen = true; });
+    const satu = bv.filter(v => v !== null && v !== undefined).length === 1;
+    if (satu) { const i = bv.findIndex(v => v !== null && v !== undefined), x = m.l + slot*i + slot/2; svgEl('line', {x1: x - bw, x2: x + bw, y1: y(bv[i]), y2: y(bv[i]), style: 'stroke:#1b1f1d;stroke-width:1.6;stroke-dasharray:5 4;pointer-events:none'}, svg); }
+    else if (d) svgEl('path', {d, style: 'fill:none;stroke:#1b1f1d;stroke-width:1.6;stroke-dasharray:5 4;pointer-events:none'}, svg);
+  }
   host.appendChild(svg);
 }
 
@@ -776,6 +786,24 @@ function hariBulan(m) {
   out.forEach(o => o.t = o.DB + o.DD + o.FM);
   return ada ? out : null;
 }
+// nilai satu kategori di tanggal d bulan m (d < 1 = tanggal akhir bulan sebelumnya); null bila tidak ada data
+function nilaiHariKat(m, d, k) {
+  while (d < 1 && m > 0) { m--; d += nHari(m); }
+  const h = d >= 1 ? hariBulan(m) : null, o = h && h[d - 1];
+  return o && o.ada ? o[k] : null;
+}
+// pembanding grafik per tanggal: filter tanggal = periode sebelumnya dengan panjang sama (digeser ke tanggal terpilih); per bulan = bulan pembanding, tanggal yang sama
+function bandingHari(k, n) {
+  if (keHariAktif()) {
+    const a = tgl, b = Math.max(tgl2, tgl), L = b - a + 1;
+    return {v: Array.from({length: n}, (_, i) => i + 1 >= a && i + 1 <= b ? nilaiHariKat(mon, i + 1 - L, k) : null),
+      lbl: i => { let mm = mon, dd = i + 1 - L; while (dd < 1 && mm > 0) { mm--; dd += nHari(mm); } return `Pembanding ${dd} ${BLN[mm].slice(0, 3)}`; }};
+  }
+  const pm = prevM(); if (pm === null) return null;
+  const h = hariBulan(pm); if (!h) return null;
+  return {v: Array.from({length: n}, (_, i) => h[i] && h[i].ada ? h[i][k] : null), lbl: i => `${i + 1} ${BLN[pm].slice(0, 3)}`};
+}
+let keHariAktif = () => false;
 function renderHarian() {
   const host = document.getElementById('bday'), sub = document.getElementById('bdaySub'), pm = prevM();
   host.innerHTML = '';
@@ -947,11 +975,12 @@ function renderBulan() {
   // kartu per kategori: donut, kotak, tren, tabel parameter
   // filter tanggal saja, tapi sebagian besar event bulan ini tidak punya jam kejadian: grafik per jam kosong, jadi tampilkan event per tanggal
   const keHari = W && !shift && jam < 0 && tgl > 0 && D.tanpaJam && D.tanpaJam.grafik > sum(HS.map(h => D.jamW[h].t)) && !!hariBulan(mon);
+  keHariAktif = () => keHari;
   const TJ = W && D.tanpaJam && D.tanpaJam.t ? ' · tanpa jam (data GPS, tidak ikut filter shift/jam): ' + CATS.filter(c => D.tanpaJam[c.key]).map(c => `${c.name} ${nf(D.tanpaJam[c.key])}`).join(', ') : '';
-  document.getElementById('trendSub').textContent = keHari ? `${scope()} · ${labelWaktu()} · data ${BLN[mon]} tidak punya jam kejadian, jadi grafik menampilkan event per tanggal (batang gelap = tanggal ${tA()}) · garis merah = tren`
+  document.getElementById('trendSub').textContent = keHari ? `${scope()} · ${labelWaktu()} · data ${BLN[mon]} tidak punya jam kejadian, jadi grafik menampilkan event per tanggal (batang gelap = tanggal ${tA()}) · garis merah = tren · garis putus-putus = tanggal ${tPv()} (pembanding)`
     : W ? `${scope()} · ${labelWaktu()} · batang = event per jam${KP ? `, garis putus-putus = ${tPv()} ${BLN[mon]} (jam yang sama)` : ''}${TJ}`
     : PERIODE === 'tahun' ? `${scope()} · ${BLN[ADA[0]]}–${BLN[LAST]} ${D.tahun} · batang gelap = ${BLN[mon]}, garis merah = tren`
-    : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis merah = tren`;
+    : `${scope()} · ${BLN[mon]} ${D.tahun} per tanggal · garis merah = tren${prevM() !== null ? ` · garis putus-putus = ${BLN[prevM()]} (tanggal yang sama)` : ''}`;
   const te = document.getElementById('btrend'); te.innerHTML = '';
   // keterangan tabel parameter: periode ini dibanding apa
   const pjg = k => W ? namaK(k) : `${BLN[k]} ${D.tahun}`;
@@ -976,10 +1005,10 @@ function renderBulan() {
       <div class="cattbl"><div class="tblket">${ketTabel}</div><div class="tbl"><table><thead><tr><th>Parameter</th><th>${S3(pm)}</th><th>${S3(kc)}</th><th>Kenaikan</th></tr></thead><tbody>${rows}
       <tr class="tot"><td>TOTAL</td><td>${prv === null ? '–' : nf(prv)}</td><td>${cur === null ? '–' : nf(cur)}</td><td>${pctTxt(cur || 0, prv)}</td></tr></tbody></table></div></div>`;
     te.appendChild(card);
-    if (keHari) drawHarianKat(card.querySelector('.anachart'), hariBulan(mon), cat, tgl - 1);
+    if (keHari) drawHarianKat(card.querySelector('.anachart'), hariBulan(mon), cat, [tgl - 1, Math.max(tgl2, tgl) - 1], bandingHari(cat.key, nHari(mon)));
     else if (W) drawJamKat(card.querySelector('.anachart'), HS, HS.map(h => D.jamW[h][cat.key]), KP ? HS.map(h => D.jamW[h]['p' + cat.key]) : null, cat);
     else if (PERIODE === 'tahun') drawBulanan(card.querySelector('.anachart'), arr, cat);
-    else drawHarianKat(card.querySelector('.anachart'), HB, cat);
+    else drawHarianKat(card.querySelector('.anachart'), HB, cat, -1, HB ? bandingHari(cat.key, HB.length) : null);
   });
 
 
