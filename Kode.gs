@@ -1519,7 +1519,7 @@ function prosesMulti_(folder, o, batas, lanjut) {
   const k = akhir < 1 ? {} : petaKolom(sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]);
   const kol = hs => { for (const h of hs) if (k[h] !== undefined) return k[h]; return -1; };
   const cWk = kol(['TIME', 'START ALERT']), cTb = kol(['TBBM']), cAl = kol(['ALARM STATUS']), cAm = kol(['AMT 1']);
-  const cG = kol(['ALERT GROUP ID', 'UNIQ CODE']), cPl = kol(['PLATE', 'IMEI']), jeda = (CFG.JEDA_GABUNG_DETIK || 0) * 1000;
+  const cG = kol(['ALERT GROUP ID', 'UNIQ CODE']), cPl = kol(['PLATE', 'IMEI']), cLa = kol(['LATITUDE', 'LAT']), cLo = kol(['LONGITUDE', 'LONG']), jeda = (CFG.JEDA_GABUNG_DETIK || 0) * 1000;
   if (ke(1) !== null && (cWk < 0 || cTb < 0 || cAl < 0)) throw new Error('kolom Time / TBBM / Alarm Status tidak ditemukan');
 
   // baris pertama bertanggal >= mulai
@@ -1544,7 +1544,7 @@ function prosesMulti_(folder, o, batas, lanjut) {
   while (b <= akhir) {
     if (Date.now() > henti) { selesai = false; break; }
     const m = Math.min(BLOK, akhir - b + 1), baca = c => c < 0 ? null : sh.getRange(b, c + 1, m, 1).getValues();
-    const wk = baca(cWk), tb = baca(cTb), al = baca(cAl), am = baca(cAm), gid = baca(cG), pl = jeda ? baca(cPl) : null;
+    const wk = baca(cWk), tb = baca(cTb), al = baca(cAl), am = baca(cAm), gid = baca(cG), pl = baca(cPl), la = baca(cLa), lo = baca(cLo);
     for (let i = 0; i < m; i++) {
       const t = waktuMs(wk[i][0], true); if (t === null || t === undefined) continue;
       const tg = tglMs(t); if (tg < mulai || tg > hariIni || +tg.slice(0, 4) !== CFG.TAHUN) continue;
@@ -1552,7 +1552,8 @@ function prosesMulti_(folder, o, batas, lanjut) {
       const c = normKasus(al[i][0]); if (!c) continue;
       const g = gid ? teks(gid[i][0]) : '';
       if (g) { if (lihat[g]) continue; lihat[g] = 1; }   // baris dobel (Alert Group ID sama) dihitung sekali
-      const kp = pl ? teks(pl[i][0]).toUpperCase() + '\u0001' + c : '';
+      else { const kk = kunciKembar_(t, pl && pl[i][0], c, la && la[i][0], lo && lo[i][0]); if (kk) { if (lihat[kk]) continue; lihat[kk] = 1; } }
+      const kp = jeda && pl ? teks(pl[i][0]).toUpperCase() + '\u0001' + c : '';
       if (kp) { const s0 = akhirKp[kp]; akhirKp[kp] = t; if (s0 !== undefined && t - s0 <= jeda) continue; }
       const lok = teks(tb[i][0]).toUpperCase(), jam = jamDari(wk[i][0]), kc = lok + '\u0001' + c, kt = tg + '\u0001' + kc;
       ev[kt] = (ev[kt] || 0) + 1; nTgl[tg] = (nTgl[tg] || 0) + 1;
@@ -1581,6 +1582,16 @@ function prosesMulti_(folder, o, batas, lanjut) {
   let n = 0; Object.keys(tulis).forEach(tg => { n += nTgl[tg]; });
   Logger.log(o.nama + ' (' + o.area + '): mulai ' + mulai + ' dari baris ' + dari + ' / ' + akhir + ', ' + n + ' event ditulis' + (selesai ? '' : ', berhenti di ' + tAkhir + ' (batas waktu)'));
   return { n: n, sampai: tAkhir, selesai: selesai };
+}
+
+/**
+ * Baris tanpa Alert Group ID: baris kembar = waktu (detik) + nopol + case + koordinat sama persis (tempel ganda), dihitung sekali.
+ * Tanpa waktu atau nopol tidak bisa dipastikan kembar, jadi tetap dihitung (null).
+ */
+function kunciKembar_(t, plat, c, lat, lon) {
+  const p = teks(plat).toUpperCase();
+  if (t === null || t === undefined || !p) return null;
+  return 'k\u0001' + Math.floor(t / 1000) + '\u0001' + p + '\u0001' + c + '\u0001' + teks(lat) + '\u0001' + teks(lon);
 }
 
 /** Merangkum satu file tarikan dan menulis hasilnya (menggantikan hasil lama file yang sama). Mengembalikan jumlah baris event. */
@@ -1612,7 +1623,7 @@ function prosesSatuTarikan(folder, o, batas) {
     if (nr < 1) { bersihkanSumber_(folder, o); return 0; }
     const kol = h => kolDari(h, dari);
     const tb = kol('TBBM'), al = kol('ALARM STATUS'), am = kol('AMT 1'), gid = kol('ALERT GROUP ID') || kol('UNIQ CODE');
-    const pl = kol('PLATE') || kol('IMEI'), jeda = (CFG.JEDA_GABUNG_DETIK || 0) * 1000;
+    const pl = kol('PLATE') || kol('IMEI'), la = kol('LATITUDE') || kol('LAT'), lo = kol('LONGITUDE') || kol('LONG'), jeda = (CFG.JEDA_GABUNG_DETIK || 0) * 1000;
     if (!tb || !al) throw new Error('kolom TBBM / Alarm Status tidak ditemukan');
     const ev = {}, evj = {}, amt = {}, amj = {}, lihat = {}, akhir = {};
     // urut waktu supaya alert beruntun per nopol bisa digabung
@@ -1632,6 +1643,7 @@ function prosesSatuTarikan(folder, o, batas) {
       } else if (wk && ms[i] !== null && ms[i] !== undefined && tglMs(ms[i]) !== o.tgl) { diluar++; continue; }
       const g = gid ? teks(gid[i][0]) : '';
       if (g) { if (lihat[g]) continue; lihat[g] = 1; }   // baris dobel (Alert Group ID sama) dihitung sekali
+      else { const kk = kunciKembar_(ms[i], pl && pl[i][0], c, la && la[i][0], lo && lo[i][0]); if (kk) { if (lihat[kk]) continue; lihat[kk] = 1; } }
       // alert yang sama dari kendaraan yang sama berulang tiap 1-10 detik (mis. Yawning) = satu kejadian
       const kp = pl ? teks(pl[i][0]).toUpperCase() + '\u0001' + c : '', t = ms[i];
       if (jeda && kp && t !== null && t !== undefined) { const s = akhir[kp]; akhir[kp] = t; if (s !== undefined && t - s <= jeda) continue; }
