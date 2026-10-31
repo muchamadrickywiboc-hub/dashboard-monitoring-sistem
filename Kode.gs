@@ -1438,7 +1438,6 @@ function prosesTarikan() {
  * Hasil: [{id, nama, area, tgl, diubah, mime, file}].
  */
 function daftarTarikan_(statusLog) {
-  const v = SpreadsheetApp.openById(CFG.TARIKAN_ID).getSheets()[0].getDataRange().getValues();
   const out = [], lihat = {};
   // file Cleansing (mulai MULAI_CLEANSING) menggantikan semua sumber lain untuk tanggal-tanggal itu
   const bersih = daftarCleansing_(), awalBersih = bersih.length || CFG.CLEANSING_ID ? CFG.MULAI_CLEANSING : '';
@@ -1463,6 +1462,11 @@ function daftarTarikan_(statusLog) {
     }
     if (dalam) { const sub = folder.getFolders(); while (sub.hasNext()) { const f = sub.next(), nm = teks(f.getName()).replace(/^\d+\s*[.)]\s*/, '').toUpperCase(); baca(f, areaNorm(nm) ? nm : area, dalam - 1); } }
   };
+  // Tarikan Sistem hanya dibaca bila masih ada tanggal sebelum MULAI_CLEANSING yang diambil dari tarikan harian
+  // (bila tidak, spreadsheet itu tidak dibuka sama sekali, jadi gangguan aksesnya tidak menghentikan pembacaan folder Cleansing)
+  const awalTarikan = [CFG.MULAI_TARIKAN].concat(Object.values(CFG.MULAI_TARIKAN_AREA || {})).sort()[0];
+  if (awalBersih && awalTarikan >= awalBersih) return out;
+  const v = SpreadsheetApp.openById(CFG.TARIKAN_ID).getSheets()[0].getDataRange().getValues();
   v.forEach(r => {
     const area = teks(r[0]), link = teks(r[1]);
     const id = (link.match(/folders\/([-\w]{20,})/) || link.match(/[?&]id=([-\w]{20,})/) || [])[1];
@@ -1520,7 +1524,12 @@ function daftarCleansing_() {
     if (dalam) { const sub = folder.getFolders(); while (sub.hasNext()) { const f = sub.next(); baca(f, area || areaNorm(teks(f.getName()).replace(/^\d+\s*[.)]\s*/, '')), dalam - 1); } }
   };
   baca(DriveApp.getFolderById(CFG.CLEANSING_ID), '', 4);
-  return out;
+  // satu file per tanggal x nama area di nama file ("Sumbagut 1"): bila ada salinan / unggahan ganda, hanya yang terakhir diubah yang dipakai
+  const pilih = {};
+  out.forEach(o => { const k = o.tgl + '|' + teks(o.nama.split('_')[1]).toUpperCase() + '|' + o.area;
+    if (!pilih[k] || o.diubah > pilih[k].diubah) { if (pilih[k]) Logger.log('File Cleansing ganda, dilewati: ' + pilih[k].nama + ' (' + pilih[k].id + ')'); pilih[k] = o; }
+    else Logger.log('File Cleansing ganda, dilewati: ' + o.nama + ' (' + o.id + ')'); });
+  return Object.keys(pilih).map(k => pilih[k]);
 }
 
 /**
@@ -1567,6 +1576,8 @@ function prosesCleansing_(folder, o, peta, sidikLama) {
   if (!h.berubah) return h;
   const bulan = {}; bulan[+o.tgl.slice(5, 7)] = 1;
   Object.keys(ev).forEach(x => { bulan[+x.slice(5, 7)] = 1; });
+  // bulan sebelah (baris shift 23.00-03.00 bisa menyeberang bulan): hasil lama file ini di sana ikut dibersihkan, tanpa membuat file Tarikan baru
+  [+o.tgl.slice(5, 7) - 1, +o.tgl.slice(5, 7) + 1].forEach(m => { if (m >= 1 && m <= 12 && !bulan[m] && folder.getFilesByName(namaTarikan_(m)).hasNext()) bulan[m] = 1; });
   Object.keys(bulan).forEach(m => {
     const diBulan = x => +x.slice(5, 7) === +m, bagi = x => x.split('\u0001');
     const ssT = bukaTarikan_(folder, +m);
@@ -1757,8 +1768,9 @@ const HDR_TARIKAN = {
   'Event Jam': ['Tanggal', 'Jam', 'Area', 'Lokasi', 'Case', 'Jumlah', 'Sumber'], 'AMT Jam': ['Tanggal', 'Jam', 'Area', 'Lokasi', 'Nama AMT', 'Case', 'Jumlah', 'Sumber'],
 };
 /** Google Sheet "Tarikan <nn> <Bulan> <tahun>" (bulan 1-12) di folder data; dibuat bila belum ada. */
+function namaTarikan_(m) { return 'Tarikan ' + ('0' + m).slice(-2) + ' ' + BULAN[m - 1].charAt(0) + BULAN[m - 1].slice(1).toLowerCase() + ' ' + CFG.TAHUN; }
 function bukaTarikan_(folder, m) {
-  const ss = bukaAtauBuat(folder, 'Tarikan ' + ('0' + m).slice(-2) + ' ' + BULAN[m - 1].charAt(0) + BULAN[m - 1].slice(1).toLowerCase() + ' ' + CFG.TAHUN,
+  const ss = bukaAtauBuat(folder, namaTarikan_(m),
     [['Event', HDR_TARIKAN['Event']], ['AMT', HDR_TARIKAN['AMT']]]);
   ss.getSheetByName('Event').getRange('A:A').setNumberFormat('@');   // tanggal disimpan sebagai teks yyyy-mm-dd
   return ss;
