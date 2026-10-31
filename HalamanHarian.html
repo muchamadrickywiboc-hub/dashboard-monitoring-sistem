@@ -42,6 +42,8 @@ h1{margin:2px 0 4px;font-size:clamp(22px,3vw,34px);font-weight:700;letter-spacin
 .hbtn:disabled{opacity:.6;cursor:default}
 #pdfWrap{position:fixed;left:-20000px;top:0;width:1120px;background:var(--bg);font-family:var(--f-ui)}
 #pdfWrap .wrap{margin:0;padding:18px 24px 24px}
+#pdfWrap.j4pdf{width:1700px}   /* Laporan Per 4 Jam: satu halaman lebar */
+#pdfWrap.j4pdf .j4t th{white-space:nowrap}
 .pdfhead{background:linear-gradient(115deg,#3f6e4b 0%,var(--forest) 22%,var(--leaf) 58%,#93b833 100%);color:#fff;padding:0 24px 18px}
 .pdfhead .tab.l{margin-left:-24px;padding-left:24px}.pdfhead .tab.r{margin-right:-24px;padding-right:24px}
 .pdfhead h1{font-size:26px;margin:14px 0 2px}
@@ -1507,6 +1509,8 @@ $('btnPdf').onclick = async () => {
       <div class="pdfwaktu">Waktu export<b>${esc(waktuEkspor(waktu))}</b></div>
       <div class="eyebrow" style="margin-top:14px">${esc($('tEyebrow').textContent)}</div><h1>${esc(document.querySelector('.hero h1').textContent)}</h1><div class="sub">${esc($('tSub').textContent)}</div></div>
       <div class="wrap">${$('isi').innerHTML}</div>`;
+    const satu = LAP.mode === 'per4jam';   // Laporan Per 4 Jam: seluruh isi dalam satu halaman PDF
+    if (satu) { box.classList.add('j4pdf'); box.querySelectorAll('[data-html2canvas-ignore]').forEach(el => el.remove()); }
     document.body.appendChild(box);
     await Promise.all([...box.querySelectorAll('img')].map(im => im.complete ? 0 : new Promise(ok => { im.onload = im.onerror = ok; })));
     const SK = 2, cv = await window.html2canvas(box, {scale: SK, backgroundColor: '#f6f7f6', logging: false});
@@ -1524,8 +1528,14 @@ $('btnPdf').onclick = async () => {
       const akhir = cocok.length ? Math.max(...cocok) : Math.min(y + tinggiHal, box.offsetHeight);
       potong.push([y, akhir]); y = akhir;
     }
-    const pdf = new window.jspdf.jsPDF({orientation: 'portrait', unit: 'mm', format: 'a4'});
-    potong.forEach(([a, z], i) => {
+    let pdf;
+    if (satu) {
+      // satu halaman selebar A4 mendatar (297 mm), tingginya mengikuti isi
+      const lebar = 297, tinggi = Math.round(lebar * box.offsetHeight / W * 10) / 10;
+      pdf = new window.jspdf.jsPDF({orientation: tinggi > lebar ? 'portrait' : 'landscape', unit: 'mm', format: [lebar, tinggi]});
+      pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, lebar, tinggi);
+    } else pdf = new window.jspdf.jsPDF({orientation: 'portrait', unit: 'mm', format: 'a4'});
+    if (!satu) potong.forEach(([a, z], i) => {
       const c = document.createElement('canvas'); c.width = W * SK; c.height = (z - a) * SK;
       const g = c.getContext('2d'); g.fillStyle = '#f6f7f6'; g.fillRect(0, 0, c.width, c.height);
       g.drawImage(cv, 0, a * SK, W * SK, (z - a) * SK, 0, 0, W * SK, (z - a) * SK);
