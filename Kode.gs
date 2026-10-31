@@ -1574,6 +1574,8 @@ function penerimaEmail_() {
  */
 function kirimEmailUpdate_(daftar) {
   const ke = penerimaEmail_(); if (!ke) return;
+  // kuota kirim email Gmail biasa 100 per hari: sisakan cadangan, jangan sampai email lain dari skrip ikut tertahan
+  if (MailApp.getRemainingDailyQuota() <= 5) { Logger.log('Kuota email hari ini hampir habis; email update dilewati.'); return; }
   const NB = s0 => s0.charAt(0) + s0.slice(1).toLowerCase();
   const esc = x => teks(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const fmt = x => Number(x || 0).toLocaleString('id-ID');
