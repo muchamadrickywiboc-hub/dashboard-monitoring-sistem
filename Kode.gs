@@ -37,7 +37,7 @@ const CFG = {
   CLEANSING_ID: '1Vi71Ur9QtMrjO4OFBx3e1ocMFlXiZ4M8',
   MULAI_CLEANSING: '2026-10-31',
   CLEANSING_BUANG_KEMBAR: false,   // false = semua baris di sheet Event Sistem dihitung apa adanya; true = baris yang semua kolomnya sama persis dihitung sekali
-  EMAIL_UPDATE: '',   // penerima email update setiap file Cleansing selesai dibaca; kosong = pemilik folder data (CFG.FOLDER_ID)
+  EMAIL_UPDATE: '',   // penerima email update setiap file Cleansing selesai dibaca (isi alamat email Anda); kosong = pemilik folder data (CFG.FOLDER_ID)
   // tanggal anomali = tanggal yang belum terjadi (sesudah hari ini, mis. jam perangkat salah): tidak dihitung, otomatis (lihat anomali_).
   // Bila perlu, tanggal tertentu bisa disingkirkan manual per Area (nama persis seperti di file Data, mis. "SUMBAGUT I"): { 'SUMBAGUT I': ['2026-10-01'] }
   TANGGAL_ANOMALI: {},
