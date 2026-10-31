@@ -228,6 +228,11 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 .j4leg i{display:inline-block;width:12px;height:8px;margin-right:5px;vertical-align:middle}
 .j4leg i.ln{height:2px}
 .j4note{font-size:12px;color:var(--muted)}
+.j4salin{display:flex;flex-direction:column;gap:8px}
+.j4salin label{font-size:12.5px;font-weight:600;color:var(--ink-2);display:flex;flex-direction:column;gap:4px}
+.j4salin input,.j4salin textarea{font:13px var(--f-ui);color:var(--ink);border:1px solid var(--axis);border-radius:8px;padding:8px 10px;width:100%}
+.j4salin textarea{min-height:300px;resize:vertical;white-space:pre;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+.j4salin .row-end{display:flex;gap:10px;align-items:center}
 </style>
 </head>
 <body>
@@ -1189,7 +1194,7 @@ function grafik4(h1, td, akhir) {
 }
 function gambar4(R) {
   const akhir = R.jamAkhir, s = akhir + 1;   // jumlah jam yang dibandingkan (jam 00 s/d jam terakhir yang ada data)
-  const per = J4_KAT.map(K => { const o = R.kat.find(x => x.k === K.k) || {params: []}, t = Array(24).fill(0), h = Array(24).fill(0);
+  const per = J4_PER = J4_KAT.map(K => { const o = R.kat.find(x => x.k === K.k) || {params: []}, t = Array(24).fill(0), h = Array(24).fill(0);
     o.params.forEach(p => p.t.forEach((v, i) => { t[i] += v; h[i] += p.h[i]; })); return {...K, params: o.params, t, h}; });
   const lok = R.lokasi ? judul(R.lokasi) : R.area ? judul(R.area) : 'Nasional';
   const upd = akhir < 0 ? 'Belum ada data' : rentang4(akhir);
@@ -1209,6 +1214,10 @@ function gambar4(R) {
   const kanan = `<h3>Event per jam</h3><div class="tbl"><table class="j4t jam"><thead><tr><th rowspan="2" style="text-align:left">Jam</th>${per.map(K => `<th colspan="2">${K.n}</th>`).join('')}<th colspan="2">Akumulasi data</th><th rowspan="2">H-1 vs Today</th></tr>
     <tr>${per.map(() => '<th class="sub">H-1</th><th class="sub">Today</th>').join('')}<th class="sub">H-1</th><th class="sub">Today</th></tr></thead><tbody>${baris}
     <tr class="tot"><td>TOTAL</td>${per.map(K => `<td>${nf4(jumlah4(K.h, 24))}</td><td>${nf4(jumlah4(K.t, s))}</td>`).join('')}<td></td><td></td><td></td></tr></tbody></table></div>`;
+  html += `<section class="j4 j4salin" data-html2canvas-ignore><h3>Teks update (siap salin)</h3>
+    <label>Sapaan (setelah "Selamat Pagi/Siang/Sore/Malam")<input id="j4Sapaan" maxlength="300"></label>
+    <textarea id="j4Teks" readonly aria-label="Teks update"></textarea>
+    <div class="row-end"><button class="btn pri" type="button" id="j4Salin">Salin teks</button><span class="j4note" id="j4Msg"></span></div></section>`;
   html += `<section class="j4"><div class="j4grid"><div>${kiri}<div class="j4note" style="margin-top:10px">${ket}</div></div><div>${kanan}</div></div></section>`;
   // analisis per kategori: total, kenaikan & penurunan tertinggi antar jam (today), grafik
   per.forEach(K => {
@@ -1226,7 +1235,36 @@ function gambar4(R) {
   html += `<div class="j4note">Kenaikan / penurunan tertinggi = selisih event hari ini dibanding jam sebelumnya. Total H-1 di kotak analisis dan baris TOTAL tabel per jam = sehari penuh.</div>`;
   return html;
 }
-let MINTA4 = 0;
+// teks siap salin (WhatsApp): penambahan jam terakhir dan total s.d jam itu, today vs H-1
+const J4_SAPAAN = 'Bapak/Ibu';   // nama penerima diketik di kolom Sapaan, disimpan di perangkat (repo publik: tanpa nama orang)
+const J4_IKON = {DB: '🚛', DD: '👮‍♂️', FM: '🥱'};
+function sapaan4() { try { return localStorage.getItem('j4_sapaan') || J4_SAPAAN; } catch (e) { return J4_SAPAAN; } }
+function teksSalin4(R, per, sapaan) {
+  const a = R.jamAkhir, s = a + 1, jamS = jj4((a + 1) % 24), salam = a < 10 ? 'Pagi' : a < 14 ? 'Siang' : a < 17 ? 'Sore' : 'Malam';
+  const L = ['📊 UPDATE DATA DRIVING BEHAVIOUR, DRIVER DISCIPLINE, DAN FATIGUE MANAGEMENT 📊',
+    `Tanggal: ${R.tanggal.split('-').reverse().join('/')} | Update Pukul: ${rentang4(a)} WIB`, '',
+    `Selamat ${salam} ${sapaan}, berikut update data Driving Behaviour, Driver Discipline, dan Fatigue Management${R.lokasi || R.area ? ' ' + judul(R.lokasi || R.area) : ''}:`];
+  per.forEach((K, i) => {
+    const t1 = K.t[a], h1 = K.h[a], d = t1 - h1, tT = jumlah4(K.t, s), tH = jumlah4(K.h, s);
+    L.push('', `${J4_IKON[K.k]} ${i + 1}. ${K.n.toUpperCase()}`,
+      `* Penambahan Pukul ${jamS} (Today vs H-1): ${nf4(t1)} vs ${nf4(h1)} event (${d > 0 ? 'Naik ' + nf4(d) : d < 0 ? 'Turun ' + nf4(-d) : 'Sama'})`,
+      `* Total s.d Pukul ${jamS} (Today vs H-1): ${nf4(tT)} vs ${nf4(tH)} event (${tH ? Math.round(tT / tH * 100) + '%' : '–'})`);
+  });
+  L.push('', 'Hormat kami,', 'Team RTC');
+  return L.join('\n');
+}
+function pasangSalin4(R, per) {
+  const inp = $('j4Sapaan'), ta = $('j4Teks'), msg = $('j4Msg');
+  if (!inp) return;
+  const isi = () => { ta.value = teksSalin4(R, per, inp.value.trim() || J4_SAPAAN); };
+  inp.value = sapaan4(); isi();
+  inp.oninput = () => { try { localStorage.setItem('j4_sapaan', inp.value.trim()); } catch (e) { /* tanpa penyimpanan */ } isi(); };
+  $('j4Salin').onclick = async () => {
+    try { await navigator.clipboard.writeText(ta.value); } catch (e) { ta.select(); document.execCommand('copy'); }
+    msg.textContent = 'Teks disalin.'; setTimeout(() => { msg.textContent = ''; }, 2500);
+  };
+}
+let MINTA4 = 0, J4_PER = null;
 function tampil4() {
   const t = $('fTgl').value; if (!t) return;
   const id = ++MINTA4;
@@ -1234,7 +1272,7 @@ function tampil4() {
   $('isi').innerHTML = '<div class="loading"><span class="spin"></span>Menyiapkan laporan per 4 jam…</div>'; $('btnPdf').disabled = true;
   run('lhPer4Jam', TOKEN, t, $('fArea').value, $('fLok').value).then(j => {
     if (id !== MINTA4) return;
-    const R = JSON.parse(j); $('isi').innerHTML = gambar4(R);
+    const R = JSON.parse(j); $('isi').innerHTML = gambar4(R); if (R.jamAkhir >= 0) pasangSalin4(R, J4_PER);
     LAP = {mode: 'per4jam', periode: t, area: R.area || '', lokasi: R.lokasi || R.area || 'Nasional', baris: R.lokasi ? 'Lokasi' : 'Area'};
     $('btnPdf').disabled = false;
   }).catch(e => { if (id !== MINTA4 || cekLogin(e)) return; $('isi').innerHTML = `<div class="errbar">Gagal: ${esc(pesan(e))}</div>`; });
