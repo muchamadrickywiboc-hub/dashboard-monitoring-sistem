@@ -36,8 +36,8 @@ const CFG = {
   // Hanya sheet "Event Sistem" yang dibaca. Mulai MULAI_CLEANSING semua area HANYA dari folder ini (Tarikan Sistem dan folder per 4 jam tidak dipakai lagi).
   CLEANSING_ID: '1Vi71Ur9QtMrjO4OFBx3e1ocMFlXiZ4M8',
   MULAI_CLEANSING: '2026-10-31',
-  CLEANSING_BUANG_KEMBAR: true,   // baris yang SEMUA kolomnya sama persis dalam satu file dihitung sekali (jumlahnya dilaporkan di email)
-  EMAIL_UPDATE: '',   // penerima email update setiap file Cleansing selesai dibaca; kosong = email pemilik skrip (akun yang memasang pemicu)
+  CLEANSING_BUANG_KEMBAR: false,   // false = semua baris di sheet Event Sistem dihitung apa adanya; true = baris yang semua kolomnya sama persis dihitung sekali
+  EMAIL_UPDATE: '',   // penerima email update setiap file Cleansing selesai dibaca; kosong = pemilik folder data (CFG.FOLDER_ID)
   // tanggal anomali = tanggal yang belum terjadi (sesudah hari ini, mis. jam perangkat salah): tidak dihitung, otomatis (lihat anomali_).
   // Bila perlu, tanggal tertentu bisa disingkirkan manual per Area (nama persis seperti di file Data, mis. "SUMBAGUT I"): { 'SUMBAGUT I': ['2026-10-01'] }
   TANGGAL_ANOMALI: {},
@@ -1559,8 +1559,13 @@ function prosesCleansing_(folder, o, peta, sidikLama) {
   return h;
 }
 
-/** Penerima email update: CFG.EMAIL_UPDATE, selain itu pemilik skrip. */
-function penerimaEmail_() { return teks(CFG.EMAIL_UPDATE) || Session.getEffectiveUser().getEmail(); }
+/** Penerima email update: CFG.EMAIL_UPDATE, selain itu pemilik folder data (izin Drive sudah ada, tidak perlu izin userinfo.email). */
+function penerimaEmail_() {
+  if (teks(CFG.EMAIL_UPDATE)) return teks(CFG.EMAIL_UPDATE);
+  const o = DriveApp.getFolderById(CFG.FOLDER_ID).getOwner();
+  if (!o || !o.getEmail()) throw new Error('Pemilik folder data tidak terbaca; isi CFG.EMAIL_UPDATE.');
+  return o.getEmail();
+}
 
 /**
  * Satu email berisi semua file Cleansing yang hasilnya berubah (atau gagal dibaca) di jalan prosesTarikan ini:
