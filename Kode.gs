@@ -25,13 +25,19 @@
 const CFG = {
   FOLDER_ID: '1nUJtRTcKwJua4Am9EdiFXoQxcTALgt9e',   // folder Drive "3. Data Dashboard"
   TARIKAN_ID: '11akfRibrQLixrBicdNXazEWX-TGmgfYu4zdYYNaOEy8',   // spreadsheet "Tarikan Sistem": kolom Area | linkgdrive (folder tarikan harian per regional)
-  // Oktober seluruhnya dari "Data 10 Oktober 2026" + "Jam 10 ..." (hasil olah Oktober.zip); folder per 4 jam dipakai mulai November
-  MULAI_TARIKAN: '2026-11-01',   // mulai tanggal ini data HANYA dari tarikan; tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..."
+  // 1-30 Oktober dari "Data 10 Oktober 2026" + "Jam 10 ..." (hasil olah Oktober.zip); mulai 31 Oktober dari folder Data Tarikan Cleansing
+  MULAI_TARIKAN: '2026-10-31',   // mulai tanggal ini data HANYA dari tarikan; tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..."
   MULAI_TARIKAN_AREA: {},   // area yang mulai dari tarikan pada tanggal lain, mis. { SUMBAGUT: '2026-10-27' }
   // folder "4. Report Data alert Per 4 Jam": subfolder per regional ("7. Malupa"), isinya file alert mentah sebulan (Google Sheet "MALUPA_OKTOBER 2026") yang diperbarui tiap 4 jam; file Excel di folder ini tidak dibaca.
   // Mulai MULAI_4JAM event area yang filenya sudah terbaca dari folder ini HANYA diambil dari sini (tarikan harian di Tarikan Sistem tidak dipakai lagi untuk area itu).
   ALERT4JAM_ID: '1ZLTierdGgXgpA2BwFszLnGfLa1fHRF0F',
   MULAI_4JAM: '2026-11-01',
+  // folder "Data Tarikan Cleansing": subfolder per area ("1. Sumbagut 1" ... "7. Malupa") > tahun > bulan > Google Sheet "2026-10-31_Sumbagut 1_Cleansing".
+  // Hanya sheet "Event Sistem" yang dibaca. Mulai MULAI_CLEANSING semua area HANYA dari folder ini (Tarikan Sistem dan folder per 4 jam tidak dipakai lagi).
+  CLEANSING_ID: '1Vi71Ur9QtMrjO4OFBx3e1ocMFlXiZ4M8',
+  MULAI_CLEANSING: '2026-10-31',
+  CLEANSING_BUANG_KEMBAR: true,   // baris yang SEMUA kolomnya sama persis dalam satu file dihitung sekali (jumlahnya dilaporkan di email)
+  EMAIL_UPDATE: '',   // penerima email update setiap file Cleansing selesai dibaca; kosong = email pemilik skrip (akun yang memasang pemicu)
   // tanggal anomali = tanggal yang belum terjadi (sesudah hari ini, mis. jam perangkat salah): tidak dihitung, otomatis (lihat anomali_).
   // Bila perlu, tanggal tertentu bisa disingkirkan manual per Area (nama persis seperti di file Data, mis. "SUMBAGUT I"): { 'SUMBAGUT I': ['2026-10-01'] }
   TANGGAL_ANOMALI: {},
@@ -101,7 +107,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-10-30c';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-10-31a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -1236,6 +1242,7 @@ const KASUS_ABAIKAN = { 'PARKING': 1, 'MAX PARKING': 1 };
 const KASUS_TARIKAN = {
   'OVERSPEED INSTANT': ['Over Speed', 'Driving Behaviour'], 'OVER SPEED ALARM': ['Over Speed', 'Driving Behaviour'],
   'OVER DRIVING (4 HOURS)': ['Driving > 4 Hours', 'Driving Behaviour'], 'OVERDRIVING ALARM': ['Driving > 4 Hours', 'Driving Behaviour'],
+  'OVERDRIVING ALARM (4 HOURS)': ['Driving > 4 Hours', 'Driving Behaviour'],
   'BLACKZONE ALARM': ['Black Zone', 'Driver Discipline'], 'IDLE REPORT': ['Idling', 'Driver Discipline'],
   'DRIVER IS USING PHONE': ['Menggunakan Telepon', 'Driver Discipline'], 'DRIVER HAS BEEN SMOKING': ['Merokok / Vape', 'Driver Discipline'],
   'DRIVER HAS BEEN YAWNING': ['Menguap', 'Fatigue Management'],
@@ -1321,7 +1328,8 @@ const BULAN_MULAI_TARIKAN = Math.min.apply(null, [CFG.MULAI_TARIKAN].concat(Obje
 const BATAS_MS = 3 * 60 * 1000;     // file baru tidak dimulai lewat dari ini (Apps Script berhenti di 6 menit; satu file besar bisa 2 menit lebih)
 const BATAS_CACHE_MS = 4 * 60 * 1000;   // lewat dari ini cache tidak dipanaskan di sini, diserahkan ke pemicu panaskanOtomatis tiap 15 menit
 const LOG_NAMA = 'Log Tarikan';
-const LOG_HDR = ['File ID', 'Nama file', 'Area', 'Tanggal', 'Diubah', 'Baris event', 'Diproses', 'Status', 'Lanjut dari'];   // Lanjut dari: file per 4 jam dibaca lagi mulai tanggal ini
+const LOG_HDR = ['File ID', 'Nama file', 'Area', 'Tanggal', 'Diubah', 'Baris event', 'Diproses', 'Status', 'Lanjut dari', 'Sidik', 'Ringkasan'];
+// Lanjut dari: file per 4 jam dibaca lagi mulai tanggal ini. Sidik / Ringkasan: file Cleansing (hasil hitung terakhir, untuk tahu ada perubahan dan selisih di email)
 
 /**
  * Membaca file tarikan harian baru/berubah dari folder-folder di spreadsheet "Tarikan Sistem",
@@ -1341,7 +1349,7 @@ function prosesTarikan() {
     const folder = DriveApp.getFolderById(CFG.FOLDER_ID);
     const logSs = bukaAtauBuat(folder, LOG_NAMA, [[LOG_NAMA, LOG_HDR]]);
     const logSh = logSs.getSheetByName(LOG_NAMA);
-    if (!teks(logSh.getRange(1, LOG_HDR.length).getValue())) logSh.getRange(1, LOG_HDR.length).setValue(LOG_HDR[LOG_HDR.length - 1]);
+    if (!teks(logSh.getRange(1, LOG_HDR.length).getValue())) logSh.getRange(1, 1, 1, LOG_HDR.length).setValues([LOG_HDR]);
     let diimpor = 0;
     try { diimpor = imporTarikan_(folder, logSh, mulai); } catch (e) { Logger.log('Impor tarikan gagal: ' + e.message); }
     let logV = logSh.getDataRange().getValues(), dibuang = 0;
@@ -1355,7 +1363,9 @@ function prosesTarikan() {
     logV = logSh.getDataRange().getValues();
     const sudah = {};
     const isoTgl_ = v => v instanceof Date ? Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd') : teks(v).slice(0, 10);
-    logV.slice(1).forEach((r, i) => { sudah[r[0]] = { baris: i + 2, diubah: Number(r[4]) || 0, status: teks(r[7]), lanjut: isoTgl_(r[8]) }; });
+    logV.slice(1).forEach((r, i) => { sudah[r[0]] = { baris: i + 2, diubah: Number(r[4]) || 0, n: Number(r[5]) || 0, status: teks(r[7]), lanjut: isoTgl_(r[8]), sidik: teks(r[9]), ring: teks(r[10]) }; });
+    let peta = null; const petaC = () => peta || (peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(fileAtur_()), 'Pemetaan') || []));
+    const email = [];   // file Cleansing yang hasilnya berubah / gagal: dikirim satu email di akhir jalan ini
 
     // baru, berubah, gagal sebelumnya, atau file per 4 jam yang belum selesai terbaca
     const antre = daftar.filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^(GAGAL|SEBAGIAN)/.test(sudah[o.id].status));
@@ -1365,7 +1375,8 @@ function prosesTarikan() {
     let n = 0;
     for (const o of antre) {
       if (Date.now() - mulai > BATAS_MS) break;
-      let status = 'OK', baris = 0, lanjut = sudah[o.id] ? sudah[o.id].lanjut : '';
+      let status = 'OK', baris = 0, lanjut = sudah[o.id] ? sudah[o.id].lanjut : '', hc = null, berubah = true;
+      const lama = sudah[o.id] ? { n: sudah[o.id].n, status: sudah[o.id].status, sidik: sudah[o.id].sidik, ring: sudah[o.id].ring } : null;
       // ditandai dulu: kalau Apps Script menghentikan proses di tengah file ini, jalan berikutnya tahu file ini gagal
       const tanda = [o.id, o.nama, o.area, o.tgl, 0, 0, new Date(), 'GAGAL: waktu habis saat diproses, dicoba lagi otomatis'];
       if (sudah[o.id]) logSh.getRange(sudah[o.id].baris, 1, 1, tanda.length).setValues([tanda]);
@@ -1376,12 +1387,20 @@ function prosesTarikan() {
           const h = prosesMulti_(folder, o, mulai + BATAS_MS, lanjut);
           baris = h.n; lanjut = h.sampai;
           if (!h.selesai) status = 'SEBAGIAN: terbaca s/d ' + h.sampai + ', dilanjutkan otomatis';
+        } else if (o.cleansing) {
+          hc = prosesCleansing_(folder, o, petaC(), lama && /^OK/.test(lama.status) ? lama.sidik : '');
+          baris = hc.n; berubah = hc.berubah;
         } else baris = prosesSatuTarikan(folder, o, mulai + BATAS_MS);
       } catch (e) { status = 'GAGAL: ' + e.message; }
       const row = [o.id, o.nama, o.area, o.tgl, o.diubah, baris, new Date(), status, lanjut || ''];
+      if (o.cleansing) row.push(hc ? hc.sidik : (lama ? lama.sidik : ''), hc ? JSON.stringify(hc.param) : (lama ? lama.ring : ''));
       logSh.getRange(sudah[o.id].baris, 1, 1, row.length).setValues([row]);
-      n++;
+      // file Cleansing yang isinya tidak berubah (mis. hanya sheet Tindak Lanjut yang diedit) tidak memicu bangun ulang cache / email
+      if (berubah || status !== 'OK') n++;
+      if (o.cleansing && hc && berubah) email.push({ o: o, h: hc, lama: lama });
+      if (o.cleansing && status !== 'OK' && !(lama && /^GAGAL/.test(lama.status))) email.push({ o: o, gagal: status, lama: lama });
     }
+    if (email.length) try { kirimEmailUpdate_(email); } catch (e) { Logger.log('Email update gagal dikirim: ' + e.message); }
     Logger.log('File tarikan diproses: ' + n + ' dari ' + antre.length + ' yang menunggu.');
     if (n || dibuang || diimpor) gantiVersiData_();
     if (n || diimpor) try { cekLokasiTanpaAkun(); } catch (e) { Logger.log('Cek lokasi tanpa akun gagal: ' + e.message); }
@@ -1399,8 +1418,12 @@ function prosesTarikan() {
 function daftarTarikan_(statusLog) {
   const v = SpreadsheetApp.openById(CFG.TARIKAN_ID).getSheets()[0].getDataRange().getValues();
   const out = [], lihat = {};
+  // file Cleansing (mulai MULAI_CLEANSING) menggantikan semua sumber lain untuk tanggal-tanggal itu
+  const bersih = daftarCleansing_(), awalBersih = bersih.length || CFG.CLEANSING_ID ? CFG.MULAI_CLEANSING : '';
+  bersih.forEach(o => { lihat[o.id] = 1; out.push(o); });
   // folder per 4 jam dulu: area yang filenya sudah pernah terbaca OK tidak lagi mengambil tarikan harian mulai MULAI_4JAM
-  const empat = daftar4Jam_(), tercakup = {};
+  // (tidak dipakai bila mulainya tidak sebelum MULAI_CLEANSING, karena semua tanggalnya sudah dari folder Cleansing)
+  const empat = awalBersih && (!CFG.MULAI_4JAM || CFG.MULAI_4JAM >= awalBersih) ? [] : daftar4Jam_(), tercakup = {};
   if (!statusLog) { const it = DriveApp.getFolderById(CFG.FOLDER_ID).getFilesByName(LOG_NAMA); statusLog = {};
     if (it.hasNext()) (nilaiSheet(SpreadsheetApp.open(it.next()), LOG_NAMA) || []).slice(1).forEach(r => { statusLog[teks(r[0])] = teks(r[7]); }); }
   empat.forEach(o => { lihat[o.id] = 1; out.push(o); if (/^(OK|SEBAGIAN)/.test(statusLog[o.id] || '')) tercakup[areaNorm(o.area)] = 1; });
@@ -1410,6 +1433,7 @@ function daftarTarikan_(statusLog) {
       const f = it.next(), nama = f.getName(), tgl = tanggalNama_(nama);
       if (!tgl || lihat[f.getId()] || +tgl.slice(0, 4) !== CFG.TAHUN || tgl < mulaiTarikan_(area)) continue;
       if (CFG.MULAI_4JAM && tgl >= CFG.MULAI_4JAM && tercakup[areaNorm(area)]) continue;   // sudah dari folder per 4 jam
+      if (awalBersih && tgl >= awalBersih) continue;   // sudah dari folder Cleansing
       const mime = f.getMimeType();
       if (mime !== MimeType.MICROSOFT_EXCEL && mime !== MimeType.GOOGLE_SHEETS) continue;
       lihat[f.getId()] = 1;
@@ -1450,6 +1474,153 @@ function daftar4Jam_() {
   };
   baca(DriveApp.getFolderById(CFG.ALERT4JAM_ID), '', 2);
   return out;
+}
+
+/* ============================== DATA TARIKAN CLEANSING ============================== */
+/**
+ * Google Sheet "<yyyy-mm-dd>_<Area>_Cleansing" di folder CFG.CLEANSING_ID, sampai empat tingkat subfolder
+ * (mis. "3. Sumbagsel" > "2026" > "10 Oktober" > "2026-10-31_Sumbagsel_Cleansing").
+ * Area = nama subfolder area ("1. Sumbagut 1" -> SUMBAGUT), selain itu bagian nama file sesudah tanggal.
+ * Hasil: [{id, nama, area, tgl, diubah, mime, file, cleansing: true}].
+ */
+function daftarCleansing_() {
+  if (!CFG.CLEANSING_ID) return [];
+  const out = [];
+  const baca = (folder, area, dalam) => {
+    const it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+    while (it.hasNext()) {
+      const f = it.next(), nama = teks(f.getName());
+      if (!/_CLEANSING$/i.test(nama)) continue;
+      const tgl = tanggalNama_(nama), a = area || areaNorm(nama.split('_')[1]);
+      if (!tgl || !a || +tgl.slice(0, 4) !== CFG.TAHUN || tgl < CFG.MULAI_CLEANSING) continue;
+      out.push({ id: f.getId(), nama: nama, area: a, tgl: tgl, diubah: f.getLastUpdated().getTime(), mime: MimeType.GOOGLE_SHEETS, file: f, cleansing: true });
+    }
+    if (dalam) { const sub = folder.getFolders(); while (sub.hasNext()) { const f = sub.next(); baca(f, area || areaNorm(teks(f.getName()).replace(/^\d+\s*[.)]\s*/, '')), dalam - 1); } }
+  };
+  baca(DriveApp.getFolderById(CFG.CLEANSING_ID), '', 4);
+  return out;
+}
+
+/**
+ * Merangkum sheet "Event Sistem" satu file Cleansing per Tanggal x Jam x Lokasi (TBBM) x Case dan menulisnya ke file "Tarikan <nn> ...".
+ * Setiap baris ikut tanggal di kolom TIME (WIB, seperti yang tampil di sheet). Baris kosong dilewati.
+ * Baris yang semua kolomnya sama persis dihitung sekali (CFG.CLEANSING_BUANG_KEMBAR); selain itu tidak ada baris yang dibuang.
+ * sidikLama: sidik hasil sebelumnya; bila sama, file Tarikan tidak ditulis ulang (berubah = false).
+ * Hasil: { n, berubah, sidik, param: {parameter: jumlah}, rentang: {teks: jumlah}, kembar, belum: {teks alarm: jumlah}, lain: {..}, tanpaWaktu, diluar, tanggal: {yyyy-mm-dd: jumlah} }.
+ */
+function prosesCleansing_(folder, o, peta, sidikLama) {
+  const ss = SpreadsheetApp.openById(o.id), sh = ss.getSheetByName('Event Sistem');
+  if (!sh) throw new Error('sheet "Event Sistem" tidak ditemukan');
+  const v = sh.getDataRange().getDisplayValues();   // teks persis seperti yang tampil (jam WIB), tidak terpengaruh zona waktu file
+  const k = petaKolom(v[0] || []), kol = h => k[h] === undefined ? -1 : k[h];
+  const cWk = kol('TIME'), cTb = kol('TBBM'), cAl = kol('ALARM STATUS'), cAm = kol('AMT 1'), cRt = kol('RENTANG');
+  if (cWk < 0 || cTb < 0 || cAl < 0) throw new Error('kolom TIME / TBBM / ALARM STATUS tidak ditemukan di sheet Event Sistem');
+  const tglMs = t => { const x = new Date(t); return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
+  const awal = mulaiTarikan_(o.area), ev = {}, evj = {}, amt = {}, amj = {}, lihat = {};
+  const h = { n: 0, param: {}, rentang: {}, kembar: 0, belum: {}, lain: {}, tanpaWaktu: 0, diluar: 0, tanggal: {} };
+  const tambah = (obj, key) => { obj[key] = (obj[key] || 0) + 1; };
+  for (let i = 1; i < v.length; i++) {
+    const r = v[i], c = normKasus(r[cAl]);
+    if (!c) continue;   // baris kosong / tanpa alarm
+    if (CFG.CLEANSING_BUANG_KEMBAR) { const kk = r.join('\u0001'); if (lihat[kk]) { h.kembar++; continue; } lihat[kk] = 1; }
+    const t = waktuMs(r[cWk], true);
+    if (t === null || t === undefined) { h.tanpaWaktu++; continue; }
+    const tg = tglMs(t);
+    if (tg < awal || +tg.slice(0, 4) !== CFG.TAHUN) { h.diluar++; continue; }
+    const lok = teks(r[cTb]).toUpperCase(), jam = jamDari(r[cWk]), ke = lok + '\u0001' + c, kt = tg + '\u0001' + ke;
+    ev[kt] = (ev[kt] || 0) + 1; h.n++; tambah(h.tanggal, tg);
+    if (jam !== null) { const kj = tg + '\u0001' + jam + '\u0001' + ke; evj[kj] = (evj[kj] || 0) + 1; }
+    const nama = cAm >= 0 ? namaAmt(r[cAm]) : '';
+    if (nama) { const ka = lok + '\u0001' + nama + '\u0001' + c, kb = tg.slice(0, 7) + '\u0001' + ka; amt[kb] = (amt[kb] || 0) + 1; if (jam !== null) { const kj = tg + '\u0001' + jam + '\u0001' + ka; amj[kj] = (amj[kj] || 0) + 1; } }
+    // ringkasan untuk email
+    const pm = peta.kasus[c];
+    if (pm && pm.k !== 'LAIN') tambah(h.param, pm.p);
+    else if (pm) tambah(h.lain, pm.p);
+    else if (!KASUS_ABAIKAN[c]) tambah(h.belum, teks(r[cAl]).replace(/\s*\(\s*[\d.,]+\s*(?:KM\/H|G)?\s*\)\s*$/i, ''));
+    if (cRt >= 0 && teks(r[cRt])) tambah(h.rentang, teks(r[cRt]));
+  }
+  const urutJson = x => JSON.stringify(Object.keys(x).sort().map(kk => [kk, x[kk]]));
+  h.sidik = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, urutJson(ev) + urutJson(evj) + urutJson(amt) + urutJson(amj) + o.area));
+  h.berubah = h.sidik !== sidikLama;
+  if (!h.berubah) return h;
+  const bulan = {}; bulan[+o.tgl.slice(5, 7)] = 1;
+  Object.keys(ev).forEach(x => { bulan[+x.slice(5, 7)] = 1; });
+  Object.keys(bulan).forEach(m => {
+    const diBulan = x => +x.slice(5, 7) === +m, bagi = x => x.split('\u0001');
+    const ssT = bukaTarikan_(folder, +m);
+    gantiBaris(ssT.getSheetByName('Event'), o.id, Object.keys(ev).filter(diBulan).map(x => { const p = bagi(x); return [p[0], o.area, p[1], p[2], ev[x], o.id]; }));
+    gantiBaris(sheetAtauBuat(ssT, 'Event Jam', HDR_TARIKAN['Event Jam']), o.id,
+      Object.keys(evj).filter(diBulan).map(x => { const p = bagi(x); return [p[0], +p[1], o.area, p[2], p[3], evj[x], o.id]; }));
+    gantiBaris(sheetAtauBuat(ssT, 'AMT Jam', HDR_TARIKAN['AMT Jam']), o.id,
+      Object.keys(amj).filter(diBulan).map(x => { const p = bagi(x); return [p[0], +p[1], o.area, p[2], p[3], p[4], amj[x], o.id]; }));
+    gantiBaris(ssT.getSheetByName('AMT'), o.id, Object.keys(amt).filter(diBulan).map(x => { const p = bagi(x); return [o.area, p[1], p[2], p[3], amt[x], o.id]; }));
+  });
+  Logger.log(o.nama + ' (' + o.area + '): ' + h.n + ' event' + (h.kembar ? ', ' + h.kembar + ' baris kembar dihitung sekali' : '') + '.');
+  return h;
+}
+
+/** Penerima email update: CFG.EMAIL_UPDATE, selain itu pemilik skrip. */
+function penerimaEmail_() { return teks(CFG.EMAIL_UPDATE) || Session.getEffectiveUser().getEmail(); }
+
+/**
+ * Satu email berisi semua file Cleansing yang hasilnya berubah (atau gagal dibaca) di jalan prosesTarikan ini:
+ * area, tanggal, rentang shift yang ada, jumlah event dan tambahannya sejak update sebelumnya per parameter,
+ * baris kembar yang dihitung sekali, dan teks ALARM STATUS yang belum terdaftar di sheet Pemetaan.
+ */
+function kirimEmailUpdate_(daftar) {
+  const ke = penerimaEmail_(); if (!ke) return;
+  const NB = s0 => s0.charAt(0) + s0.slice(1).toLowerCase();
+  const esc = x => teks(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const fmt = x => Number(x || 0).toLocaleString('id-ID');
+  const tglId = t => +t.slice(8, 10) + ' ' + NB(BULAN[+t.slice(5, 7) - 1]).slice(0, 3) + ' ' + t.slice(0, 4);
+  const beda = x => x > 0 ? '+' + fmt(x) : x < 0 ? '−' + fmt(-x) : '0';
+  const area = x => NB(x);
+  const html = [], polos = [];
+  const sel = 'style="border:1px solid #ccc;padding:4px 8px"', selK = 'style="border:1px solid #ccc;padding:4px 8px;text-align:right"';
+  daftar.forEach(d => {
+    const o = d.o, judul = area(o.area) + ' · ' + tglId(o.tgl), url = 'https://docs.google.com/spreadsheets/d/' + o.id;
+    html.push('<h3 style="margin:18px 0 6px">' + esc(judul) + '</h3><div style="color:#555">File: <a href="' + url + '">' + esc(o.nama) + '</a></div>');
+    polos.push('== ' + judul + ' ==', 'File: ' + o.nama + ' (' + url + ')');
+    if (d.gagal) { html.push('<p style="color:#b00020"><b>Gagal dibaca:</b> ' + esc(d.gagal.replace(/^GAGAL:\s*/, '')) + '. Dicoba lagi otomatis tiap 15 menit.</p>'); polos.push('GAGAL dibaca: ' + d.gagal, ''); return; }
+    const h = d.h, nLama = d.lama ? d.lama.n : 0;
+    let ringLama = {}; try { ringLama = d.lama && d.lama.ring ? JSON.parse(d.lama.ring) : {}; } catch (e) { ringLama = {}; }
+    const rt = Object.keys(h.rentang).sort();
+    html.push('<p>Total event: <b>' + fmt(h.n) + '</b>' + (d.lama ? ' (' + beda(h.n - nLama) + ' sejak update sebelumnya)' : ' (file baru)') + '<br>'
+      + 'Rentang di file: ' + (rt.length ? rt.map(x => esc(x) + ' (' + fmt(h.rentang[x]) + ')').join('; ') : '-') + '</p>');
+    polos.push('Total event: ' + fmt(h.n) + (d.lama ? ' (' + beda(h.n - nLama) + ' sejak update sebelumnya)' : ' (file baru)'),
+      'Rentang di file: ' + (rt.length ? rt.map(x => x + ' (' + fmt(h.rentang[x]) + ')').join('; ') : '-'));
+    const tgLain = Object.keys(h.tanggal).filter(t => t !== o.tgl).sort();
+    if (tgLain.length) { const s = 'Termasuk baris bertanggal lain (dihitung di tanggalnya masing-masing): ' + tgLain.map(t => tglId(t) + ' = ' + fmt(h.tanggal[t])).join(', ');
+      html.push('<p>' + esc(s) + '</p>'); polos.push(s); }
+    const ps = Object.keys(h.param).concat(Object.keys(ringLama).filter(p => !(p in h.param))).sort((a, b) => (h.param[b] || 0) - (h.param[a] || 0) || (a < b ? -1 : 1));
+    html.push('<table style="border-collapse:collapse;font-size:13px"><tr style="background:#f1f3f4"><th ' + sel + '>Parameter</th><th ' + sel + '>Total</th><th ' + sel + '>Tambahan</th></tr>'
+      + ps.map(p => '<tr><td ' + sel + '>' + esc(p) + '</td><td ' + selK + '>' + fmt(h.param[p]) + '</td><td ' + selK + '>' + (d.lama ? beda((h.param[p] || 0) - (ringLama[p] || 0)) : '-') + '</td></tr>').join('') + '</table>');
+    ps.forEach(p => polos.push('- ' + p + ': ' + fmt(h.param[p]) + (d.lama ? ' (' + beda((h.param[p] || 0) - (ringLama[p] || 0)) + ')' : '')));
+    const cat = [];
+    if (h.kembar) cat.push(fmt(h.kembar) + ' baris sama persis (semua kolom) dihitung sekali.');
+    if (h.tanpaWaktu) cat.push(fmt(h.tanpaWaktu) + ' baris tanpa TIME yang terbaca, tidak dihitung.');
+    if (h.diluar) cat.push(fmt(h.diluar) + ' baris bertanggal sebelum ' + tglId(mulaiTarikan_(o.area)) + ' atau di luar tahun ' + CFG.TAHUN + ', tidak dihitung.');
+    const lain = Object.keys(h.lain);
+    if (lain.length) cat.push('Tidak dihitung di dashboard (sesuai sheet Pemetaan): ' + lain.map(p => p + ' = ' + fmt(h.lain[p])).join(', ') + '.');
+    const belum = Object.keys(h.belum).sort((a, b) => h.belum[b] - h.belum[a]);
+    if (belum.length) cat.push('ALARM STATUS belum terdaftar, TIDAK dihitung sampai ditambahkan di sheet Pemetaan: ' + belum.map(x => '"' + x + '" = ' + fmt(h.belum[x])).join(', ') + '.');
+    if (cat.length) { html.push('<ul style="color:#7a4b00">' + cat.map(c => '<li>' + esc(c) + '</li>').join('') + '</ul>'); polos.push.apply(polos, cat.map(c => '* ' + c)); }
+    polos.push('');
+  });
+  const ok = daftar.filter(d => !d.gagal), gg = daftar.filter(d => d.gagal);
+  const nama = [...new Set(daftar.map(d => area(d.o.area)))].join(', '), tgl = [...new Set(daftar.map(d => tglId(d.o.tgl)))].join(', ');
+  const subjek = '[Dashboard] ' + (ok.length ? 'Data terupdate' : 'File gagal dibaca') + (ok.length && gg.length ? ' (' + gg.length + ' gagal)' : '') + ': ' + nama + ' · ' + tgl;
+  const jam = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'd MMM yyyy HH.mm') + ' WIB';
+  const kaki = 'Dikirim otomatis oleh dashboard setelah file di folder Data Tarikan Cleansing selesai dibaca (' + jam + '). Data sudah tampil di dashboard.';
+  MailApp.sendEmail({ to: ke, subject: subjek, body: polos.join('\n') + '\n' + kaki,
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px">' + html.join('') + '<p style="color:#777;font-size:12px;margin-top:20px">' + esc(kaki) + '</p></div>' });
+}
+
+/** Jalankan sekali dari editor: memberi izin kirim email lalu mengirim email uji ke penerima update. */
+function cobaEmailUpdate() {
+  const ke = penerimaEmail_();
+  MailApp.sendEmail(ke, '[Dashboard] Uji email update', 'Email update dashboard aktif. Setiap file di folder Data Tarikan Cleansing yang selesai dibaca dan isinya berubah akan dilaporkan ke alamat ini.\nSisa kuota email hari ini: ' + MailApp.getRemainingDailyQuota());
+  Logger.log('Email uji dikirim ke ' + ke);
 }
 
 /**
