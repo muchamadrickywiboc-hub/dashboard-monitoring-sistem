@@ -31,7 +31,6 @@ h1{margin:2px 0 4px;font-size:clamp(24px,3.2vw,36px);font-weight:700;letter-spac
 .winfo{font-size:12.5px;opacity:.9}
 .akun{gap:10px;align-items:center}.akun button{font:600 12px var(--f-ui);border:0;background:#fff;color:var(--forest);border-radius:999px;padding:3px 10px;cursor:pointer}
 .akun a.btnlink{font:600 12px var(--f-ui);background:#fff;color:var(--forest);border-radius:999px;padding:3px 10px;text-decoration:none}
-body:not(.peran-lokasi):not(.peran-area):not(.master) #btnHarian{display:none!important}
 .akun select{font:600 12px var(--f-ui);border:0;background:#fff;color:var(--forest);border-radius:999px;padding:3px 8px;cursor:pointer;max-width:220px}
 body:not(.master) #selMaster,body.master:not(.peran-area):not(.peran-lokasi) #selMaster{display:none}   /* akun RTC tidak menampilkan "Masuk sebagai" */
 .peran-lokasi #btnPdf,.peran-area #btnPdf{display:none!important}
@@ -1618,7 +1617,8 @@ function terapkanAkun(p) {
   // tombol Laporan (Daily & Monthly) untuk Control Room (Command Center bila LH_UNTUK_AREA = true di LaporanHarian.gs); Export PDF dashboard hanya untuk RTC
   const bh = document.getElementById('btnHarian');
   if (ganti) bh.hidden = true;
-  if ((a.peran === 'LOKASI' || a.peran === 'AREA' || MASTER) && bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian(a.peran);
+  // semua akun: RTC = Laporan Per 4 Jam, Control Room / Command Center = Laporan Daily & Monthly
+  if (bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian(a.peran);
   cekMaster();
   document.getElementById('loginwrap').hidden = true;
   document.getElementById('akunBox').hidden = false;
