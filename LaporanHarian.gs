@@ -139,7 +139,7 @@ const cocokLH_ = (c, lok, area) => c.lok ? kunciLok(lok) === kunciLok(c.lok) : !
 /**
  * LAPORAN PER 4 JAM (akun RTC): event per jam per parameter pada tanggal terpilih ("today") dan sehari sebelumnya (H-1),
  * dari data jam yang sama dengan filter jam dashboard (file "Jam <nn> ..." / sheet Event Jam file Tarikan).
- * Hasil: { tanggal, h1, jamAkhir (jam terakhir yang sudah ada data hari itu, -1 = belum ada), kat: [{k, params: [{p, t: [24], h: [24]}]}], tanpaJam }.
+ * Hasil: { tanggal, h1, jamAkhir (jam terakhir yang sudah ada data hari itu, -1 = belum ada), kat: [{k, params: [{p, t: [24], h: [24], h2 (H-2 jam 23)}]}], tanpaJam }.
  */
 function lhPer4Jam(token, tanggal, area, lokasi) {
   const ses = sesiLH_(token);
@@ -147,7 +147,7 @@ function lhPer4Jam(token, tanggal, area, lokasi) {
   const tg = tanggalTeks(teks(tanggal));
   if (!tg) throw new Error('Tanggal tidak valid.');
   const m = tg.m, d = tg.d, c = cakupanLH_(ses, area, lokasi);
-  const kunci = 'L4J_' + versiData_() + '_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, [m, d, c.area, c.lok].join('|'))).slice(0, 16);
+  const kunci = 'L4J2_' + versiData_() + '_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, [m, d, c.area, c.lok].join('|'))).slice(0, 16);
   const ada = ambilCache_(kunci);
   if (ada) return ada;
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID), S = sumberBulan_(folder);
@@ -156,21 +156,24 @@ function lhPer4Jam(token, tanggal, area, lokasi) {
   const jamBln = mm => { const src = mm >= 0 ? (S.perBulan[mm] || []) : []; return src.length ? jamBulan_(folder, mm, src, peta) : { EJ: [] }; };
   // H-1: tanggal sebelumnya; tanggal 1 = tanggal terakhir bulan sebelumnya
   const J = jamBln(m), mp = d > 1 ? m : m - 1, dp = d > 1 ? d - 1 : (m > 0 ? new Date(CFG.TAHUN, m, 0).getDate() : 0), JP = mp === m ? J : jamBln(mp);
+  // H-2 (hanya jam 23.00): rentang 23:00-03:00 H-1 dimulai di hari sebelumnya
+  const mq = dp > 1 ? mp : mp - 1, dq = !dp ? 0 : dp > 1 ? dp - 1 : (mp > 0 ? new Date(CFG.TAHUN, mp, 0).getDate() : 0), JQ = mq === mp ? JP : mq === m ? J : jamBln(mq);
   const kat = {}; peta.urut.forEach(o => { if (o.k === 'DB' || o.k === 'DD' || o.k === 'FM') kat[o.p] = o.k; });
   const H = {}, TJ = { DB: [0, 0], DD: [0, 0], FM: [0, 0] };
   const tambah = (X, dd, b) => X.EJ.forEach(e => {
     if (e[0] !== dd || !kat[e[4]] || !cocokLH_(c, e[3], e[2])) return;
-    if (e[1] < 0 || e[1] > 23) { TJ[kat[e[4]]][b] += e[5]; return; }   // event tanpa jam kejadian: tidak bisa ditaruh per jam
-    const o = H[e[4]] || (H[e[4]] = [new Array(24).fill(0), new Array(24).fill(0)]); o[b][e[1]] += e[5];
+    if (e[1] < 0 || e[1] > 23) { if (b < 2) TJ[kat[e[4]]][b] += e[5]; return; }   // event tanpa jam kejadian: tidak bisa ditaruh per jam
+    if (b === 2 && e[1] !== 23) return;
+    const o = H[e[4]] || (H[e[4]] = [new Array(24).fill(0), new Array(24).fill(0), new Array(24).fill(0)]); o[b][e[1]] += e[5];
   });
-  tambah(J, d, 0); if (dp) tambah(JP, dp, 1);
+  tambah(J, d, 0); if (dp) tambah(JP, dp, 1); if (dq) tambah(JQ, dq, 2);
   let jamAkhir = -1;
   Object.keys(H).forEach(p => H[p][0].forEach((n, j) => { if (n && j > jamAkhir) jamAkhir = j; }));
-  const urut = peta.urut.map(o => o.p).filter(p => H[p]);
+  const urut = peta.urut.map(o => o.p).filter(p => H[p] && (H[p][0].some(Boolean) || H[p][1].some(Boolean)));
   const out = {
     tanggal: teks(tanggal), h1: dp ? CFG.TAHUN + '-' + ('0' + (mp + 1)).slice(-2) + '-' + ('0' + dp).slice(-2) : '',
     area: c.area, lokasi: c.lok, jamAkhir: jamAkhir, tanpaJam: TJ,
-    kat: ['DB', 'DD', 'FM'].map(k => ({ k: k, params: urut.filter(p => kat[p] === k).map(p => ({ p: p, t: H[p][0], h: H[p][1] })) })),
+    kat: ['DB', 'DD', 'FM'].map(k => ({ k: k, params: urut.filter(p => kat[p] === k).map(p => ({ p: p, t: H[p][0], h: H[p][1], h2: H[p][2][23] })) })),
     dibuat: new Date().toISOString(),
   };
   const json = JSON.stringify(out);

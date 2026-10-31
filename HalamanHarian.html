@@ -290,6 +290,7 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
         <label class="pick" id="lBln" hidden>Bulan <select id="fBln"></select></label>
         <label class="pick" id="lArea">Area <select id="fArea"></select></label>
         <label class="pick" id="lLok">Lokasi <select id="fLok"></select></label>
+        <label class="pick" id="lRentang" hidden>Rentang <select id="fRentang"></select></label>
         <button class="hbtn pdf" id="btnPdf" type="button" disabled>Export PDF</button>
       </div>
     </div>
@@ -1117,6 +1118,7 @@ function mulai() {
     $('fArea').innerHTML = '<option value="">Semua Area</option>' + INFO.areas.map(x => `<option value="${x}">${esc(judul(x))}</option>`).join('');
     isiLokasi();
     const rtc = a.peran === 'PUSAT';
+    if (rtc) { $('fRentang').innerHTML = J4_RENTANG.map((o, i) => `<option value="${i}">${o.l}</option>`).join(''); $('lRentang').hidden = false; }
     if (rtc) { MODE = 'harian'; document.querySelector('.seg').hidden = true; document.querySelector('.hero h1').textContent = 'Laporan Per 4 Jam'; }   // akun RTC: tanpa Daily / Monthly
     const akhir = new Date(Date.now() + 7 * 36e5 - (rtc ? 0 : 864e5)).toISOString().slice(0, 10);   // pelaporan H+1: bawaan tanggal kemarin (WIB); RTC: hari ini
     if (!$('fTgl').value) $('fTgl').value = akhir;
@@ -1141,6 +1143,7 @@ function aturMode(m) {
 $('segD').onclick = () => aturMode('harian');
 $('segM').onclick = () => aturMode('bulanan');
 $('fArea').onchange = () => { isiLokasi(); tampil(); };
+$('fRentang').onchange = () => { if (J4_R) { $('isi').innerHTML = gambar4(J4_R); if (J4_CTX) pasangSalin4(J4_R, J4_PER); } };
 $('fLok').onchange = tampil; $('fTgl').onchange = tampil; $('fBln').onchange = tampil;
 
 let MINTA = 0;
@@ -1160,6 +1163,10 @@ function tampil() {
 /* ================= LAPORAN PER 4 JAM (akun RTC) ================= */
 const J4_KAT = [{k: 'DB', n: 'Driving Behaviour', w: '#3d4f93'}, {k: 'DD', n: 'Driver Discipline', w: '#c8742a'}, {k: 'FM', n: 'Fatigue Management', w: '#12a84f'}];
 const J4_H1 = '#ef4123', J4_TD = '#3d4f93';
+// filter rentang 4 jam (a = jam mulai, e = jam selesai); 23:00-03:00 dimulai jam 23.00 hari sebelumnya
+const J4_RENTANG = [{l: 'Semua jam (s/d data terakhir)'}, {a: 7, e: 11, l: 'Shift 1 : Rentang 07:00 - 11:00'}, {a: 11, e: 15, l: 'Shift 1 : Rentang 11:00 - 15:00'},
+  {a: 15, e: 19, l: 'Shift 2 : Rentang 15:00 - 19:00'}, {a: 19, e: 23, l: 'Shift 2 : Rentang 19:00 - 23:00'}, {a: 23, e: 3, l: 'Shift 3 : Rentang 23:00 - 03:00'}, {a: 3, e: 7, l: 'Shift 3 : Rentang 03:00 - 07:00'}];
+let J4_R = null, J4_CTX = null;
 const nf4 = n => Math.round(n || 0).toLocaleString('id-ID');
 const jj4 = h => String(h).padStart(2, '0') + ':00';
 const rentang4 = h => `${jj4(h)}–${jj4((h + 1) % 24)}`;
@@ -1195,12 +1202,21 @@ function grafik4(h1, td, akhir) {
     <div class="j4leg"><span><i style="background:${J4_H1}"></i>H-1</span><span><i style="background:${J4_TD}"></i>Today</span><span><i class="ln" style="background:${J4_H1}"></i>2 per. Mov. Avg. (H-1)</span><span><i class="ln" style="background:${J4_TD}"></i>2 per. Mov. Avg. (Today)</span></div>`;
 }
 function gambar4(R) {
-  const akhir = R.jamAkhir, s = akhir + 1;   // jumlah jam yang dibandingkan (jam 00 s/d jam terakhir yang ada data)
+  // rentang terpilih: data dipotong di jam selesai rentang; tanpa rentang: s/d jam terakhir yang ada data
+  const rg = R.jamAkhir >= 0 && J4_RENTANG[+$('fRentang').value || 0].e !== undefined ? J4_RENTANG[+$('fRentang').value] : null;
+  const akhir = rg ? (rg.e + 23) % 24 : R.jamAkhir, s = akhir + 1;   // jumlah jam yang dibandingkan (jam 00 s/d jam akhir)
   const per = J4_PER = J4_KAT.map(K => { const o = R.kat.find(x => x.k === K.k) || {params: []}, t = Array(24).fill(0), h = Array(24).fill(0);
-    o.params.forEach(p => p.t.forEach((v, i) => { t[i] += v; h[i] += p.h[i]; })); return {...K, params: o.params, t, h}; });
+    let h2 = 0; o.params.forEach(p => { p.t.forEach((v, i) => { t[i] += v; h[i] += p.h[i]; }); h2 += p.h2 || 0; });
+    // penambahan: event di rentang (atau jam terakhir); jam 23.00 rentang 23-03 milik hari sebelumnya (today: H-1 jam 23, H-1: H-2 jam 23)
+    let pt = 0, ph = 0;
+    if (!rg) { pt = t[akhir] || 0; ph = h[akhir] || 0; }
+    else for (let j = rg.a; j !== rg.e; j = (j + 1) % 24) { if (rg.a > rg.e && j >= rg.a) { pt += h[j]; ph += h2; } else { pt += t[j]; ph += h[j]; } }
+    return {...K, params: o.params, t, h, pt, ph}; });
+  J4_CTX = {rg, akhir};
   const lok = R.lokasi ? judul(R.lokasi) : R.area ? judul(R.area) : 'Nasional';
-  const upd = akhir < 0 ? 'Belum ada data' : rentang4(akhir);
+  const upd = akhir < 0 ? 'Belum ada data' : rg ? `${jj4(rg.a)}–${jj4(rg.e)}` : rentang4(akhir);
   let html = `<section class="j4"><div class="j4info"><span>LOKASI:<b>${esc(lok.toUpperCase())}</b></span><span>TANGGAL:<b>${esc(R.tanggal.split('-').reverse().join('/'))}</b></span><span>UPDATE JAM:<b>${upd}</b></span><span>ZONA WAKTU:<b>WIB</b></span><span>H-1:<b>${esc(R.h1 ? R.h1.split('-').reverse().join('/') : '–')}</b></span></div></section>`;
+  if (rg && R.jamAkhir < akhir) html += `<div class="errbar">Data rentang ${jj4(rg.a)}–${jj4(rg.e)} belum lengkap: data hari ini baru sampai jam ${jj4((R.jamAkhir + 1) % 24)}.</div>`;
   if (akhir < 0) return html + `<div class="errbar">Belum ada event per jam untuk ${esc(tglPanjang(R.tanggal))}${R.lokasi || R.area ? ' di ' + esc(lok) : ''}.</div>`;
   const ket = `Tabel: H-1 sehari penuh, Today s/d ${jj4((akhir + 1) % 24)}. Donut: Today dibanding H-1 pada jam yang sama (00:00 s/d ${jj4((akhir + 1) % 24)}).`;
   // kiri: tabel parameter per kategori + donut (today / H-1 di jam yang sama)
@@ -1244,14 +1260,15 @@ function sapaan4() { try { return localStorage.getItem('j4_sapaan') || J4_SAPAAN
 // perubahan total today dibanding H-1 di jam yang sama: "Naik 5,58%" / "Turun 5,58%"
 const persenUbah4 = (t, h) => { if (!h) return t ? 'Naik, H-1 belum ada event' : 'Sama'; const p = (t / h - 1) * 100, x = Math.abs(p).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '%'; return p > 0 ? 'Naik ' + x : p < 0 ? 'Turun ' + x : 'Sama 0,00%'; };
 function teksSalin4(R, per, sapaan) {
-  const a = R.jamAkhir, s = a + 1, jamS = jj4((a + 1) % 24), salam = a < 10 ? 'Pagi' : a < 14 ? 'Siang' : a < 17 ? 'Sore' : 'Malam';
+  const rg = J4_CTX.rg, a = J4_CTX.akhir, s = a + 1, jamS = jj4((a + 1) % 24), salam = a < 10 ? 'Pagi' : a < 14 ? 'Siang' : a < 17 ? 'Sore' : 'Malam';
+  const pukul = rg ? `${jj4(rg.a)}–${jj4(rg.e)}` : jamS;
   const L = ['📊 UPDATE DATA DRIVING BEHAVIOUR, DRIVER DISCIPLINE, DAN FATIGUE MANAGEMENT 📊',
-    `Tanggal: ${R.tanggal.split('-').reverse().join('/')} | Update Pukul: ${rentang4(a)} WIB`, '',
+    `Tanggal: ${R.tanggal.split('-').reverse().join('/')} | Update Pukul: ${rg ? pukul : rentang4(a)} WIB`, '',
     `Selamat ${salam} ${sapaan}, berikut update data Driving Behaviour, Driver Discipline, dan Fatigue Management${R.lokasi || R.area ? ' ' + judul(R.lokasi || R.area) : ''}:`];
   per.forEach((K, i) => {
-    const t1 = K.t[a], h1 = K.h[a], d = t1 - h1, tT = jumlah4(K.t, s), tH = jumlah4(K.h, s);
+    const t1 = K.pt, h1 = K.ph, d = t1 - h1, tT = jumlah4(K.t, s), tH = jumlah4(K.h, s);
     L.push('', `${J4_IKON[K.k]} ${i + 1}. ${K.n.toUpperCase()}`,
-      `* Penambahan Pukul ${jamS} (Today vs H-1): ${nf4(t1)} vs ${nf4(h1)} event (${d > 0 ? 'Naik ' + nf4(d) : d < 0 ? 'Turun ' + nf4(-d) : 'Sama'})`,
+      `* Penambahan Pukul ${pukul} (Today vs H-1): ${nf4(t1)} vs ${nf4(h1)} event (${d > 0 ? 'Naik ' + nf4(d) : d < 0 ? 'Turun ' + nf4(-d) : 'Sama'})`,
       `* Total s.d Pukul ${jamS} (Today vs H-1): ${nf4(tT)} vs ${nf4(tH)} event (${persenUbah4(tT, tH)})`);
   });
   L.push('', 'Hormat kami,', 'Team RTC');
@@ -1276,7 +1293,7 @@ function tampil4() {
   $('isi').innerHTML = '<div class="loading"><span class="spin"></span>Menyiapkan laporan per 4 jam…</div>'; $('btnPdf').disabled = true;
   run('lhPer4Jam', TOKEN, t, $('fArea').value, $('fLok').value).then(j => {
     if (id !== MINTA4) return;
-    const R = JSON.parse(j); $('isi').innerHTML = gambar4(R); if (R.jamAkhir >= 0) pasangSalin4(R, J4_PER);
+    const R = J4_R = JSON.parse(j); $('isi').innerHTML = gambar4(R); if (R.jamAkhir >= 0) pasangSalin4(R, J4_PER);
     LAP = {mode: 'per4jam', periode: t, area: R.area || '', lokasi: R.lokasi || R.area || 'Nasional', baris: R.lokasi ? 'Lokasi' : 'Area'};
     $('btnPdf').disabled = false;
   }).catch(e => { if (id !== MINTA4 || cekLogin(e)) return; $('isi').innerHTML = `<div class="errbar">Gagal: ${esc(pesan(e))}</div>`; });
