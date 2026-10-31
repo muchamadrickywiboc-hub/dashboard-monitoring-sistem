@@ -1200,13 +1200,13 @@ function gambar4(R) {
   const upd = akhir < 0 ? 'Belum ada data' : rentang4(akhir);
   let html = `<section class="j4"><div class="j4info"><span>LOKASI:<b>${esc(lok.toUpperCase())}</b></span><span>TANGGAL:<b>${esc(R.tanggal.split('-').reverse().join('/'))}</b></span><span>UPDATE JAM:<b>${upd}</b></span><span>ZONA WAKTU:<b>WIB</b></span><span>H-1:<b>${esc(R.h1 ? R.h1.split('-').reverse().join('/') : '–')}</b></span></div></section>`;
   if (akhir < 0) return html + `<div class="errbar">Belum ada event per jam untuk ${esc(tglPanjang(R.tanggal))}${R.lokasi || R.area ? ' di ' + esc(lok) : ''}.</div>`;
-  const ket = `H-1 dihitung pada jam yang sama (00:00 s/d ${jj4((akhir + 1) % 24)}) supaya sebanding.`;
+  const ket = `Tabel: H-1 sehari penuh, Today s/d ${jj4((akhir + 1) % 24)}. Donut: Today dibanding H-1 pada jam yang sama (00:00 s/d ${jj4((akhir + 1) % 24)}).`;
   // kiri: tabel parameter per kategori + donut (today / H-1 di jam yang sama)
-  const kiri = per.map(K => { const tT = jumlah4(K.t, s), tH = jumlah4(K.h, s);
-    const rows = K.params.map(p => { const a = jumlah4(p.t, s), b = jumlah4(p.h, s); return `<tr><td>${esc(p.p.toUpperCase())}</td><td class="h1">${nf4(b)}</td><td class="td">${nf4(a)}</td><td class="${kelas4(a, b)}">${pct4(a, b)}</td></tr>`; }).join('');
+  const kiri = per.map(K => { const tT = jumlah4(K.t, s), tH = jumlah4(K.h, 24), tHs = jumlah4(K.h, s);   // tabel: H-1 sehari penuh; donut: H-1 di jam yang sama
+    const rows = K.params.map(p => { const a = jumlah4(p.t, s), b = jumlah4(p.h, 24); return `<tr><td>${esc(p.p.toUpperCase())}</td><td class="h1">${nf4(b)}</td><td class="td">${nf4(a)}</td><td class="${kelas4(a, b)}">${pct4(a, b)}</td></tr>`; }).join('');
     return `<div class="j4kat"><div><h3>${K.n}</h3><table class="j4t"><thead><tr><th>Event</th><th>H-1</th><th>Today</th><th>Kenaikan (%)</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="j4note">Tidak ada event</td></tr>'}
       <tr class="tot"><td>TOTAL</td><td>${nf4(tH)}</td><td>${nf4(tT)}</td><td class="${kelas4(tT, tH)}">${pct4(tT, tH)}</td></tr></tbody></table></div>
-      <div class="j4donut" title="Today dibanding H-1 pada jam yang sama">${donut4(tH ? tT / tH * 100 : 0, K.w)}</div></div>`; }).join('');
+      <div class="j4donut" title="Today dibanding H-1 pada jam yang sama (00:00 s/d ${jj4((akhir + 1) % 24)}): ${nf4(tT)} / ${nf4(tHs)}">${donut4(tHs ? tT / tHs * 100 : 0, K.w)}</div></div>`; }).join('');
   // kanan: event per jam
   let aH = 0, aT = 0;
   const baris = Array.from({length: 24}, (_, j) => { aH += per.reduce((x, K) => x + K.h[j], 0); const ada = j <= akhir; if (ada) aT += per.reduce((x, K) => x + K.t[j], 0);
@@ -1239,6 +1239,8 @@ function gambar4(R) {
 const J4_SAPAAN = 'Bapak/Ibu';   // nama penerima diketik di kolom Sapaan, disimpan di perangkat (repo publik: tanpa nama orang)
 const J4_IKON = {DB: '🚛', DD: '👮‍♂️', FM: '🥱'};
 function sapaan4() { try { return localStorage.getItem('j4_sapaan') || J4_SAPAAN; } catch (e) { return J4_SAPAAN; } }
+// perubahan total today dibanding H-1 di jam yang sama: "Naik 5,58%" / "Turun 5,58%"
+const persenUbah4 = (t, h) => { if (!h) return t ? 'Naik, H-1 belum ada event' : 'Sama'; const p = (t / h - 1) * 100, x = Math.abs(p).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '%'; return p > 0 ? 'Naik ' + x : p < 0 ? 'Turun ' + x : 'Sama 0,00%'; };
 function teksSalin4(R, per, sapaan) {
   const a = R.jamAkhir, s = a + 1, jamS = jj4((a + 1) % 24), salam = a < 10 ? 'Pagi' : a < 14 ? 'Siang' : a < 17 ? 'Sore' : 'Malam';
   const L = ['📊 UPDATE DATA DRIVING BEHAVIOUR, DRIVER DISCIPLINE, DAN FATIGUE MANAGEMENT 📊',
@@ -1248,7 +1250,7 @@ function teksSalin4(R, per, sapaan) {
     const t1 = K.t[a], h1 = K.h[a], d = t1 - h1, tT = jumlah4(K.t, s), tH = jumlah4(K.h, s);
     L.push('', `${J4_IKON[K.k]} ${i + 1}. ${K.n.toUpperCase()}`,
       `* Penambahan Pukul ${jamS} (Today vs H-1): ${nf4(t1)} vs ${nf4(h1)} event (${d > 0 ? 'Naik ' + nf4(d) : d < 0 ? 'Turun ' + nf4(-d) : 'Sama'})`,
-      `* Total s.d Pukul ${jamS} (Today vs H-1): ${nf4(tT)} vs ${nf4(tH)} event (${tH ? Math.round(tT / tH * 100) + '%' : '–'})`);
+      `* Total s.d Pukul ${jamS} (Today vs H-1): ${nf4(tT)} vs ${nf4(tH)} event (${persenUbah4(tT, tH)})`);
   });
   L.push('', 'Hormat kami,', 'Team RTC');
   return L.join('\n');
