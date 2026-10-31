@@ -33,7 +33,7 @@ h1{margin:2px 0 4px;font-size:clamp(24px,3.2vw,36px);font-weight:700;letter-spac
 .akun a.btnlink{font:600 12px var(--f-ui);background:#fff;color:var(--forest);border-radius:999px;padding:3px 10px;text-decoration:none}
 body:not(.peran-lokasi):not(.peran-area):not(.master) #btnHarian{display:none!important}
 .akun select{font:600 12px var(--f-ui);border:0;background:#fff;color:var(--forest);border-radius:999px;padding:3px 8px;cursor:pointer;max-width:220px}
-body:not(.master) #selMaster{display:none}
+body:not(.master) #selMaster,body.master:not(.peran-area):not(.peran-lokasi) #selMaster{display:none}   /* akun RTC tidak menampilkan "Masuk sebagai" */
 .peran-lokasi #btnPdf,.peran-area #btnPdf{display:none!important}
 .nologin .hero,.nologin .footer{display:none!important}
 .lg{min-height:100vh;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);background:var(--bg)}
@@ -416,7 +416,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
         <h1>Monitoring Driving Behaviour, Driver Discipline &amp; Fatigue Management — <span class="tBulan">2026</span></h1>
         <div class="sub">Sebaran pelanggaran Driving Behaviour, Driver Discipline &amp; Fatigue Management per area, lokasi dan Driver · data <span id="tPeriode">2026</span></div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><select id="selMaster" title="Akun master: masuk sebagai akun lain"><option value="">Masuk sebagai…</option></select><a class="btnlink" id="btnHarian" target="_top" href="#" hidden title="Laporan Harian Operasional GPS & Dashcam">Laporan Harian</a><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnTv" class="btntv" title="Tampilan satu layar untuk TV besar">Mode TV</button><button type="button" id="btnKeluar">Keluar</button><span class="tvjam" id="tvJam"></span></div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="preview" id="tUpdate">Memuat data…</div><div class="preview akun" id="akunBox" hidden><span id="akunNama"></span><select id="selMaster" title="Akun master: masuk sebagai akun lain"><option value="">Masuk sebagai…</option></select><a class="btnlink" id="btnHarian" target="_top" href="#" hidden title="Laporan per 4 jam GPS & Dashcam">Laporan Per 4 Jam</a><button type="button" id="btnPdf" title="Unduh ringkasan 1 halaman (PDF)">Export PDF</button><button type="button" id="btnTv" class="btntv" title="Tampilan satu layar untuk TV besar">Mode TV</button><button type="button" id="btnKeluar">Keluar</button><span class="tvjam" id="tvJam"></span></div></div>
     </div>
     <nav class="tvnav" id="tvNav" aria-label="Tampilan Mode TV"><span class="tvmode"><button type="button" data-m="utama" title="Tren &amp; parameter per kategori (tombol 1)">Mode Utama</button><button type="button" data-m="detail" title="Rekap per area, Top Pelanggaran Driver, Rekap per lokasi (tombol 2)">Mode Detail</button></span><button type="button" class="tvkeluar" id="tvKeluar">Keluar Mode TV</button></nav>
     <div class="ctrlrow" id="bulanRow">
