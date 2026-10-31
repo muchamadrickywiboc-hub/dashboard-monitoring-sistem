@@ -1511,7 +1511,8 @@ $('btnPdf').onclick = async () => {
   const b = $('btnPdf'); if (b.disabled || !LAP) return;
   b.disabled = true; b.textContent = 'Memeriksa…';
   const kunci = kunciLap(); let pertama = '';
-  try { pertama = await run('lhEksporPertama', TOKEN, kunci); } catch (e) { /* tanpa riwayat: pakai waktu sekarang */ }
+  // akun RTC (Laporan Per 4 Jam): selalu waktu sekarang, tanpa pilihan waktu export pertama
+  if (LAP.mode !== 'per4jam') try { pertama = await run('lhEksporPertama', TOKEN, kunci); } catch (e) { /* tanpa riwayat: pakai waktu sekarang */ }
   const tPertama = pertama ? new Date(pertama) : null;
   const waktu = tPertama && !isNaN(tPertama) ? await pilihWaktu(tPertama) : new Date();
   if (!waktu) { b.disabled = false; b.textContent = 'Export PDF'; return; }
@@ -1565,7 +1566,7 @@ $('btnPdf').onclick = async () => {
     const per = LAP.mode === 'bulanan' ? blnPanjang(LAP.periode) : LAP.periode;
     const nama = `Laporan ${LAP.mode === 'bulanan' ? 'Monthly' : LAP.mode === 'per4jam' ? 'Per 4 Jam' : 'Daily'} ${LAP.baris === 'Area' ? LAP.lokasi : judul(LAP.lokasi)} ${per}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
     try { pdf.save(nama); } catch (e) { window.open(pdf.output('bloburl'), '_blank'); }
-    if (!pertama) run('lhCatatEkspor', TOKEN, kunci, waktu.toISOString()).catch(() => {});
+    if (!pertama && LAP.mode !== 'per4jam') run('lhCatatEkspor', TOKEN, kunci, waktu.toISOString()).catch(() => {});
     run('catatEkspor', TOKEN, {area: LAP.area || '', lokasi: LAP.baris === 'Area' ? 'Semua lokasi' : LAP.lokasi,
       jenis: LAP.mode === 'bulanan' ? 'Monthly' : LAP.mode === 'per4jam' ? 'Per 4 Jam' : 'Daily', tanggalData: LAP.periode, waktuPdf: waktu.toISOString(), ...zonaPerangkat()}).catch(() => {});
   } catch (e) { const d = document.createElement('div'); d.className = 'errbar'; d.textContent = 'Export PDF gagal: ' + pesan(e); $('isi').prepend(d); }
