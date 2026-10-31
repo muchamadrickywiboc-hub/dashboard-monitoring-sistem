@@ -13,6 +13,7 @@
  *     disimpan di spreadsheet LH.INPUT_NAMA di folder data (dibuat otomatis).
  *   - Logo: file gambar di folder data yang namanya diawali "Logo" (mis. "Logo Pertamina Patra Niaga.png").
  *     Tanpa file itu dipakai logo bawaan di HalamanHarian.html.
+ * Akun RTC melihat Laporan per 4 jam (lhPer4Jam): event per jam hari terpilih dibanding H-1.
  * Camera Covering dan Illegal Shutdown tidak dimasukkan ke laporan. SOS, Seat Belt, Microsleep, Driver Distracted dan Driving > 4 hrs hanya untuk akun RTC.
  */
 const LH = {
@@ -134,6 +135,48 @@ function cakupanLH_(ses, area, lokasi) {
   return { area: area, lok: lokasi };
 }
 const cocokLH_ = (c, lok, area) => c.lok ? kunciLok(lok) === kunciLok(c.lok) : !c.area || area === c.area;
+
+/**
+ * LAPORAN PER 4 JAM (akun RTC): event per jam per parameter pada tanggal terpilih ("today") dan sehari sebelumnya (H-1),
+ * dari data jam yang sama dengan filter jam dashboard (file "Jam <nn> ..." / sheet Event Jam file Tarikan).
+ * Hasil: { tanggal, h1, jamAkhir (jam terakhir yang sudah ada data hari itu, -1 = belum ada), kat: [{k, params: [{p, t: [24], h: [24]}]}], tanpaJam }.
+ */
+function lhPer4Jam(token, tanggal, area, lokasi) {
+  const ses = sesiLH_(token);
+  if (ses.peran !== 'PUSAT') throw new Error('Laporan per 4 jam hanya untuk akun RTC.');
+  const tg = tanggalTeks(teks(tanggal));
+  if (!tg) throw new Error('Tanggal tidak valid.');
+  const m = tg.m, d = tg.d, c = cakupanLH_(ses, area, lokasi);
+  const kunci = 'L4J_' + versiData_() + '_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, [m, d, c.area, c.lok].join('|'))).slice(0, 16);
+  const ada = ambilCache_(kunci);
+  if (ada) return ada;
+  const folder = DriveApp.getFolderById(CFG.FOLDER_ID), S = sumberBulan_(folder);
+  if (!S.atur) throw new Error('File Pengaturan Dashboard tidak ditemukan.');
+  const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(S.atur), 'Pemetaan') || []);
+  const jamBln = mm => { const src = mm >= 0 ? (S.perBulan[mm] || []) : []; return src.length ? jamBulan_(folder, mm, src, peta) : { EJ: [] }; };
+  // H-1: tanggal sebelumnya; tanggal 1 = tanggal terakhir bulan sebelumnya
+  const J = jamBln(m), mp = d > 1 ? m : m - 1, dp = d > 1 ? d - 1 : (m > 0 ? new Date(CFG.TAHUN, m, 0).getDate() : 0), JP = mp === m ? J : jamBln(mp);
+  const kat = {}; peta.urut.forEach(o => { if (o.k === 'DB' || o.k === 'DD' || o.k === 'FM') kat[o.p] = o.k; });
+  const H = {}, TJ = { DB: [0, 0], DD: [0, 0], FM: [0, 0] };
+  const tambah = (X, dd, b) => X.EJ.forEach(e => {
+    if (e[0] !== dd || !kat[e[4]] || !cocokLH_(c, e[3], e[2])) return;
+    if (e[1] < 0 || e[1] > 23) { TJ[kat[e[4]]][b] += e[5]; return; }   // event tanpa jam kejadian: tidak bisa ditaruh per jam
+    const o = H[e[4]] || (H[e[4]] = [new Array(24).fill(0), new Array(24).fill(0)]); o[b][e[1]] += e[5];
+  });
+  tambah(J, d, 0); if (dp) tambah(JP, dp, 1);
+  let jamAkhir = -1;
+  Object.keys(H).forEach(p => H[p][0].forEach((n, j) => { if (n && j > jamAkhir) jamAkhir = j; }));
+  const urut = peta.urut.map(o => o.p).filter(p => H[p]);
+  const out = {
+    tanggal: teks(tanggal), h1: dp ? CFG.TAHUN + '-' + ('0' + (mp + 1)).slice(-2) + '-' + ('0' + dp).slice(-2) : '',
+    area: c.area, lokasi: c.lok, jamAkhir: jamAkhir, tanpaJam: TJ,
+    kat: ['DB', 'DD', 'FM'].map(k => ({ k: k, params: urut.filter(p => kat[p] === k).map(p => ({ p: p, t: H[p][0], h: H[p][1] })) })),
+    dibuat: new Date().toISOString(),
+  };
+  const json = JSON.stringify(out);
+  simpanCache_(json, kunci, LH.CACHE_DETIK);
+  return json;
+}
 
 /**
  * Isi laporan untuk satu hari (periode yyyy-mm-dd) atau satu bulan (periode yyyy-mm) dan cakupan.

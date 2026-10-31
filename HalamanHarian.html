@@ -197,6 +197,37 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
 .expopsi{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 6px}.expopsi .btn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;height:auto;padding:12px 14px;text-align:left}
 .expopsi .btn span{font-size:12px;color:var(--muted);font-weight:600}.expopsi .btn b{font-size:14px}.expopsi .btn:hover{border-color:var(--forest)}
 @media (max-width:640px){.expopsi{grid-template-columns:1fr}}
+/* ===== Laporan per 4 jam (akun RTC) ===== */
+.j4{background:var(--surface);border-radius:16px;box-shadow:0 8px 24px rgba(30,60,40,.10);padding:16px 18px}
+.j4info{display:flex;flex-wrap:wrap;gap:8px 28px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.j4info b{display:inline-block;margin-left:6px;background:#fbf7dc;color:var(--ink);padding:2px 10px;border-radius:6px;font-weight:600}
+.j4grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:20px;align-items:start}
+@media (max-width:1100px){.j4grid{grid-template-columns:minmax(0,1fr)}}
+.j4kat{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:14px;align-items:center}
+.j4kat+.j4kat{margin-top:16px}
+@media (max-width:520px){.j4kat{grid-template-columns:minmax(0,1fr)}}
+.j4 h3{margin:0 0 6px;font-size:13px;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+.j4t{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.j4t th{background:var(--surface-2);color:var(--ink);text-transform:none;letter-spacing:0;text-align:right;font-weight:700;padding:5px 8px;border-bottom:2px solid var(--ink);white-space:nowrap}
+.j4t th:first-child,.j4t td:first-child{text-align:left}
+.j4t td{padding:4px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+.j4t tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
+.j4t .h1{color:#c4351f}.j4t .td{color:#2f3f86}
+.j4t .naik{color:var(--serious-ink)}.j4t .turun{color:#1d7a3a}
+.j4t.jam th{text-align:center}.j4t.jam th.sub{font-size:12px;font-weight:600;border-bottom:1px solid var(--axis)}
+.j4t.jam td.kosong{color:var(--muted)}
+.j4donut{display:flex;justify-content:center}
+.j4sec{display:flex;flex-direction:column;gap:10px}
+.j4head{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--surface-2);border-top:2px solid var(--ink);font-size:12px}
+.j4head>div{padding:6px 10px}.j4head>div+div{border-left:1px solid var(--axis)}
+.j4head b{display:block;font-size:14px;margin-top:2px}
+.j4head .naik b{color:var(--serious-ink)}.j4head .turun b{color:#1d7a3a}
+@media (max-width:640px){.j4head{grid-template-columns:minmax(0,1fr)}.j4head>div+div{border-left:0;border-top:1px solid var(--axis)}}
+.j4chart{overflow-x:auto}.j4chart svg{display:block;min-width:900px;width:100%;height:auto}
+.j4leg{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;font-size:11.5px;color:var(--ink-2)}
+.j4leg i{display:inline-block;width:12px;height:8px;margin-right:5px;vertical-align:middle}
+.j4leg i.ln{height:2px}
+.j4note{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -1078,7 +1109,9 @@ function mulai() {
     $('lArea').hidden = a.peran !== 'PUSAT'; $('lLok').hidden = a.peran !== 'PUSAT';   // akun Area (Command Center) melapor untuk seluruh area
     $('fArea').innerHTML = '<option value="">Semua Area</option>' + INFO.areas.map(x => `<option value="${x}">${esc(judul(x))}</option>`).join('');
     isiLokasi();
-    const akhir = new Date(Date.now() + 7 * 36e5 - 864e5).toISOString().slice(0, 10);   // pelaporan H+1: bawaan tanggal kemarin (WIB)
+    const rtc = a.peran === 'PUSAT';
+    if (rtc) { MODE = 'harian'; document.querySelector('.seg').hidden = true; document.querySelector('.hero h1').textContent = 'Laporan Per 4 Jam'; }   // akun RTC: tanpa Daily / Monthly
+    const akhir = new Date(Date.now() + 7 * 36e5 - (rtc ? 0 : 864e5)).toISOString().slice(0, 10);   // pelaporan H+1: bawaan tanggal kemarin (WIB); RTC: hari ini
     if (!$('fTgl').value) $('fTgl').value = akhir;
     const mAkhir = Math.max(+akhir.slice(5, 7), 1);
     $('fBln').innerHTML = Array.from({length: mAkhir}, (_, i) => { const v = INFO.tahun + '-' + ('0' + (i + 1)).slice(-2); return `<option value="${v}">${BLN[i]} ${INFO.tahun}</option>`; }).reverse().join('');
@@ -1106,6 +1139,7 @@ $('fLok').onchange = tampil; $('fTgl').onchange = tampil; $('fBln').onchange = t
 let MINTA = 0;
 function tampil() {
   if (!INFO) return;
+  if (INFO.akun.peran === 'PUSAT') return tampil4();   // akun RTC: Laporan per 4 jam
   const per = MODE === 'harian' ? $('fTgl').value : $('fBln').value;
   if (!per) return;
   const id = ++MINTA;
@@ -1114,6 +1148,96 @@ function tampil() {
     if (id !== MINTA) return;
     LAP = JSON.parse(j); gambar(LAP); $('btnPdf').disabled = false;
   }).catch(e => { if (id !== MINTA || cekLogin(e)) return; $('isi').innerHTML = `<div class="errbar">Gagal: ${esc(pesan(e))}</div>`; });
+}
+
+/* ================= LAPORAN PER 4 JAM (akun RTC) ================= */
+const J4_KAT = [{k: 'DB', n: 'Driving Behaviour', w: '#3d4f93'}, {k: 'DD', n: 'Driver Discipline', w: '#c8742a'}, {k: 'FM', n: 'Fatigue Management', w: '#12a84f'}];
+const J4_H1 = '#ef4123', J4_TD = '#3d4f93';
+const nf4 = n => Math.round(n || 0).toLocaleString('id-ID');
+const jj4 = h => String(h).padStart(2, '0') + ':00';
+const rentang4 = h => `${jj4(h)}–${jj4((h + 1) % 24)}`;
+const jumlah4 = (a, z) => a.slice(0, z).reduce((x, y) => x + y, 0);
+const pct4 = (t, h) => h ? ((t / h - 1) * 100).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '%' : t ? 'baru' : '0,00%';
+const kelas4 = (t, h) => t > h ? 'naik' : t < h ? 'turun' : '';
+function donut4(p, warna) {
+  const r = 52, k = 2 * Math.PI * r, isi = Math.max(0, Math.min(p, 100)) / 100;
+  return `<svg viewBox="0 0 140 140" width="140" height="140" role="img" aria-label="${Math.round(p)}%"><circle cx="70" cy="70" r="${r}" fill="none" stroke="#e8e8e8" stroke-width="22"/>
+    <circle cx="70" cy="70" r="${r}" fill="none" stroke="${warna}" stroke-width="22" stroke-dasharray="${k * isi} ${k}" transform="rotate(-90 70 70)"/>
+    <text x="70" y="78" text-anchor="middle" font-size="24" font-weight="700" fill="${warna}">${Math.round(p)}%</text></svg>`;
+}
+// grafik batang H-1 (merah) vs today (biru) per jam + garis rata-rata bergerak 2 periode
+function grafik4(h1, td, akhir) {
+  const W = 1400, H = 300, L = 46, R = 12, T = 18, B = 40, iw = W - L - R, ih = H - T - B, n = 24, gw = iw / n, bw = gw * 0.32;
+  const tdv = td.map((v, i) => i <= akhir ? v : null), mx = Math.max(1, ...h1, ...tdv.filter(v => v !== null));
+  const st = Math.pow(10, Math.floor(Math.log10(mx))), langkah = [1, 2, 2.5, 5, 10].map(x => x * st / 2).find(x => mx / x <= 8) || st, top = Math.ceil(mx / langkah) * langkah;
+  const y = v => T + ih - v / top * ih, cx = i => L + gw * i + gw / 2;
+  let g = '';
+  for (let v = 0; v <= top + 1e-9; v += langkah) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#e6e9e6"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#737b76">${nf4(v)}</text>`;
+  const ma = a => a.map((v, i) => i === 0 || v === null || a[i - 1] === null ? null : (v + a[i - 1]) / 2);
+  const garis = (a, w) => { let d = '', on = false; a.forEach((v, i) => { if (v === null) { on = false; return; } d += `${on ? 'L' : 'M'}${cx(i).toFixed(1)},${y(v).toFixed(1)}`; on = true; }); return d ? `<path d="${d}" fill="none" stroke="${w}" stroke-width="1.6"/>` : ''; };
+  h1.forEach((v, i) => {
+    g += `<rect x="${cx(i) - bw - 1}" y="${y(v)}" width="${bw}" height="${T + ih - y(v)}" fill="${J4_H1}"><title>${rentang4(i)} H-1: ${nf4(v)}</title></rect>`;
+    if (v) g += `<text x="${cx(i) - bw / 2 - 1}" y="${y(v) - 4}" text-anchor="middle" font-size="10" fill="${J4_H1}">${nf4(v)}</text>`;
+    const t = tdv[i];
+    if (t !== null) { g += `<rect x="${cx(i) + 1}" y="${y(t)}" width="${bw}" height="${T + ih - y(t)}" fill="${J4_TD}"><title>${rentang4(i)} Today: ${nf4(t)}</title></rect>`;
+      if (t) g += `<text x="${cx(i) + bw / 2 + 1}" y="${y(t) - 4}" text-anchor="middle" font-size="10" fill="${J4_TD}">${nf4(t)}</text>`; }
+    g += `<text x="${cx(i)}" y="${H - B + 14}" text-anchor="middle" font-size="10" fill="#47504b">${jj4(i)}–</text><text x="${cx(i)}" y="${H - B + 26}" text-anchor="middle" font-size="10" fill="#47504b">${jj4((i + 1) % 24)}</text>`;
+  });
+  g += garis(ma(h1), J4_H1) + garis(ma(tdv), J4_TD) + `<line x1="${L}" x2="${W - R}" y1="${T + ih}" y2="${T + ih}" stroke="#c9cec9"/>`;
+  return `<div class="j4chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Event per jam H-1 dan hari ini">${g}</svg></div>
+    <div class="j4leg"><span><i style="background:${J4_H1}"></i>H-1</span><span><i style="background:${J4_TD}"></i>Today</span><span><i class="ln" style="background:${J4_H1}"></i>2 per. Mov. Avg. (H-1)</span><span><i class="ln" style="background:${J4_TD}"></i>2 per. Mov. Avg. (Today)</span></div>`;
+}
+function gambar4(R) {
+  const akhir = R.jamAkhir, s = akhir + 1;   // jumlah jam yang dibandingkan (jam 00 s/d jam terakhir yang ada data)
+  const per = J4_KAT.map(K => { const o = R.kat.find(x => x.k === K.k) || {params: []}, t = Array(24).fill(0), h = Array(24).fill(0);
+    o.params.forEach(p => p.t.forEach((v, i) => { t[i] += v; h[i] += p.h[i]; })); return {...K, params: o.params, t, h}; });
+  const lok = R.lokasi ? judul(R.lokasi) : R.area ? judul(R.area) : 'Nasional';
+  const upd = akhir < 0 ? 'Belum ada data' : rentang4(akhir);
+  let html = `<section class="j4"><div class="j4info"><span>LOKASI:<b>${esc(lok.toUpperCase())}</b></span><span>TANGGAL:<b>${esc(R.tanggal.split('-').reverse().join('/'))}</b></span><span>UPDATE JAM:<b>${upd}</b></span><span>ZONA WAKTU:<b>WIB</b></span><span>H-1:<b>${esc(R.h1 ? R.h1.split('-').reverse().join('/') : '–')}</b></span></div></section>`;
+  if (akhir < 0) return html + `<div class="errbar">Belum ada event per jam untuk ${esc(tglPanjang(R.tanggal))}${R.lokasi || R.area ? ' di ' + esc(lok) : ''}.</div>`;
+  const ket = `H-1 dihitung pada jam yang sama (00:00 s/d ${jj4((akhir + 1) % 24)}) supaya sebanding.`;
+  // kiri: tabel parameter per kategori + donut (today / H-1 di jam yang sama)
+  const kiri = per.map(K => { const tT = jumlah4(K.t, s), tH = jumlah4(K.h, s);
+    const rows = K.params.map(p => { const a = jumlah4(p.t, s), b = jumlah4(p.h, s); return `<tr><td>${esc(p.p.toUpperCase())}</td><td class="h1">${nf4(b)}</td><td class="td">${nf4(a)}</td><td class="${kelas4(a, b)}">${pct4(a, b)}</td></tr>`; }).join('');
+    return `<div class="j4kat"><div><h3>${K.n}</h3><table class="j4t"><thead><tr><th>Event</th><th>H-1</th><th>Today</th><th>Kenaikan (%)</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="j4note">Tidak ada event</td></tr>'}
+      <tr class="tot"><td>TOTAL</td><td>${nf4(tH)}</td><td>${nf4(tT)}</td><td class="${kelas4(tT, tH)}">${pct4(tT, tH)}</td></tr></tbody></table></div>
+      <div class="j4donut" title="Today dibanding H-1 pada jam yang sama">${donut4(tH ? tT / tH * 100 : 0, K.w)}</div></div>`; }).join('');
+  // kanan: event per jam
+  let aH = 0, aT = 0;
+  const baris = Array.from({length: 24}, (_, j) => { aH += per.reduce((x, K) => x + K.h[j], 0); const ada = j <= akhir; if (ada) aT += per.reduce((x, K) => x + K.t[j], 0);
+    return `<tr><td>${rentang4(j)}</td>${per.map(K => `<td class="h1">${nf4(K.h[j])}</td><td class="td">${ada ? nf4(K.t[j]) : ''}</td>`).join('')}<td class="h1">${nf4(aH)}</td><td class="td">${ada ? nf4(aT) : ''}</td><td>${ada ? nf4(aH - aT) : ''}</td></tr>`; }).join('');
+  const kanan = `<h3>Event per jam</h3><div class="tbl"><table class="j4t jam"><thead><tr><th rowspan="2" style="text-align:left">Jam</th>${per.map(K => `<th colspan="2">${K.n}</th>`).join('')}<th colspan="2">Akumulasi data</th><th rowspan="2">H-1 vs Today</th></tr>
+    <tr>${per.map(() => '<th class="sub">H-1</th><th class="sub">Today</th>').join('')}<th class="sub">H-1</th><th class="sub">Today</th></tr></thead><tbody>${baris}
+    <tr class="tot"><td>TOTAL</td>${per.map(K => `<td>${nf4(jumlah4(K.h, 24))}</td><td>${nf4(jumlah4(K.t, s))}</td>`).join('')}<td></td><td></td><td></td></tr></tbody></table></div>`;
+  html += `<section class="j4"><div class="j4grid"><div>${kiri}<div class="j4note" style="margin-top:10px">${ket}</div></div><div>${kanan}</div></div></section>`;
+  // analisis per kategori: total, kenaikan & penurunan tertinggi antar jam (today), grafik
+  per.forEach(K => {
+    let up = null, dn = null;
+    for (let j = 1; j <= akhir; j++) { const d = K.t[j] - K.t[j - 1]; if (d > 0 && (!up || d > up.d)) up = {j, d}; if (d < 0 && (!dn || d < dn.d)) dn = {j, d}; }
+    const nama = K.params.map(p => p.p).join(', ');
+    html += `<section class="j4 j4sec"><h3>Analisis perbandingan ${K.n}${nama ? ` <span style="font-weight:500;text-transform:none">(${esc(nama)})</span>` : ''}</h3>
+      <div class="j4head"><div>Total data (Today / H-1)<b>${nf4(jumlah4(K.t, s))} / ${nf4(jumlah4(K.h, 24))}</b></div>
+      <div class="naik">Kenaikan tertinggi<b>${up ? `Pukul ${rentang4(up.j)} sebanyak ${nf4(up.d)}` : 'Tidak ada kenaikan'}</b></div>
+      <div class="turun">Penurunan tertinggi<b>${dn ? `Pukul ${rentang4(dn.j)} sebanyak −${nf4(-dn.d)}` : 'Tidak ada penurunan'}</b></div></div>
+      ${grafik4(K.h, K.t, akhir)}</section>`;
+  });
+  const tj = J4_KAT.map(K => (R.tanpaJam[K.k] || [0, 0])[0]).reduce((a, b) => a + b, 0);
+  if (tj) html += `<div class="j4note">${nf4(tj)} event hari ini tanpa jam kejadian (data GPS) tidak ikut di laporan per jam.</div>`;
+  html += `<div class="j4note">Kenaikan / penurunan tertinggi = selisih event hari ini dibanding jam sebelumnya. Total H-1 di kotak analisis dan baris TOTAL tabel per jam = sehari penuh.</div>`;
+  return html;
+}
+let MINTA4 = 0;
+function tampil4() {
+  const t = $('fTgl').value; if (!t) return;
+  const id = ++MINTA4;
+  $('tSub').textContent = 'Per 4 jam · ' + tglPanjang(t) + ' · ' + ($('fLok').value ? judul($('fLok').value) : $('fArea').value ? judul($('fArea').value) : 'Nasional');
+  $('isi').innerHTML = '<div class="loading"><span class="spin"></span>Menyiapkan laporan per 4 jam…</div>'; $('btnPdf').disabled = true;
+  run('lhPer4Jam', TOKEN, t, $('fArea').value, $('fLok').value).then(j => {
+    if (id !== MINTA4) return;
+    const R = JSON.parse(j); $('isi').innerHTML = gambar4(R);
+    LAP = {mode: 'per4jam', periode: t, area: R.area || '', lokasi: R.lokasi || R.area || 'Nasional', baris: R.lokasi ? 'Lokasi' : 'Area'};
+    $('btnPdf').disabled = false;
+  }).catch(e => { if (id !== MINTA4 || cekLogin(e)) return; $('isi').innerHTML = `<div class="errbar">Gagal: ${esc(pesan(e))}</div>`; });
 }
 
 /* ================= TAMPILAN ================= */
@@ -1341,7 +1465,7 @@ $('btnPdf').onclick = async () => {
     box = document.createElement('div'); box.id = 'pdfWrap';
     box.innerHTML = `<div class="pdfhead"><div class="brandbar">${document.querySelector('.hero .brandbar').innerHTML}</div>
       <div class="pdfwaktu">Waktu export<b>${esc(waktuEkspor(waktu))}</b></div>
-      <div class="eyebrow" style="margin-top:14px">${esc($('tEyebrow').textContent)}</div><h1>Laporan Operasional GPS &amp; Dashcam</h1><div class="sub">${esc($('tSub').textContent)}</div></div>
+      <div class="eyebrow" style="margin-top:14px">${esc($('tEyebrow').textContent)}</div><h1>${esc(document.querySelector('.hero h1').textContent)}</h1><div class="sub">${esc($('tSub').textContent)}</div></div>
       <div class="wrap">${$('isi').innerHTML}</div>`;
     document.body.appendChild(box);
     await Promise.all([...box.querySelectorAll('img')].map(im => im.complete ? 0 : new Promise(ok => { im.onload = im.onerror = ok; })));
@@ -1372,11 +1496,11 @@ $('btnPdf').onclick = async () => {
       pdf.setFontSize(8); pdf.setTextColor(115, 123, 118); pdf.text(`Halaman ${i + 1} / ${potong.length}`, 200, 292, {align: 'right'});
     });
     const per = LAP.mode === 'bulanan' ? blnPanjang(LAP.periode) : LAP.periode;
-    const nama = `Laporan ${LAP.mode === 'bulanan' ? 'Monthly' : 'Daily'} ${LAP.baris === 'Area' ? LAP.lokasi : judul(LAP.lokasi)} ${per}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
+    const nama = `Laporan ${LAP.mode === 'bulanan' ? 'Monthly' : LAP.mode === 'per4jam' ? 'Per 4 Jam' : 'Daily'} ${LAP.baris === 'Area' ? LAP.lokasi : judul(LAP.lokasi)} ${per}.pdf`.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ');
     try { pdf.save(nama); } catch (e) { window.open(pdf.output('bloburl'), '_blank'); }
     if (!pertama) run('lhCatatEkspor', TOKEN, kunci, waktu.toISOString()).catch(() => {});
     run('catatEkspor', TOKEN, {area: LAP.area || '', lokasi: LAP.baris === 'Area' ? 'Semua lokasi' : LAP.lokasi,
-      jenis: LAP.mode === 'bulanan' ? 'Monthly' : 'Daily', tanggalData: LAP.periode, waktuPdf: waktu.toISOString(), ...zonaPerangkat()}).catch(() => {});
+      jenis: LAP.mode === 'bulanan' ? 'Monthly' : LAP.mode === 'per4jam' ? 'Per 4 Jam' : 'Daily', tanggalData: LAP.periode, waktuPdf: waktu.toISOString(), ...zonaPerangkat()}).catch(() => {});
   } catch (e) { const d = document.createElement('div'); d.className = 'errbar'; d.textContent = 'Export PDF gagal: ' + pesan(e); $('isi').prepend(d); }
   finally { if (box) box.remove(); b.disabled = !LAP; b.textContent = 'Export PDF'; }
 };
