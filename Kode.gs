@@ -484,7 +484,7 @@ function buatSheetAkun() {
 }
 /* ============================== LOG EXPORT ============================== */
 const LOG_EKSPOR = 'Log Export';
-const LOG_EKSPOR_HDR = ['ID_Log', 'Area', 'Lokasi', 'Jenis Laporan', 'Tanggal Data', 'Target Pelaporan', 'Realisasi Pelaporan', 'Zona Waktu', 'Status', 'Zona Perangkat'];
+const LOG_EKSPOR_HDR = ['ID_Log', 'Area', 'Akun', 'Jenis Laporan', 'Tanggal Data', 'Target Pelaporan', 'Realisasi Pelaporan', 'Zona Waktu', 'Status', 'Zona Perangkat'];
 const TARGET_LAPOR_JAM = 7;   // Daily: H+1 pukul 07.00; Monthly: tanggal 1 bulan berikutnya pukul 07.00 (jam setempat lokasi)
 /**
  * Zona waktu resmi (selisih jam dari UTC) untuk batas pelaporan:
@@ -547,6 +547,7 @@ function catatEkspor(token, o) {
   const ses = sesi_(token); o = o || {};
   const t = x => { const v = teks(x).slice(0, 200); return /^[=+\-@]/.test(v) ? "'" + v : v; };   // cegah teks dibaca sebagai rumus
   const area = t(o.area || ses.area || ''), lokasi = t(o.lokasi || ses.lok || ''), jenis = t(o.jenis);
+  const akun = t(labelAkun_(ses));   // kolom Akun: akun yang mengunduh, mis. "Control Room FT SINTANG"
   const zona = zonaWaktu_(area, lokasi), tz = 'GMT+' + zona, fmt = x => Utilities.formatDate(x, tz, 'dd/MM/yyyy HH:mm:ss');
   const d = teks(o.tanggalData).match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/);
   let tgl = t(o.tanggalData), target = null, fmtTgl = '@';
@@ -560,7 +561,9 @@ function catatEkspor(token, o) {
   try {
     const ss = bukaAtauBuat(DriveApp.getFolderById(CFG.FOLDER_ID), LOG_EKSPOR, [[LOG_EKSPOR, LOG_EKSPOR_HDR]]);
     let sh = ss.getSheetByName(LOG_EKSPOR);
-    const n = LOG_EKSPOR_HDR.length, hdr = sh.getRange(1, 1, 1, n).getValues()[0].map(teks);
+    const n = LOG_EKSPOR_HDR.length;
+    let hdr = sh.getRange(1, 1, 1, n).getValues()[0].map(teks);
+    if (hdr[2] === 'Lokasi' && hdr[0] === 'ID_Log') { ubahKolomAkun_(sh); hdr = sh.getRange(1, 1, 1, n).getValues()[0].map(teks); }   // kolom Lokasi lama -> Akun
     if (hdr.slice(0, 7).join('|') === LOG_EKSPOR_HDR.slice(0, 7).join('|') && hdr.join('|') !== LOG_EKSPOR_HDR.join('|')) {   // format lama 7 / 9 kolom: tambah kolom baru, baris lama tetap
       sh.getRange(1, 1, 1, n).setValues([LOG_EKSPOR_HDR]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#4a7a53');
     } else if (hdr.join('|') !== LOG_EKSPOR_HDR.join('|')) {   // format kolom lain -> disimpan, buat sheet baru
@@ -573,12 +576,31 @@ function catatEkspor(token, o) {
     const no = ids.reduce((m, r) => Math.max(m, +(teks(r[0]).match(/(\d+)$/) || [0, 0])[1]), 0) + 1;
     sh.insertRowAfter(1);
     sh.getRange(2, 6, 1, 2).setNumberFormat('@');   // jam setempat sebagai teks (tidak diubah zona waktu spreadsheet)
-    sh.getRange(2, 1, 1, n).setValues([['LOG-' + ('00000' + no).slice(-6), area, lokasi, jenis, tgl, target ? fmt(target) : '', fmt(realisasi), namaZona_(zona), status, zPer]])
+    sh.getRange(2, 1, 1, n).setValues([['LOG-' + ('00000' + no).slice(-6), area, akun, jenis, tgl, target ? fmt(target) : '', fmt(realisasi), namaZona_(zona), status, zPer]])
       .setFontWeight('normal').setFontColor('#000000').setBackground(null);
     sh.getRange(2, 5).setNumberFormat(fmtTgl);
     if (status) sh.getRange(2, 9).setFontColor(status === 'Tepat waktu' ? '#2e7d32' : /^Terlambat/.test(status) ? '#c62828' : '#b26a00');
   } finally { lock.releaseLock(); }
   return true;
+}
+
+/** Nama akun seperti di dashboard: RTC / Command Center <AREA> / Control Room <LOKASI>. */
+function labelAkun_(ses) {
+  if (ses.peran === 'LOKASI') return 'Control Room ' + teks(ses.lok).toUpperCase();
+  if (ses.peran === 'AREA') return 'Command Center ' + teks(ses.area).toUpperCase();
+  return 'RTC';
+}
+/** Log Export format lama (kolom Lokasi): judul jadi Akun, isi baris lama diubah ke nama akun (Semua lokasi = RTC / Command Center area itu). */
+function ubahKolomAkun_(sh) {
+  sh.getRange(1, 3).setValue('Akun');
+  const n = sh.getLastRow() - 1; if (n < 1) return;
+  const v = sh.getRange(2, 2, n, 2).getValues();
+  sh.getRange(2, 3, n, 1).setValues(v.map(r => {
+    const a = teks(r[0]).toUpperCase(), l = teks(r[1]);
+    if (!l || /^SEMUA LOKASI$/i.test(l)) return [areaNorm(a) ? 'Command Center ' + areaNorm(a) : 'RTC'];
+    if (/^(COMMAND CENTER|CONTROL ROOM|RTC)\b/i.test(l)) return [l];
+    return ['Control Room ' + l.toUpperCase()];
+  }));
 }
 
 /**
