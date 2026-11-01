@@ -64,7 +64,27 @@ h1{margin:2px 0 4px;font-size:clamp(22px,3vw,34px);font-weight:700;letter-spacin
 #pdfWrap.j4hp .j4head{grid-template-columns:minmax(0,1fr)}
 #pdfWrap.j4hp .j4head>div+div{border-left:0;border-top:1px solid var(--axis)}
 #pdfWrap.j4hp .j4chart svg{min-width:0}
-#pdfWrap.j4hp .j4note,#pdfWrap.j4hp .j4leg{font-size:10.5px}
+#pdfWrap.j4hp .j4note,#pdfWrap.j4hp .j4leg{font-size:10px}
+#pdfWrap.j4hp .wrap{padding:8px 8px 10px;gap:8px}
+#pdfWrap.j4hp .j4{padding:9px 10px}
+#pdfWrap.j4hp .j4 h3{font-size:11.5px;margin-bottom:4px}
+#pdfWrap.j4hp .j4kat+.j4kat{margin-top:8px}
+#pdfWrap.j4hp .j4kat{grid-template-columns:minmax(0,1fr) 78px}
+#pdfWrap.j4hp .j4donut svg{width:78px;height:78px}
+#pdfWrap.j4hp .j4t td{padding:2px 4px}
+#pdfWrap.j4hp .j4t th{padding:3px 4px}
+#pdfWrap.j4hp .j4t.jam td,#pdfWrap.j4hp .j4t.jam th{padding:2px 2px}
+#pdfWrap.j4hp .j4grid{gap:10px}
+#pdfWrap.j4hp .j4sec{gap:4px}
+#pdfWrap.j4hp .j4leg{gap:2px 10px}
+#pdfWrap.j4hp .pdfhead{padding:0 14px 10px}
+#pdfWrap.j4hp .pdfhead .brandbar{transform:scale(.62);width:161%;margin-bottom:-26px}
+#pdfWrap.j4hp .pdfhead h1{font-size:17px;margin-top:6px}
+#pdfWrap.j4hp .pdfhead .eyebrow{display:none}
+#pdfWrap.j4hp .pdfwaktu{margin-top:4px}
+#pdfWrap.j4hp .pdfwaktu b{display:inline;font-size:11px;margin-left:4px}
+.j4hpana{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:10px;color:var(--ink-2)}
+.j4hpana b{color:var(--ink);font-weight:700}.j4hpana .naik b{color:var(--serious-ink)}.j4hpana .turun b{color:#1d7a3a}
 .pdfhead{background:linear-gradient(115deg,#3f6e4b 0%,var(--forest) 22%,var(--leaf) 58%,#93b833 100%);color:#fff;padding:0 24px 18px}
 .pdfhead .tab.l{margin-left:-24px;padding-left:24px}.pdfhead .tab.r{margin-right:-24px;padding-right:24px}
 .pdfhead h1{font-size:26px;margin:14px 0 2px}
@@ -1204,7 +1224,7 @@ function donut4(p, warna) {
 // grafik batang H-1 (merah) vs today (biru) per jam + garis rata-rata bergerak 2 periode
 function grafik4(h1, td, akhir, hp) {
   // hp: versi Download JPG selebar layar HP (lebih sempit, huruf lebih besar, angka di atas batang tidak ditampilkan; angkanya ada di tabel per jam)
-  const W = hp ? 720 : 1400, H = hp ? 420 : 300, L = hp ? 44 : 46, R = 10, T = 18, B = hp ? 30 : 40, iw = W - L - R, ih = H - T - B, n = 24, gw = iw / n, bw = gw * (hp ? 0.4 : 0.32), fs = hp ? 13 : 11;
+  const W = hp ? 720 : 1400, H = hp ? 250 : 300, L = hp ? 44 : 46, R = 10, T = 18, B = hp ? 30 : 40, iw = W - L - R, ih = H - T - B, n = 24, gw = iw / n, bw = gw * (hp ? 0.4 : 0.32), fs = hp ? 13 : 11;
   const tdv = td.map((v, i) => i <= akhir ? v : null), mx = Math.max(1, ...h1, ...tdv.filter(v => v !== null));
   const st = Math.pow(10, Math.floor(Math.log10(mx))), langkah = [1, 2, 2.5, 5, 10].map(x => x * st / 2).find(x => mx / x <= 8) || st, top = Math.ceil(mx / langkah) * langkah;
   const y = v => T + ih - v / top * ih, cx = i => L + gw * i + gw / 2;
@@ -1252,6 +1272,7 @@ function gambar4(R, hp) {
   // kanan: event per jam
   let aH = 0, aT = 0;
   const baris = Array.from({length: 24}, (_, j) => { aH += per.reduce((x, K) => x + K.h[j], 0); const ada = j <= akhir; if (ada) aT += per.reduce((x, K) => x + K.t[j], 0);
+    if (hp && !ada) return '';   // versi HP: hanya jam yang sudah ada data hari ini (TOTAL H-1 tetap sehari penuh)
     return `<tr><td>${rentang4(j)}</td>${per.map(K => `<td class="h1">${nf4(K.h[j])}</td><td class="td">${ada ? nf4(K.t[j]) : ''}</td>`).join('')}<td class="h1">${nf4(aH)}</td><td class="td">${ada ? nf4(aT) : ''}</td><td>${ada ? nf4(aH - aT) : ''}</td></tr>`; }).join('');
   const kanan = `<h3>Event per jam</h3><div class="tbl"><table class="j4t jam"><thead><tr><th rowspan="2" style="text-align:left">Jam</th>${per.map(K => `<th colspan="2">${K.n}</th>`).join('')}<th colspan="2">Akumulasi data</th><th rowspan="2">H-1 vs Today</th></tr>
     <tr>${per.map(() => '<th class="sub">H-1</th><th class="sub">Today</th>').join('')}<th class="sub">H-1</th><th class="sub">Today</th></tr></thead><tbody>${baris}
@@ -1266,6 +1287,11 @@ function gambar4(R, hp) {
     let up = null, dn = null;
     for (let j = 1; j <= akhir; j++) { const d = K.t[j] - K.t[j - 1]; if (d > 0 && (!up || d > up.d)) up = {j, d}; if (d < 0 && (!dn || d < dn.d)) dn = {j, d}; }
     const nama = K.params.map(p => p.p).join(', ');
+    if (hp) { html += `<section class="j4 j4sec"><h3>Analisis ${K.n}</h3>
+      <div class="j4hpana"><span>Today / H-1 <b>${nf4(jumlah4(K.t, s))} / ${nf4(jumlah4(K.h, 24))}</b></span>
+      <span class="naik">Naik tertinggi <b>${up ? `${rentang4(up.j)} (+${nf4(up.d)})` : '–'}</b></span>
+      <span class="turun">Turun tertinggi <b>${dn ? `${rentang4(dn.j)} (−${nf4(-dn.d)})` : '–'}</b></span></div>
+      ${grafik4(K.h, K.t, akhir, hp)}</section>`; return; }
     html += `<section class="j4 j4sec"><h3>Analisis perbandingan ${K.n}${nama ? ` <span style="font-weight:500;text-transform:none">(${esc(nama)})</span>` : ''}</h3>
       <div class="j4head"><div>Total data (Today / H-1)<b>${nf4(jumlah4(K.t, s))} / ${nf4(jumlah4(K.h, 24))}</b></div>
       <div class="naik">Kenaikan tertinggi<b>${up ? `Pukul ${rentang4(up.j)} sebanyak ${nf4(up.d)}` : 'Tidak ada kenaikan'}</b></div>
@@ -1274,6 +1300,7 @@ function gambar4(R, hp) {
   });
   const tj = J4_KAT.map(K => (R.tanpaJam[K.k] || [0, 0])[0]).reduce((a, b) => a + b, 0);
   if (tj) html += `<div class="j4note">${nf4(tj)} event hari ini tanpa jam kejadian (data GPS) tidak ikut di laporan per jam.</div>`;
+  if (hp) return html;
   html += `<div class="j4note">Kenaikan / penurunan tertinggi = selisih event hari ini dibanding jam sebelumnya. Total H-1 di kotak analisis dan baris TOTAL tabel per jam = sehari penuh.</div>`;
   return html;
 }
