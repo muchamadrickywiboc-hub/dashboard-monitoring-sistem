@@ -45,7 +45,7 @@ h1{margin:2px 0 4px;font-size:clamp(22px,3vw,34px);font-weight:700;letter-spacin
 #pdfWrap.j4pdf{width:1700px}   /* Laporan Per 4 Jam: satu halaman lebar */
 #pdfWrap.j4pdf .j4t th{white-space:nowrap}
 /* Download JPG (Laporan Per 4 Jam): selebar layar HP tegak, semua bagian bertumpuk satu kolom */
-#pdfWrap.j4hp{width:540px}
+#pdfWrap.j4hp{width:1000px}
 #pdfWrap.j4hp .pdfhead{padding:0 16px 14px}
 #pdfWrap.j4hp .pdfhead .brandbar{transform:scale(.8);transform-origin:left top;width:125%;margin-bottom:-10px}
 #pdfWrap.j4hp .pdfhead h1{font-size:19px;line-height:1.25;margin-top:10px}
@@ -53,38 +53,42 @@ h1{margin:2px 0 4px;font-size:clamp(22px,3vw,34px);font-weight:700;letter-spacin
 #pdfWrap.j4hp .pdfwaktu{position:static;text-align:left;margin-top:8px;font-size:11px}
 #pdfWrap.j4hp .wrap{padding:12px 10px 16px;gap:12px}
 #pdfWrap.j4hp .j4{padding:12px;border-radius:12px}
-#pdfWrap.j4hp .j4info{gap:6px 12px;font-size:11px}
-#pdfWrap.j4hp .j4grid{grid-template-columns:minmax(0,1fr);gap:14px}
+#pdfWrap.j4hp .j4info{gap:6px 16px;font-size:12px}
+#pdfWrap.j4hp .j4grid{grid-template-columns:minmax(0,46fr) minmax(0,54fr);gap:14px}
 #pdfWrap.j4hp .j4kat{grid-template-columns:minmax(0,1fr) 96px;gap:8px}
 #pdfWrap.j4hp .j4donut svg{width:96px;height:96px}
-#pdfWrap.j4hp table{font-size:10.5px}
-#pdfWrap.j4hp th{font-size:9.5px;padding:4px 3px;white-space:normal}
+#pdfWrap.j4hp table{font-size:12px}
+#pdfWrap.j4hp th{font-size:11px;padding:4px 3px;white-space:normal}
 #pdfWrap.j4hp td{padding:3px 4px}
-#pdfWrap.j4hp .j4t.jam td,#pdfWrap.j4hp .j4t.jam th{padding:3px 2px;font-size:9.5px}
+#pdfWrap.j4hp .j4t.jam td,#pdfWrap.j4hp .j4t.jam th{padding:3px 2px;font-size:11px}
 #pdfWrap.j4hp .j4head{grid-template-columns:minmax(0,1fr)}
 #pdfWrap.j4hp .j4head>div+div{border-left:0;border-top:1px solid var(--axis)}
 #pdfWrap.j4hp .j4chart svg{min-width:0}
-#pdfWrap.j4hp .j4note,#pdfWrap.j4hp .j4leg{font-size:10px}
+#pdfWrap.j4hp .j4note,#pdfWrap.j4hp .j4leg{font-size:11px}
 #pdfWrap.j4hp .wrap{padding:8px 8px 10px;gap:8px}
 #pdfWrap.j4hp .j4{padding:9px 10px}
-#pdfWrap.j4hp .j4 h3{font-size:11.5px;margin-bottom:4px}
+#pdfWrap.j4hp .j4 h3{font-size:13px;margin-bottom:4px}
 #pdfWrap.j4hp .j4kat+.j4kat{margin-top:8px}
-#pdfWrap.j4hp .j4kat{grid-template-columns:minmax(0,1fr) 78px}
-#pdfWrap.j4hp .j4donut svg{width:78px;height:78px}
+#pdfWrap.j4hp .j4kat{grid-template-columns:minmax(0,1fr) 84px}
+#pdfWrap.j4hp .j4donut svg{width:84px;height:84px}
 #pdfWrap.j4hp .j4t td{padding:2px 4px}
 #pdfWrap.j4hp .j4t th{padding:3px 4px}
 #pdfWrap.j4hp .j4t.jam td,#pdfWrap.j4hp .j4t.jam th{padding:2px 2px}
-#pdfWrap.j4hp .j4grid{gap:10px}
+#pdfWrap.j4hp .j4grid{gap:12px}
 #pdfWrap.j4hp .j4sec{gap:4px}
 #pdfWrap.j4hp .j4leg{gap:2px 10px}
 #pdfWrap.j4hp .pdfhead{padding:0 14px 10px}
-#pdfWrap.j4hp .pdfhead .brandbar{transform:scale(.62);width:161%;margin-bottom:-26px}
-#pdfWrap.j4hp .pdfhead h1{font-size:17px;margin-top:6px}
+#pdfWrap.j4hp .pdfhead .brandbar{transform:scale(.8);width:125%;margin-bottom:-14px}
+#pdfWrap.j4hp .pdfhead h1{font-size:20px;margin-top:6px}
 #pdfWrap.j4hp .pdfhead .eyebrow{display:none}
 #pdfWrap.j4hp .pdfwaktu{margin-top:4px}
 #pdfWrap.j4hp .pdfwaktu b{display:inline;font-size:11px;margin-left:4px}
-.j4hpana{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:10px;color:var(--ink-2)}
+.j4hpana{display:flex;flex-wrap:wrap;gap:2px 14px;font-size:12px;color:var(--ink-2)}
 .j4hpana b{color:var(--ink);font-weight:700}.j4hpana .naik b{color:var(--serious-ink)}.j4hpana .turun b{color:#1d7a3a}
+#pdfWrap.j4hp .j4kat .j4t td:first-child{white-space:normal;word-break:break-word;line-height:1.2}
+#pdfWrap.j4hp .j4kat .j4t td,#pdfWrap.j4hp .j4kat .j4t th{font-size:11px}
+#pdfWrap.j4hp .j4kat>*{min-width:0}
+#pdfWrap.j4hp .j4kat .j4t{width:100%;table-layout:auto}
 .pdfhead{background:linear-gradient(115deg,#3f6e4b 0%,var(--forest) 22%,var(--leaf) 58%,#93b833 100%);color:#fff;padding:0 24px 18px}
 .pdfhead .tab.l{margin-left:-24px;padding-left:24px}.pdfhead .tab.r{margin-right:-24px;padding-right:24px}
 .pdfhead h1{font-size:26px;margin:14px 0 2px}
@@ -1224,7 +1228,7 @@ function donut4(p, warna) {
 // grafik batang H-1 (merah) vs today (biru) per jam + garis rata-rata bergerak 2 periode
 function grafik4(h1, td, akhir, hp) {
   // hp: versi Download JPG selebar layar HP (lebih sempit, huruf lebih besar, angka di atas batang tidak ditampilkan; angkanya ada di tabel per jam)
-  const W = hp ? 720 : 1400, H = hp ? 250 : 300, L = hp ? 44 : 46, R = 10, T = 18, B = hp ? 30 : 40, iw = W - L - R, ih = H - T - B, n = 24, gw = iw / n, bw = gw * (hp ? 0.4 : 0.32), fs = hp ? 13 : 11;
+  const W = hp ? 900 : 1400, H = hp ? 230 : 300, L = hp ? 44 : 46, R = 10, T = 18, B = hp ? 30 : 40, iw = W - L - R, ih = H - T - B, n = 24, gw = iw / n, bw = gw * (hp ? 0.4 : 0.32), fs = hp ? 13 : 11;
   const tdv = td.map((v, i) => i <= akhir ? v : null), mx = Math.max(1, ...h1, ...tdv.filter(v => v !== null));
   const st = Math.pow(10, Math.floor(Math.log10(mx))), langkah = [1, 2, 2.5, 5, 10].map(x => x * st / 2).find(x => mx / x <= 8) || st, top = Math.ceil(mx / langkah) * langkah;
   const y = v => T + ih - v / top * ih, cx = i => L + gw * i + gw / 2;
