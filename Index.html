@@ -270,6 +270,18 @@ tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
 .more{align-self:flex-start;font:600 13px var(--f-ui);border:1px solid var(--forest);background:#fff;color:var(--forest);padding:7px 14px;border-radius:8px;cursor:pointer}
 .more:hover{background:var(--accent-wash)}
 .pick select optgroup{font-weight:700}
+/* pilihan bercentang (filter Event, nanti juga Project) */
+.msel{position:relative;display:inline-block}
+.msbtn{font:600 13.5px var(--f-ui);color:var(--ink);background:#fff;border:0;border-radius:8px;padding:7px 30px 7px 12px;cursor:pointer;min-width:190px;max-width:280px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
+.msbtn::after{content:"";position:absolute;right:12px;top:50%;width:7px;height:7px;border-right:2px solid var(--ink);border-bottom:2px solid var(--ink);transform:translateY(-70%) rotate(45deg)}
+.mspop{position:absolute;z-index:60;top:calc(100% + 6px);left:0;width:290px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:10px;color:var(--ink);font-weight:500}
+.mscari{width:100%;box-sizing:border-box;font:500 13.5px var(--f-ui);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.msacts{display:flex;gap:8px;margin:8px 0 4px}.msacts button{font:600 12px var(--f-ui);border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;color:var(--forest)}
+.mslist{max-height:340px;overflow-y:auto}
+.msgrp{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:8px 6px 4px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.msopt{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13.5px}.msopt:hover{background:var(--accent-wash)}
+.msopt input,.msgrp input{width:16px;height:16px;accent-color:var(--forest);margin:0;cursor:pointer}
+.mskosong{padding:8px;font-size:13px;color:var(--muted)}
 th.urut{cursor:pointer;user-select:none;white-space:nowrap}th.urut:hover{text-decoration:underline}
 #breg tbody tr[data-r]:hover td,#blok tbody tr[data-k]:hover td{background:var(--accent-wash)}
 .nodata #view-bulan,.nodata .filters,.nodata .ctrlrow .pick{display:none!important}
@@ -425,7 +437,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
       <label class="pick" for="selShift">Shift <select id="selShift"></select></label>
       <label class="pick" for="selJam">Jam <select id="selJam"></select></label><span class="tglket" id="tglKet"></span>
       <label class="pick" for="selCmp">Dibanding <select id="selCmp"></select></label>
-      <label class="pick" for="selEvt">Event <select id="selEvt"><option value="">Pilih event…</option></select></label>
+      <span class="pick">Event <span class="msel" id="msEvt"><button type="button" class="msbtn" id="selEvt" aria-haspopup="true" aria-expanded="false">Pilih event…</button><div class="mspop" hidden><input type="search" class="mscari" placeholder="Cari event…" aria-label="Cari event"><div class="msacts"><button type="button" data-a="semua">Pilih semua</button><button type="button" data-a="hapus">Hapus pilihan</button></div><div class="mslist" role="group" aria-label="Daftar event"></div></div></span></span>
     </div>
     <div class="ctrlrow" id="waktuRow">
       <span class="flabel">Waktu:</span>
@@ -1102,8 +1114,31 @@ function kontrolTanggal() {
 }
 document.getElementById('selMon').onchange = e => { mon = +e.target.value; tgl = tgl2 = 0; ERRW = ''; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
-document.getElementById('selEvt').onchange = e => { EVT = e.target.value; render(); if (EVT) document.getElementById('panelEvt').scrollIntoView({behavior: 'smooth', block: 'nearest'}); };
-document.getElementById('evtTutup').onclick = () => { EVT = ''; render(); };
+// pilihan bercentang: host = .msel, grup() -> [{nama, item: [{k, n}]}], S = Set kunci terpilih, ubah() dipanggil tiap centang berubah
+function pasangMulti(host, grup, S, ubah) {
+  const btn = host.querySelector('.msbtn'), pop = host.querySelector('.mspop'), cari = pop.querySelector('.mscari'), list = pop.querySelector('.mslist');
+  const isi = () => { const q = cari.value.trim().toLowerCase(); let h = '';
+    grup().forEach((g, gi) => { const it = g.item.filter(o => !q || o.n.toLowerCase().indexOf(q) >= 0); if (!it.length) return;
+      const semua = it.every(o => S.has(o.k)), ada = it.some(o => S.has(o.k));
+      if (g.nama) h += `<label class="msgrp"><input type="checkbox" data-g="${gi}" ${semua ? 'checked' : ''} ${!semua && ada ? 'data-sebagian="1"' : ''}>${escH(g.nama)}</label>`;
+      h += it.map(o => `<label class="msopt"><input type="checkbox" value="${escH(o.k)}" ${S.has(o.k) ? 'checked' : ''}>${escH(o.n)}</label>`).join(''); });
+    list.innerHTML = h || '<div class="mskosong">Tidak ada yang cocok.</div>';
+    list.querySelectorAll('[data-sebagian]').forEach(x => { x.indeterminate = true; }); };
+  const buka = v => { pop.hidden = !v; btn.setAttribute('aria-expanded', v); if (v) { cari.value = ''; isi(); cari.focus(); } };
+  btn.onclick = e => { e.stopPropagation(); buka(pop.hidden); };
+  pop.onclick = e => e.stopPropagation();
+  document.addEventListener('click', () => buka(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) { buka(false); btn.focus(); } });
+  cari.oninput = isi;
+  list.onchange = e => { const x = e.target, q = cari.value.trim().toLowerCase();
+    if (x.dataset.g !== undefined) grup()[+x.dataset.g].item.filter(o => !q || o.n.toLowerCase().indexOf(q) >= 0).forEach(o => x.checked ? S.add(o.k) : S.delete(o.k));
+    else x.checked ? S.add(x.value) : S.delete(x.value);
+    isi(); ubah(); };
+  pop.querySelector('.msacts').onclick = e => { const a = e.target.dataset.a; if (!a) return;
+    grup().forEach(g => g.item.forEach(o => a === 'semua' ? S.add(o.k) : S.delete(o.k))); isi(); ubah(); };
+  return {isi};
+}
+document.getElementById('evtTutup').onclick = () => { EVTS.clear(); render(); };
 function aturPeriode(p) { PERIODE = p; try { localStorage.setItem('dashb_periode', p); } catch (e) { /* tanpa penyimpanan */ }
   document.getElementById('perBln').setAttribute('aria-selected', p === 'bulan'); document.getElementById('perThn').setAttribute('aria-selected', p === 'tahun'); render(); }
 // tombol Bulan/Tahun disembunyikan: selalu per bulan (pilihan Tahun yang tersimpan diabaikan)
@@ -1128,21 +1163,23 @@ function render() {
 
 /* ================= FILTER EVENT: PERKEMBANGAN SATU EVENT PER TANGGAL ================= */
 // EVD[bulan]: hasil getDataEvent (bentuk data utama; kolom "bulan" di fakta = tanggal), 'muat' saat dimuat, {gagal} bila gagal.
-let EVT = '', EVD = {};
+const EVTS = new Set(); let EVD = {};
 const escH = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+const MS_EVT = pasangMulti(document.getElementById('msEvt'), () => CATS.map(c => ({nama: c.name, item: catParams(c.key).map(p => ({k: p.key, n: p.label}))})).filter(g => g.item.length), EVTS,
+  () => { const ada = !!EVTS.size, baru = ada && document.getElementById('panelEvt').hidden; render(); if (baru) document.getElementById('panelEvt').scrollIntoView({behavior: 'smooth', block: 'nearest'}); });
 function muatEvent(m) {
   if (m === null || EVD[m]) return;
   EVD[m] = 'muat';
   muatLayar(1, 'Memuat data event…');
-  google.script.run.withSuccessHandler(j => { muatLayar(-1); EVD[m] = siapkanWin(JSON.parse(j)); if (EVT) render(); })
-    .withFailureHandler(e => { muatLayar(-1); if (perluLogin(e)) return; EVD[m] = {gagal: e && e.message ? e.message : String(e)}; if (EVT) render(); })
+  google.script.run.withSuccessHandler(j => { muatLayar(-1); EVD[m] = siapkanWin(JSON.parse(j)); if (EVTS.size) render(); })
+    .withFailureHandler(e => { muatLayar(-1); if (perluLogin(e)) return; EVD[m] = {gagal: e && e.message ? e.message : String(e)}; if (EVTS.size) render(); })
     .getDataEvent(TOKEN, m);
 }
 function pilihanEvent() {
-  const el = document.getElementById('selEvt');
-  if (EVT && !P.some(p => p.key === EVT)) EVT = '';
-  el.innerHTML = '<option value="">Pilih event…</option>' + CATS.map(c => `<optgroup label="${c.name}">${catParams(c.key).map(p => `<option value="${escH(p.key)}">${escH(p.label)}</option>`).join('')}</optgroup>`).join('');
-  el.value = EVT;
+  [...EVTS].forEach(k => { if (!P.some(p => p.key === k)) EVTS.delete(k); });   // event yang tidak ada di data akun ini dibuang
+  const pil = P.filter(p => EVTS.has(p.key)), el = document.getElementById('selEvt');
+  el.textContent = !pil.length ? 'Pilih event…' : pil.length === 1 ? pil[0].label : pil.length === P.length ? `Semua event (${pil.length})` : `${pil.length} event dipilih`;
+  el.title = pil.map(p => p.label).join(', ');
 }
 // jumlah event terpilih per tanggal di bulan m (sesuai filter area / lokasi); null bila datanya belum ada
 function evtHarian(m) {
@@ -1151,7 +1188,7 @@ function evtHarian(m) {
   const n = nHari(m), out = Array(n).fill(0), A = RAW.areas;
   w.fakta.forEach(([d, ai, wl, pi, v]) => {
     const p = w.params[pi], li = w.lokMap[wl];
-    if (!p || p.key !== EVT || d < 1 || d > n || !cocokReg(A[ai]) || (selLok >= 0 && li !== selLok)) return;
+    if (!p || !EVTS.has(p.key) || d < 1 || d > n || !cocokReg(A[ai]) || (selLok >= 0 && li !== selLok)) return;
     out[d - 1] += v;
   });
   const hari = (w.bulanAda || []).filter(d => d >= 1 && d <= n);   // tanggal yang ada datanya (semua event)
@@ -1160,9 +1197,12 @@ function evtHarian(m) {
 function renderEvent() {
   const panel = document.getElementById('panelEvt');
   pilihanEvent();
-  panel.hidden = !EVT;
-  if (!EVT) return;
-  const p = P.find(x => x.key === EVT), c = CATS.find(x => x.key === p.kat) || CATS[0], pm = prevM();
+  panel.hidden = !EVTS.size;
+  if (!EVTS.size) return;
+  // satu event: nama & warna kategorinya; beberapa event: jumlah gabungan, warna kategori bila semuanya satu kategori
+  const pil = P.filter(x => EVTS.has(x.key)), kat = pil.map(x => x.kat).filter((v, i, a) => a.indexOf(v) === i);
+  const c0 = kat.length === 1 ? CATS.find(x => x.key === kat[0]) || CATS[0] : {name: kat.length + ' kategori', color: '#7f9a84', dark: '#3d5c43'};
+  const p = {label: pil.length === 1 ? pil[0].label : pil.length + ' event'}, c = c0, pm = prevM();
   muatEvent(mon); muatEvent(pm);
   document.getElementById('evtH').textContent = `Perkembangan ${p.label} per tanggal — ${BLN[mon]} ${D.tahun}`;
   const sub = document.getElementById('evtSub'), host = document.getElementById('evtChart'), leg = document.getElementById('evtLeg');
@@ -1182,7 +1222,7 @@ function renderEvent() {
   const persen = avg ? b / avg * 100 : 0, arah = Math.abs(persen) < 0.5 ? 'cenderung stabil' : b > 0 ? 'cenderung naik' : 'cenderung turun';
   const pIdx = prv ? prv.v.map((_, i) => i).filter(i => prv.ada[i]) : [], pavg = pIdx.length ? sum(pIdx.map(i => prv.v[i])) / pIdx.length : null;
   const chg = (a, b0) => b0 === null || b0 === undefined ? '' : naikTxt(a, b0);
-  sub.innerHTML = `${scope()} · ${p.label} (${c.name}) · ${idx.length} tanggal ada data · batang = event per tanggal, garis merah = tren${prv ? `, garis putus-putus = ${BLN[pm]} (tanggal yang sama)` : ''}`;
+  sub.innerHTML = `${scope()} · ${pil.length === 1 ? `${p.label} (${c.name})` : `Gabungan ${pil.map(x => x.label).join(', ')}`} · ${idx.length} tanggal ada data · batang = event per tanggal, garis merah = tren${prv ? `, garis putus-putus = ${BLN[pm]} (tanggal yang sama)` : ''}`;
   leg.innerHTML = `<div class="evtstat">
     <div><small>Tren harian</small><b class="${b > 0 && arah !== 'cenderung stabil' ? 'up' : arah === 'cenderung stabil' ? 'flat' : 'down'}">${arah}</b><br><span class="hint">${b >= 0 ? '+' : '\u2212'}${nf(Math.abs(b))} event/hari (${d1(Math.abs(persen))}%)</span></div>
     <div><small>Tanggal ${iAkhir + 1} vs ${iSebelum === null ? '–' : iSebelum + 1}</small><b>${nf(cur.v[iAkhir])}</b><br>${iSebelum === null ? '' : chg(cur.v[iAkhir], cur.v[iSebelum])}</div>
@@ -1657,7 +1697,7 @@ document.getElementById('selMaster').onchange = e => {
   muatLayar(1, 'Pindah akun…');
   google.script.run.withSuccessHandler(j => {
     muatLayar(-1); const a = JSON.parse(j); TOKEN = a.token; MASTER_TOKEN = TOKEN; simpanToken(TOKEN);
-    WKEY = ''; WIN = null; tgl = tgl2 = 0; shift = 0; jam = -1; EVT = '';
+    WKEY = ''; WIN = null; tgl = tgl2 = 0; shift = 0; jam = -1; EVTS.clear();
     muat();
   }).withFailureHandler(err => { muatLayar(-1); if (perluLogin(err)) return; document.getElementById('akunNama').textContent = 'Gagal pindah akun: ' + (err && err.message ? err.message : err); }).masukSebagai(TOKEN, u);
 };

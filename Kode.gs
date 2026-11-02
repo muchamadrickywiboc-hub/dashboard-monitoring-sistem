@@ -61,15 +61,16 @@ const TIPE = {
   'DISTRACTION MENGEMUDI': 'CCTV', 'SEAT BELT': 'CCTV', 'SOS': 'GPS',
 };
 /** Parameter yang hanya tampil untuk akun RTC (PUSAT); akun Area & Lokasi tidak menerimanya sama sekali (nama parameter huruf besar). */
-const PARAM_KHUSUS_RTC = ['SOS', 'SEAT BELT'];
+const PARAM_KHUSUS_RTC = [];   // dikosongkan 2 Nov 2026: semua event terbuka untuk semua akun (dulu: SOS, SEAT BELT)
 /** Parameter yang tidak ditampilkan untuk akun Area (Command Center) & Lokasi (Control Room); keduanya hanya melihat 9 event + GPS/Dashcam Offline di Laporan Harian. */
-const PARAM_SEMBUNYI_LOKASI = ['ILLEGAL SHUTDOWN', 'CAMERA COVERING', 'MICROSLEEP', 'DRIVING > 4 HOURS', 'DISTRACTION MENGEMUDI'];
+const PARAM_SEMBUNYI_LOKASI = [];   // dikosongkan 2 Nov 2026 (dulu: ILLEGAL SHUTDOWN, CAMERA COVERING, MICROSLEEP, DRIVING > 4 HOURS, DISTRACTION MENGEMUDI)
 /** Nama event yang tampil di dashboard dan export (nama parameter huruf besar -> label). Kunci parameter tetap mengikuti sheet Pemetaan. */
 const LABEL_EVENT = {
   'OVER SPEED': 'Overspeed', 'HARSH BRAKING': 'Harsh Brake', 'HARSH ACCELERATION': 'Harsh Acceleration', 'HARSH TURN / CORNERING': 'Harsh Cornering',
   'IDLING': 'Idle', 'DRIVING > 4 HOURS': 'Drive > 4 Hr', 'BLACK ZONE': 'Blackzone',
   'MICROSLEEP': 'Microsleep', 'MENGUAP': 'Menguap', 'MEROKOK / VAPE': 'Merokok', 'MENGGUNAKAN TELEPON': 'Menggunakan Telepon',
   'DISTRACTION MENGEMUDI': 'Driver Distracted', 'SEAT BELT': 'Seat Belt Detection',
+  'CAMERA COVERING': 'Camera Covering', 'ILLEGAL SHUTDOWN': 'Illegal Shutdown',
 };
 
 /* ============================== MENU ============================== */
@@ -107,7 +108,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-10-31a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-11-02a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -227,7 +228,7 @@ function getDashboardData(token) {
   if (ses.peran === 'PUSAT') {
     return 'Z' + JSON.stringify({ nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }) + '\n' + dataUtamaZ_();
   }
-  const kunci = 'SZ_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|v2|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
+  const kunci = 'SZ_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|v3|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
   let z = ambilCache_(kunci);
   if (!z) { z = zip_(potongJson_(dataUtama_(), ses, 'SC_')); simpanCache_(z, kunci, 900); }
   return 'Z\n' + z;
@@ -411,6 +412,7 @@ function potongCakupan_(d, ses) {
 /** Parameter dalam `daftar` dibuang (params, fakta, driver) dan bagian hariannya (`kurangHarian`) dikurangkan dari total harian per kategori.
  *  Akun Area & Lokasi: PARAM_KHUSUS_RTC dan PARAM_SEMBUNYI_LOKASI. */
 function buangParam_(d, daftar, kurangHarian) {
+  if (!daftar || !daftar.length) return d;   // daftar kosong: tidak ada yang dibuang (data cache lama pun tidak dikurangi)
   const P = d.params || [], baru = [], ganti = P.map(p => daftar.indexOf(teks(p.key).toUpperCase()) >= 0 ? -1 : baru.push(p) - 1);
   if (kurangHarian && kurangHarian.length) {
     const kurang = {}; kurangHarian.forEach(r => { kurang[r.slice(0, 4).join('|')] = r; });
@@ -426,7 +428,7 @@ function buangParam_(d, daftar, kurangHarian) {
 function potongJson_(json, ses, awalan) {
   // Pusat: data utuh + info akun, tanpa parse/stringify ulang data yang besar
   if (ses.peran === 'PUSAT') return json.replace(/\}\s*$/, ',"akun":' + JSON.stringify({ nama: ses.nama, peran: ses.peran, area: ses.area || '', lok: ses.lok || '' }) + '}');
-  const kunci = awalan + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|v2|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
+  const kunci = awalan + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ses.peran + '|v3|' + (ses.area || '') + '|' + (ses.lok || ''))).slice(0, 16);
   const ada = ambilCache_(kunci);
   if (ada) return ada;
   const out = JSON.stringify(potongCakupan_(JSON.parse(json), ses));
@@ -769,9 +771,10 @@ function sinkronPemetaan_(ss) {
     const v = sc.getRange(1, 1, sc.getLastRow(), 1).getValues();
     v.forEach((r, i) => {
       const x = teks(r[0]);
-      if (/^Driver Discipline:/.test(x) && !/Distraction/.test(x)) sc.getRange(i + 1, 1).setValue('Driver Discipline: Blackzone=BLACKZONE, Idle=IDLE, Menggunakan Telepon=PHONE DETECTION, Merokok=SMOKING DETECTION, Distraction Mengemudi=DRIVER DISTRACTION, Seat Belt Detection=SEAT BELT DETECTION / DRIVER IS NOT USING SEAT-BELT.');
+      if (/^Driver Discipline:/.test(x) && !/Camera Covering/.test(x)) sc.getRange(i + 1, 1).setValue('Driver Discipline: Blackzone=BLACKZONE, Idle=IDLE, Menggunakan Telepon=PHONE DETECTION, Merokok=SMOKING DETECTION, Distraction Mengemudi=DRIVER DISTRACTION, Seat Belt Detection=SEAT BELT DETECTION / DRIVER IS NOT USING SEAT-BELT, Camera Covering=CAMERA COVERING ALARM, Illegal Shutdown=ILLEGAL SHUTDOWN.');
+      else if (/^Tidak dihitung:/.test(x) && /CAMERA COVERING|ILLEGAL SHUTDOWN/.test(x)) sc.getRange(i + 1, 1).setValue('Tidak dihitung: REST AREA, VIDEO LOSS / HIGH SPEED / ABNORMAL STORAGE ALARM.');
       else if (/^Fatigue Management:/.test(x) && /Microsleep/.test(x)) sc.getRange(i + 1, 1).setValue('Fatigue Management: Fatigue=DRIVER FATIGUE, Menguap=YAWNING DETECTION / DRIVER HAS BEEN YAWNING.');
-      else if (/^Parameter lain:/.test(x)) sc.getRange(i + 1, 1).setValue('Tidak dihitung: CAMERA COVERING ALARM, ILLEGAL SHUTDOWN, REST AREA, VIDEO LOSS / HIGH SPEED / ABNORMAL STORAGE ALARM.');
+      else if (/^Parameter lain:/.test(x)) sc.getRange(i + 1, 1).setValue('Tidak dihitung: REST AREA, VIDEO LOSS / HIGH SPEED / ABNORMAL STORAGE ALARM.');
     });
   }
   return n;
@@ -1280,6 +1283,11 @@ const KASUS_WAJIB = {
   'DRIVER DISTRACTION': ['Distraction Mengemudi', 'Driver Discipline'],
   'SEAT BELT DETECTION': ['Seat Belt', 'Driver Discipline'], 'SEATBELT DETECTION': ['Seat Belt', 'Driver Discipline'],
   'DRIVER IS NOT USING SEAT-BELT': ['Seat Belt', 'Driver Discipline'],
+  // 2 Nov 2026: Camera Covering & Illegal Shutdown ikut dihitung di Driver Discipline (sebelumnya tidak dihitung)
+  'CAMERA COVERING ALARM': ['Camera Covering', 'Driver Discipline'], 'CAMERA COVERING': ['Camera Covering', 'Driver Discipline'],
+  'CAMERA COVER': ['Camera Covering', 'Driver Discipline'], 'CAMERA HAS BEEN COVERED': ['Camera Covering', 'Driver Discipline'],
+  'ILLEGAL SHUTDOWN': ['Illegal Shutdown', 'Driver Discipline'], 'ILLEGAL SHUT DOWN': ['Illegal Shutdown', 'Driver Discipline'],
+  'ILLEGAL SHUTDOWN ALARM': ['Illegal Shutdown', 'Driver Discipline'],
 };
 /** Menyeragamkan teks Case: huruf besar; "Blackzone Alarm - <nama zona>" -> "BLACKZONE ALARM"; "Over Speed Alarm (62 Km/H)" -> "OVER SPEED ALARM"; "Harsh Cornering Alarm (0.08G)" -> "HARSH CORNERING ALARM". */
 function normKasus(x) {
