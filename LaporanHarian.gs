@@ -137,6 +137,28 @@ function cakupanLH_(ses, area, lokasi) {
 const cocokLH_ = (c, lok, area) => c.lok ? kunciLok(lok) === kunciLok(c.lok) : !c.area || area === c.area;
 
 /**
+ * Isi tabel Laporan Per 4 Jam: urutan, nama, dan kategori tetap (mengikuti format laporan RTC).
+ * p = nama parameter di sheet Pemetaan yang masuk ke baris itu (dibandingkan tanpa spasi/tanda baca, huruf besar).
+ * Driving > 4 Hours masuk Fatigue Management hanya di laporan ini; Distraction, Camera Covering, SOS tidak ditampilkan.
+ */
+const L4_EVENT = [
+  { k: 'DB', n: 'Harsh Acceleration', p: ['HARSH ACCELERATION'] },
+  { k: 'DB', n: 'Harsh Breaking', p: ['HARSH BRAKING', 'HARSH BREAKING', 'HARSH BRAKE'] },
+  { k: 'DB', n: 'Harsh Turn', p: ['HARSH TURN / CORNERING', 'HARSH TURN', 'HARSH CORNERING'] },
+  { k: 'DB', n: 'Overspeed', p: ['OVER SPEED', 'OVERSPEED'] },
+  { k: 'DD', n: 'Blackzone', p: ['BLACK ZONE', 'BLACKZONE'] },
+  { k: 'DD', n: 'MT Idle', p: ['IDLING', 'IDLE', 'MT IDLE'] },
+  { k: 'DD', n: 'Phone Detection', p: ['MENGGUNAKAN TELEPON', 'PHONE DETECTION', 'TELEPON'] },
+  { k: 'DD', n: 'Seatbelt Detection', p: ['SEAT BELT', 'SEATBELT', 'SEAT BELT DETECTION'] },
+  { k: 'DD', n: 'Smoking Detection', p: ['MEROKOK / VAPE', 'MEROKOK', 'SMOKING DETECTION'] },
+  { k: 'FM', n: 'Driver Fatigue', p: ['MICROSLEEP', 'DRIVER FATIGUE', 'FATIGUE'] },
+  { k: 'FM', n: 'Driving >4 Hours', p: ['DRIVING > 4 HOURS', 'DRIVE > 4 HR', 'DRIVING > 4 HRS'] },
+  { k: 'FM', n: 'Yawning Detection', p: ['MENGUAP', 'YAWNING DETECTION'] },
+];
+const kunciL4_ = x => String(x == null ? '' : x).toUpperCase().replace(/[^A-Z0-9>]/g, '');
+const PETA_L4 = {}; L4_EVENT.forEach((e, i) => e.p.forEach(p => { PETA_L4[kunciL4_(p)] = i; }));
+
+/**
  * LAPORAN PER 4 JAM (akun RTC): event per jam per parameter pada tanggal terpilih ("today") dan sehari sebelumnya (H-1),
  * dari data jam yang sama dengan filter jam dashboard (file "Jam <nn> ..." / sheet Event Jam file Tarikan).
  * Hasil: { tanggal, h1, jamAkhir (jam terakhir yang sudah ada data hari itu, -1 = belum ada), kat: [{k, params: [{p, t: [24], h: [24], h2 (H-2 jam 23)}]}], tanpaJam }.
@@ -147,7 +169,7 @@ function lhPer4Jam(token, tanggal, area, lokasi) {
   const tg = tanggalTeks(teks(tanggal));
   if (!tg) throw new Error('Tanggal tidak valid.');
   const m = tg.m, d = tg.d, c = cakupanLH_(ses, area, lokasi);
-  const kunci = 'L4J2_' + versiData_() + '_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, [m, d, c.area, c.lok].join('|'))).slice(0, 16);
+  const kunci = 'L4J3_' + versiData_() + '_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, [m, d, c.area, c.lok].join('|'))).slice(0, 16);
   const ada = ambilCache_(kunci);
   if (ada) return ada;
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID), S = sumberBulan_(folder);
@@ -158,22 +180,23 @@ function lhPer4Jam(token, tanggal, area, lokasi) {
   const J = jamBln(m), mp = d > 1 ? m : m - 1, dp = d > 1 ? d - 1 : (m > 0 ? new Date(CFG.TAHUN, m, 0).getDate() : 0), JP = mp === m ? J : jamBln(mp);
   // H-2 (hanya jam 23.00): rentang 23:00-03:00 H-1 dimulai di hari sebelumnya
   const mq = dp > 1 ? mp : mp - 1, dq = !dp ? 0 : dp > 1 ? dp - 1 : (mp > 0 ? new Date(CFG.TAHUN, mp, 0).getDate() : 0), JQ = mq === mp ? JP : mq === m ? J : jamBln(mq);
-  const kat = {}; peta.urut.forEach(o => { if (o.k === 'DB' || o.k === 'DD' || o.k === 'FM') kat[o.p] = o.k; });
-  const H = {}, TJ = { DB: [0, 0], DD: [0, 0], FM: [0, 0] };
+  // parameter Pemetaan -> baris laporan (L4_EVENT); parameter di luar daftar tidak dihitung di laporan ini
+  const brs = {}; peta.urut.forEach(o => { const i = PETA_L4[kunciL4_(o.p)]; if (i !== undefined) brs[o.p] = i; });
+  const H = L4_EVENT.map(() => [new Array(24).fill(0), new Array(24).fill(0), new Array(24).fill(0)]), TJ = { DB: [0, 0], DD: [0, 0], FM: [0, 0] };
   const tambah = (X, dd, b) => X.EJ.forEach(e => {
-    if (e[0] !== dd || !kat[e[4]] || !cocokLH_(c, e[3], e[2])) return;
-    if (e[1] < 0 || e[1] > 23) { if (b < 2) TJ[kat[e[4]]][b] += e[5]; return; }   // event tanpa jam kejadian: tidak bisa ditaruh per jam
+    const i = brs[e[4]];
+    if (e[0] !== dd || i === undefined || !cocokLH_(c, e[3], e[2])) return;
+    if (e[1] < 0 || e[1] > 23) { if (b < 2) TJ[L4_EVENT[i].k][b] += e[5]; return; }   // event tanpa jam kejadian: tidak bisa ditaruh per jam
     if (b === 2 && e[1] !== 23) return;
-    const o = H[e[4]] || (H[e[4]] = [new Array(24).fill(0), new Array(24).fill(0), new Array(24).fill(0)]); o[b][e[1]] += e[5];
+    H[i][b][e[1]] += e[5];
   });
   tambah(J, d, 0); if (dp) tambah(JP, dp, 1); if (dq) tambah(JQ, dq, 2);
   let jamAkhir = -1;
-  Object.keys(H).forEach(p => H[p][0].forEach((n, j) => { if (n && j > jamAkhir) jamAkhir = j; }));
-  const urut = peta.urut.map(o => o.p).filter(p => H[p] && (H[p][0].some(Boolean) || H[p][1].some(Boolean)));
+  H.forEach(o => o[0].forEach((n, j) => { if (n && j > jamAkhir) jamAkhir = j; }));
   const out = {
     tanggal: teks(tanggal), h1: dp ? CFG.TAHUN + '-' + ('0' + (mp + 1)).slice(-2) + '-' + ('0' + dp).slice(-2) : '',
     area: c.area, lokasi: c.lok, jamAkhir: jamAkhir, tanpaJam: TJ,
-    kat: ['DB', 'DD', 'FM'].map(k => ({ k: k, params: urut.filter(p => kat[p] === k).map(p => ({ p: p, t: H[p][0], h: H[p][1], h2: H[p][2][23] })) })),
+    kat: ['DB', 'DD', 'FM'].map(k => ({ k: k, params: L4_EVENT.map((e, i) => e.k === k ? { p: e.n, t: H[i][0], h: H[i][1], h2: H[i][2][23] } : null).filter(Boolean) })),
     dibuat: new Date().toISOString(),
   };
   const json = JSON.stringify(out);
