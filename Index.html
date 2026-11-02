@@ -438,6 +438,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
       <label class="pick" for="selJam">Jam <select id="selJam"></select></label><span class="tglket" id="tglKet"></span>
       <label class="pick" for="selCmp">Dibanding <select id="selCmp"></select></label>
       <span class="pick">Event <span class="msel" id="msEvt"><button type="button" class="msbtn" id="selEvt" aria-haspopup="true" aria-expanded="false">Pilih event…</button><div class="mspop" hidden><input type="search" class="mscari" placeholder="Cari event…" aria-label="Cari event"><div class="msacts"><button type="button" data-a="semua">Pilih semua</button><button type="button" data-a="hapus">Hapus pilihan</button></div><div class="mslist" role="group" aria-label="Daftar event"></div></div></span></span>
+      <span class="pick" id="pickPj" hidden>Project <span class="msel" id="msPj"><button type="button" class="msbtn" id="selPj" aria-haspopup="true" aria-expanded="false">Semua project</button><div class="mspop" hidden><input type="search" class="mscari" placeholder="Cari project…" aria-label="Cari project"><div class="msacts"><button type="button" data-a="semua">Pilih semua</button><button type="button" data-a="hapus">Hapus pilihan</button></div><div class="mslist" role="group" aria-label="Daftar project"></div></div></span></span>
     </div>
     <div class="ctrlrow" id="waktuRow">
       <span class="flabel">Waktu:</span>
@@ -704,7 +705,7 @@ const nHari = m => new Date(D.tahun, m + 1, 0).getDate();
 const perHari = (v, m) => v === null || v === undefined ? '–' : d1(v / nHari(m));
 const cocokReg = r => sel === 'ALL' || r === sel;
 const lokNama = i => i >= 0 ? RAW.lok[i][0] : '';
-const scope = () => selLok >= 0 ? lokNama(selLok) + ' (' + rn(sel) + ')' : sel === 'ALL' ? 'semua area' : rn(sel);
+const scope = () => (selLok >= 0 ? lokNama(selLok) + ' (' + rn(sel) + ')' : sel === 'ALL' ? 'semua area' : rn(sel)) + labelPj();
 
 /* ================= KONTROL ================= */
 function chips() {
@@ -866,6 +867,7 @@ function muatLayar(d, teks) {
   else el.classList.remove('on');
 }
 function siapkanWin(w) {
+  saringPj(w);
   const idx = {}; RAW.lok.forEach((x, i) => idx[x[0] + '|' + x[1]] = i);
   w.lokMap = w.lok.map(x => idx[x[0] + '|' + x[1]] === undefined ? -1 : idx[x[0] + '|' + x[1]]);
   w.pMap = w.params.map(p => P.findIndex(q => q.key === p.key));
@@ -1125,7 +1127,7 @@ function pasangMulti(host, grup, S, ubah) {
     list.innerHTML = h || '<div class="mskosong">Tidak ada yang cocok.</div>';
     list.querySelectorAll('[data-sebagian]').forEach(x => { x.indeterminate = true; }); };
   const buka = v => { pop.hidden = !v; btn.setAttribute('aria-expanded', v); if (v) { cari.value = ''; isi(); cari.focus(); } };
-  btn.onclick = e => { e.stopPropagation(); buka(pop.hidden); };
+  btn.onclick = e => { e.stopPropagation(); document.querySelectorAll('.mspop').forEach(x => { if (x !== pop) x.hidden = true; }); buka(pop.hidden); };
   pop.onclick = e => e.stopPropagation();
   document.addEventListener('click', () => buka(false));
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) { buka(false); btn.focus(); } });
@@ -1151,7 +1153,7 @@ document.getElementById('selJam').onchange = e => { jam = +e.target.value; ERRW 
 document.getElementById('selLok').onchange = e => setLok(+e.target.value);
 function render() {
   if (!D || LAST < 0) return;
-  derive(); kontrol(); chips(); pilihanLokasi();
+  pilihanPj(); derive(); kontrol(); chips(); pilihanLokasi();
   const mw = modeWaktu(), key = kunciW();
   if (mw && WKEY !== key) muatWaktu(key);
   const siap = mw && WIN && WKEY === key;
@@ -1159,6 +1161,48 @@ function render() {
   if (siap) { deriveWaktu(); KC = 'W'; KP = WIN.waktu.adaPrev ? 'P' : null; renderJam(); }
   else { KC = mon; KP = prevM(); renderHarian(); }
   renderBulan(); renderDriver(); renderRekap(); renderNaik(); renderEvent();
+}
+
+/* ================= FILTER PROJECT (SELURUH DASHBOARD) ================= */
+// Kode.gs mengirim proj (daftar nama, indeks 0 = tanpa project); fakta [.., j], harian [.., j], driver: baris 6 kolom = semua project,
+// baris 7 kolom = 5 teratas per project j. Di sini baris project terpilih dijumlahkan ulang ke bentuk semula (tanpa kolom project),
+// untuk data utama (RAW), filter waktu (WIN) dan filter event (EVD). Data asli disimpan di w._asli.
+const PJSEL = new Set(), PJ_TANPA = '(TANPA PROJECT)';
+const namaPj = n => n || PJ_TANPA;
+const labelPj = () => PJSEL.size ? ' · Project ' + [...PJSEL].map(k => k === PJ_TANPA ? 'tanpa project' : k).join(', ') : '';
+function saringPj(w) {
+  if (!w || !w.fakta || !w.proj || w.proj.length < 2) return w;
+  const a = w._asli || (w._asli = {fakta: w.fakta, harian: w.harian, driver: w.driver});
+  const pil = w.proj.map(n => PJSEL.has(namaPj(n))), semua = !PJSEL.size || pil.every(x => x), kunci = semua ? '*' : pil.join();
+  if (w._pjKunci === kunci) return w;
+  w._pjKunci = kunci;
+  const ok = j => semua || pil[j || 0];
+  const gabung = (rows, nk, nv) => { const G = {}, out = [];
+    rows.forEach(r => { if (!ok(r[nk + nv])) return; const k = r.slice(0, nk).join('|'); let g = G[k];
+      if (!g) { g = G[k] = r.slice(0, nk + nv); out.push(g); } else for (let i = nk; i < nk + nv; i++) g[i] += r[i]; });
+    return out; };
+  w.fakta = gabung(a.fakta || [], 4, 1);
+  w.harian = gabung(a.harian || [], 4, 3);
+  if (a.driver) {
+    const drv = rows => semua ? rows.filter(r => r.length < 7 || r[6] < 0).map(r => r.slice(0, 6))
+      : gabung(rows.filter(r => r.length >= 7 && r[6] >= 0).map(r => r.slice(0, 5).concat([r[5], r[6]])), 5, 1);
+    w.driver = {all: drv(a.driver.all), area: drv(a.driver.area), lok: drv(a.driver.lok), nama: a.driver.nama};
+  }
+  return w;
+}
+const daftarPj = () => RAW && RAW.proj && RAW.proj.length > 1 ? RAW.proj.slice(1).slice().sort().concat(['']) : [];
+const MS_PJ = pasangMulti(document.getElementById('msPj'), () => [{nama: '', item: daftarPj().map(n => ({k: namaPj(n), n: n || '(Tanpa project: data sebelum ada kolom Project)'}))}], PJSEL, terapkanPj);
+function terapkanPj() {
+  saringPj(RAW); if (WIN) saringPj(WIN); Object.values(EVD).forEach(w => { if (w && w.fakta) saringPj(w); });
+  showAllLok = false; showAllDelta = false; render();
+}
+function pilihanPj() {
+  const L = daftarPj(), host = document.getElementById('pickPj');
+  host.hidden = !L.length;
+  [...PJSEL].forEach(k => { if (!L.some(n => namaPj(n) === k)) PJSEL.delete(k); });
+  const el = document.getElementById('selPj'), pil = L.filter(n => PJSEL.has(namaPj(n)));
+  el.textContent = !pil.length || pil.length === L.length ? 'Semua project' : pil.length === 1 ? (pil[0] || 'Tanpa project') : `${pil.length} project dipilih`;
+  el.title = pil.map(n => n || 'Tanpa project').join(', ');
 }
 
 /* ================= FILTER EVENT: PERKEMBANGAN SATU EVENT PER TANGGAL ================= */
@@ -1520,6 +1564,7 @@ function start(json) {
   if (LGLANGKAH) lgTutupProses();
   const wasLatest = !D || mon === LAST;
   terapkanAkun(p);
+  saringPj(p);
   RAW = p; D = Object.assign({}, p); REG = p.areas; P = p.params; if (selLok >= p.lok.length) selLok = -1; ADA = D.bulanAda || []; LAST = ADA.length ? ADA[ADA.length - 1] : -1;
   if (wasLatest || ADA.indexOf(mon) < 0) mon = Math.max(0, LAST);
   kunciCakupan();
@@ -1646,7 +1691,7 @@ lgEl('lgBack').onclick = lgLangkah1;
 lgEl('lgEye').onclick = () => { const p = lgEl('lgP'), t = p.type === 'password'; p.type = t ? 'text' : 'password'; lgEl('lgEye').textContent = t ? 'Sembunyikan' : 'Lihat'; };
 function perluLogin(e) {
   if (!/LOGIN/.test(e && e.message ? e.message : String(e))) return false;
-  TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null; lepasMaster();
+  TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null; PJSEL.clear(); EVD = {}; lepasMaster();
   tampilLogin('Sesi berakhir. Silakan masuk lagi.'); return true;
 }
 function terapkanAkun(p) {
@@ -1697,7 +1742,7 @@ document.getElementById('selMaster').onchange = e => {
   muatLayar(1, 'Pindah akun…');
   google.script.run.withSuccessHandler(j => {
     muatLayar(-1); const a = JSON.parse(j); TOKEN = a.token; MASTER_TOKEN = TOKEN; simpanToken(TOKEN);
-    WKEY = ''; WIN = null; tgl = tgl2 = 0; shift = 0; jam = -1; EVTS.clear();
+    WKEY = ''; WIN = null; tgl = tgl2 = 0; shift = 0; jam = -1; EVTS.clear(); PJSEL.clear(); EVD = {};
     muat();
   }).withFailureHandler(err => { muatLayar(-1); if (perluLogin(err)) return; document.getElementById('akunNama').textContent = 'Gagal pindah akun: ' + (err && err.message ? err.message : err); }).masukSebagai(TOKEN, u);
 };
@@ -1744,7 +1789,7 @@ lgEl('loginForm').onsubmit = e => {
 };
 document.getElementById('btnKeluar').onclick = () => {
   if (TOKEN) google.script.run.withSuccessHandler(() => {}).withFailureHandler(() => {}).logout(TOKEN);
-  TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null; sel = 'ALL'; selLok = -1; tgl = tgl2 = 0; shift = 0; jam = -1;
+  TOKEN = ''; simpanToken(''); RAW = D = null; AKUN = null; WKEY = ''; WIN = null; PJSEL.clear(); EVD = {}; sel = 'ALL'; selLok = -1; tgl = tgl2 = 0; shift = 0; jam = -1;
   lepasMaster(); tampilLogin('');
 };
 // pengukur waktu muat (ditampilkan di samping "Data s/d ..."), untuk mencari langkah yang lambat
