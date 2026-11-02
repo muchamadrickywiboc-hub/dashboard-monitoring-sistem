@@ -1617,6 +1617,9 @@ function terapkanAkun(p) {
   // tombol Laporan (Daily & Monthly) untuk Control Room (Command Center bila LH_UNTUK_AREA = true di LaporanHarian.gs); Export PDF dashboard hanya untuk RTC
   const bh = document.getElementById('btnHarian');
   if (ganti) bh.hidden = true;
+  // RTC = Laporan Per 4 Jam; Command Center & Control Room = Laporan Harian (Daily & Monthly)
+  const rtc = a.peran === 'PUSAT' || a.peran === 'MASTER';
+  bh.textContent = rtc ? 'Laporan Per 4 Jam' : 'Laporan Harian'; bh.title = rtc ? 'Laporan per 4 jam GPS & Dashcam' : 'Laporan harian & bulanan GPS & Dashcam';
   // semua akun: RTC = Laporan Per 4 Jam, Control Room / Command Center = Laporan Daily & Monthly
   if (bh.hidden) google.script.run.withSuccessHandler(u => { if (u) { bh.href = u; bh.hidden = false; } }).withFailureHandler(() => {}).urlLaporanHarian(a.peran);
   cekMaster();
