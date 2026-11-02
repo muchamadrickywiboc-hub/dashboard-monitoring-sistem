@@ -1270,21 +1270,21 @@ function gambar4(R, hp) {
   let html = `<section class="j4"><div class="j4info"><span>LOKASI:<b>${esc(lok.toUpperCase())}</b></span><span>TANGGAL:<b>${esc(R.tanggal.split('-').reverse().join('/'))}</b></span><span>UPDATE JAM:<b>${upd}</b></span><span>ZONA WAKTU:<b>WIB</b></span><span>H-1:<b>${esc(R.h1 ? R.h1.split('-').reverse().join('/') : '–')}</b></span></div></section>`;
   if (rg && R.jamAkhir < akhirRg) html += `<div class="errbar">Data rentang ${jj4(rg.a)}–${jj4(rg.e)} belum lengkap: data hari ini baru sampai jam ${jj4((R.jamAkhir + 1) % 24)}, jadi Today dan H-1 dibandingkan s/d jam ${jj4((R.jamAkhir + 1) % 24)}.</div>`;
   if (akhir < 0) return html + `<div class="errbar">Belum ada event per jam untuk ${esc(tglPanjang(R.tanggal))}${R.lokasi || R.area ? ' di ' + esc(lok) : ''}.</div>`;
-  const ket = `Tabel: H-1 sehari penuh, Today s/d ${jj4((akhir + 1) % 24)}. Donut: Today dibanding H-1 pada jam yang sama (00:00 s/d ${jj4((akhir + 1) % 24)}).`;
+  const ket = `Tabel & donut: Today dibanding H-1 pada jam yang sama (00:00 s/d ${jj4((akhir + 1) % 24)}).`;
   // kiri: tabel parameter per kategori + donut (today / H-1 di jam yang sama)
-  const kiri = per.map(K => { const tT = jumlah4(K.t, s), tH = jumlah4(K.h, 24), tHs = jumlah4(K.h, s);   // tabel: H-1 sehari penuh; donut: H-1 di jam yang sama
-    const rows = K.params.map(p => { const a = jumlah4(p.t, s), b = jumlah4(p.h, 24); return `<tr><td>${esc(p.p.toUpperCase())}</td><td class="h1">${nf4(b)}</td><td class="td">${nf4(a)}</td><td class="${kelas4(a, b)}">${pct4(a, b)}</td></tr>`; }).join('');
+  const kiri = per.map(K => { const tT = jumlah4(K.t, s), tH = jumlah4(K.h, s), tHs = tH;   // tabel & donut: H-1 di jam yang sama (00:00 s/d jam akhir)
+    const rows = K.params.map(p => { const a = jumlah4(p.t, s), b = jumlah4(p.h, s); return `<tr><td>${esc(p.p.toUpperCase())}</td><td class="h1">${nf4(b)}</td><td class="td">${nf4(a)}</td><td class="${kelas4(a, b)}">${pct4(a, b)}</td></tr>`; }).join('');
     return `<div class="j4kat"><div><h3>${K.n}</h3><table class="j4t"><thead><tr><th>Event</th><th>H-1</th><th>Today</th><th>Kenaikan (%)</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="j4note">Tidak ada event</td></tr>'}
       <tr class="tot"><td>TOTAL</td><td>${nf4(tH)}</td><td>${nf4(tT)}</td><td class="${kelas4(tT, tH)}">${pct4(tT, tH)}</td></tr></tbody></table></div>
       <div class="j4donut" title="Today dibanding H-1 pada jam yang sama (00:00 s/d ${jj4((akhir + 1) % 24)}): ${nf4(tT)} / ${nf4(tHs)}">${donut4(tHs ? tT / tHs * 100 : 0, K.w)}</div></div>`; }).join('');
   // kanan: event per jam
   let aH = 0, aT = 0;
   const baris = Array.from({length: 24}, (_, j) => { aH += per.reduce((x, K) => x + K.h[j], 0); const ada = j <= akhir; if (ada) aT += per.reduce((x, K) => x + K.t[j], 0);
-    if (hp && !ada) return '';   // versi HP: hanya jam yang sudah ada data hari ini (TOTAL H-1 tetap sehari penuh)
+    if (hp && !ada) return '';   // versi HP: hanya jam yang sudah ada data hari ini (TOTAL = s/d jam akhir)
     return `<tr><td>${rentang4(j)}</td>${per.map(K => `<td class="h1">${nf4(K.h[j])}</td><td class="td">${ada ? nf4(K.t[j]) : ''}</td>`).join('')}<td class="h1">${nf4(aH)}</td><td class="td">${ada ? nf4(aT) : ''}</td><td>${ada ? nf4(aH - aT) : ''}</td></tr>`; }).join('');
   const kanan = `<h3>Event per jam</h3><div class="tbl"><table class="j4t jam"><thead><tr><th rowspan="2" style="text-align:left">Jam</th>${per.map(K => `<th colspan="2">${K.n}</th>`).join('')}<th colspan="2">Akumulasi data</th><th rowspan="2">H-1 vs Today</th></tr>
     <tr>${per.map(() => '<th class="sub">H-1</th><th class="sub">Today</th>').join('')}<th class="sub">H-1</th><th class="sub">Today</th></tr></thead><tbody>${baris}
-    <tr class="tot"><td>TOTAL</td>${per.map(K => `<td>${nf4(jumlah4(K.h, 24))}</td><td>${nf4(jumlah4(K.t, s))}</td>`).join('')}<td></td><td></td><td></td></tr></tbody></table></div>`;
+    <tr class="tot"><td>TOTAL s/d ${jj4((akhir + 1) % 24)}</td>${per.map(K => `<td>${nf4(jumlah4(K.h, s))}</td><td>${nf4(jumlah4(K.t, s))}</td>`).join('')}<td></td><td></td><td></td></tr></tbody></table></div>`;
   html += `<section class="j4 j4salin" data-html2canvas-ignore><h3>Teks update (siap salin)</h3>
     <label>Sapaan (setelah "Selamat Pagi/Siang/Sore/Malam")<input id="j4Sapaan" maxlength="300"></label>
     <textarea id="j4Teks" readonly aria-label="Teks update"></textarea>
@@ -1296,12 +1296,12 @@ function gambar4(R, hp) {
     for (let j = 1; j <= akhir; j++) { const d = K.t[j] - K.t[j - 1]; if (d > 0 && (!up || d > up.d)) up = {j, d}; if (d < 0 && (!dn || d < dn.d)) dn = {j, d}; }
     const nama = K.params.map(p => p.p).join(', ');
     if (hp) { html += `<section class="j4 j4sec"><h3>Analisis ${K.n}</h3>
-      <div class="j4hpana"><span>Today / H-1 <b>${nf4(jumlah4(K.t, s))} / ${nf4(jumlah4(K.h, 24))}</b></span>
+      <div class="j4hpana"><span>Today / H-1 <b>${nf4(jumlah4(K.t, s))} / ${nf4(jumlah4(K.h, s))}</b></span>
       <span class="naik">Naik tertinggi <b>${up ? `${rentang4(up.j)} (+${nf4(up.d)})` : '–'}</b></span>
       <span class="turun">Turun tertinggi <b>${dn ? `${rentang4(dn.j)} (−${nf4(-dn.d)})` : '–'}</b></span></div>
       ${grafik4(K.h, K.t, akhir, hp)}</section>`; return; }
     html += `<section class="j4 j4sec"><h3>Analisis perbandingan ${K.n}${nama ? ` <span style="font-weight:500;text-transform:none">(${esc(nama)})</span>` : ''}</h3>
-      <div class="j4head"><div>Total data (Today / H-1)<b>${nf4(jumlah4(K.t, s))} / ${nf4(jumlah4(K.h, 24))}</b></div>
+      <div class="j4head"><div>Total data (Today / H-1)<b>${nf4(jumlah4(K.t, s))} / ${nf4(jumlah4(K.h, s))}</b></div>
       <div class="naik">Kenaikan tertinggi<b>${up ? `Pukul ${rentang4(up.j)} sebanyak ${nf4(up.d)}` : 'Tidak ada kenaikan'}</b></div>
       <div class="turun">Penurunan tertinggi<b>${dn ? `Pukul ${rentang4(dn.j)} sebanyak −${nf4(-dn.d)}` : 'Tidak ada penurunan'}</b></div></div>
       ${grafik4(K.h, K.t, akhir, hp)}</section>`;
@@ -1309,7 +1309,7 @@ function gambar4(R, hp) {
   const tj = J4_KAT.map(K => (R.tanpaJam[K.k] || [0, 0])[0]).reduce((a, b) => a + b, 0);
   if (tj) html += `<div class="j4note">${nf4(tj)} event hari ini tanpa jam kejadian (data GPS) tidak ikut di laporan per jam.</div>`;
   if (hp) return html;
-  html += `<div class="j4note">Kenaikan / penurunan tertinggi = selisih event hari ini dibanding jam sebelumnya. Total H-1 di kotak analisis dan baris TOTAL tabel per jam = sehari penuh.</div>`;
+  html += `<div class="j4note">Kenaikan / penurunan tertinggi = selisih event hari ini dibanding jam sebelumnya. Semua total H-1 dihitung pada jam yang sama dengan Today (00:00 s/d jam akhir).</div>`;
   return html;
 }
 // teks siap salin (WhatsApp): penambahan jam terakhir dan total s.d jam itu, today vs H-1
