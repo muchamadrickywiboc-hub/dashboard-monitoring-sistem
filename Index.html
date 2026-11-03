@@ -1198,7 +1198,10 @@ function saringPj(w) {
   return w;
 }
 // pilihan hanya project yang terdaftar; data tanpa project (TIDAK TERDAFTAR, data sebelum ada kolom project) ikut bila tidak ada pilihan
-const daftarPj = () => RAW && RAW.proj && RAW.proj.length > 1 ? RAW.proj.filter(n => n).sort() : [];
+// hanya project yang punya data di cakupan akun ini (akun Area / Lokasi tidak melihat project area lain)
+const daftarPj = () => { if (!RAW || !RAW.proj || RAW.proj.length < 2) return [];
+  const F = (RAW._asli || RAW).fakta || [], ada = {}; F.forEach(f => { if (f[5]) ada[f[5]] = 1; });
+  return RAW.proj.filter((n, j) => n && ada[j] && !/^TIDAK\b/.test(n)).sort(); };
 const MS_PJ = pasangMulti(document.getElementById('msPj'), () => [{nama: '', item: daftarPj().map(n => ({k: namaPj(n), n: n}))}], PJSEL, terapkanPj);
 function terapkanPj() {
   saringPj(RAW); if (WIN) saringPj(WIN); Object.values(EVD).forEach(w => { if (w && w.fakta) saringPj(w); });

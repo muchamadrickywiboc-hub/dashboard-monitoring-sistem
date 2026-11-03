@@ -108,7 +108,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-11-03a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-11-03b';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -1801,11 +1801,11 @@ const HDR_TARIKAN = {
 };
 /** Project: huruf besar tanpa spasi berlebih; '' = tanpa project (data lama / file tanpa kolom PROJECT). */
 /** Nama project diseragamkan: huruf besar, ejaan lain dari project yang dikenal (POLTA PLUS, Poltaplus) disamakan;
- *  TIDAK TERDAFTAR / kosong / "-" = tanpa project (tidak tampil sebagai pilihan di dashboard). */
+ *  TIDAK TERDAFTAR / TIDAK DITEMUKAN / TIDAK ADA, #N/A, kosong, "-" = tanpa project (tidak tampil sebagai pilihan di dashboard). */
 const PROJECT_DIKENAL = ['APMS', 'AVIASI', 'BBK', 'LPG', 'PERTASHOP', 'POLATARIF', 'POLTAPLUS', 'SPBUK'];
 const projNorm_ = x => {
   const u = teks(x).toUpperCase(), k = u.replace(/[^A-Z0-9]/g, '');
-  if (!k || k === 'TIDAKTERDAFTAR' || /^(NA|N\/A|NULL|0)$/.test(u)) return '';
+  if (!k || /^TIDAK/.test(k) || /^(NA|N\/?A|#N\/?A|NULL|NONE|UNKNOWN|0)$/.test(u)) return '';
   return PROJECT_DIKENAL.filter(p => p === k)[0] || u;
 };
 /** Indeks kolom Project dan Sumber di sheet Tarikan dari judul kolom; Project -1 bila kolomnya belum ada, Sumber = kolom terakhir bila tidak berjudul. */
