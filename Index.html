@@ -1190,8 +1190,9 @@ function saringPj(w) {
   }
   return w;
 }
-const daftarPj = () => RAW && RAW.proj && RAW.proj.length > 1 ? RAW.proj.slice(1).slice().sort().concat(['']) : [];
-const MS_PJ = pasangMulti(document.getElementById('msPj'), () => [{nama: '', item: daftarPj().map(n => ({k: namaPj(n), n: n || '(Tanpa project: data sebelum ada kolom Project)'}))}], PJSEL, terapkanPj);
+// pilihan hanya project yang terdaftar; data tanpa project (TIDAK TERDAFTAR, data sebelum ada kolom project) ikut bila tidak ada pilihan
+const daftarPj = () => RAW && RAW.proj && RAW.proj.length > 1 ? RAW.proj.filter(n => n).sort() : [];
+const MS_PJ = pasangMulti(document.getElementById('msPj'), () => [{nama: '', item: daftarPj().map(n => ({k: namaPj(n), n: n}))}], PJSEL, terapkanPj);
 function terapkanPj() {
   saringPj(RAW); if (WIN) saringPj(WIN); Object.values(EVD).forEach(w => { if (w && w.fakta) saringPj(w); });
   showAllLok = false; showAllDelta = false; render();

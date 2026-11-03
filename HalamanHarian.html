@@ -1167,7 +1167,7 @@ function mulai() {
     $('fArea').innerHTML = '<option value="">Semua Area</option>' + INFO.areas.map(x => `<option value="${x}">${esc(judul(x))}</option>`).join('');
     isiLokasi();
     const rtc = a.peran === 'PUSAT';
-    if (rtc) { $('fRentang').innerHTML = J4_RENTANG.map((o, i) => `<option value="${i}">${o.l}</option>`).join(''); $('lRentang').hidden = false; }
+    if (rtc) { $('fRentang').innerHTML = J4_RENTANG.map((o, i) => `<option value="${i}">${o.l}</option>`).join(''); /* pilihan Rentang disembunyikan untuk saat ini: selalu semua jam s/d data terakhir */ }
     if (rtc) { MODE = 'harian'; document.querySelector('.seg').hidden = true; document.querySelector('.hero h1').textContent = 'Laporan Per 4 Jam'; }   // akun RTC: tanpa Daily / Monthly
     const akhir = new Date(Date.now() + 7 * 36e5 - (rtc ? 0 : 864e5)).toISOString().slice(0, 10);   // pelaporan H+1: bawaan tanggal kemarin (WIB); RTC: hari ini
     if (!$('fTgl').value) $('fTgl').value = akhir;

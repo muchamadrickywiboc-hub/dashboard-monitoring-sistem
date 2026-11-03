@@ -108,7 +108,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-11-02b';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-11-03a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -1412,7 +1412,9 @@ function prosesTarikan() {
     const email = [];   // file Cleansing yang hasilnya berubah / gagal: dikirim satu email di akhir jalan ini
 
     // baru, berubah, gagal sebelumnya, atau file per 4 jam yang belum selesai terbaca
-    const antre = daftar.filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^(GAGAL|SEBAGIAN)/.test(sudah[o.id].status));
+    // file Cleansing yang diproses sebelum kolom PROJECT LOKASI dibaca (sidik tanpa awalan p1:) dibaca ulang sekali
+    const antre = daftar.filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^(GAGAL|SEBAGIAN)/.test(sudah[o.id].status)
+      || (o.cleansing && /^OK/.test(sudah[o.id].status) && !!sudah[o.id].sidik && !/^p1:/.test(sudah[o.id].sidik)));
     // file yang pernah gagal diproses paling akhir, supaya tidak menahan file lain (file yang dibaca bertahap tidak ditunda)
     const gagal = o => sudah[o.id] && /^GAGAL/.test(sudah[o.id].status) ? 1 : 0;
     antre.sort((a, b) => gagal(a) - gagal(b) || (a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0));
@@ -1441,7 +1443,7 @@ function prosesTarikan() {
       logSh.getRange(sudah[o.id].baris, 1, 1, row.length).setValues([row]);
       // file Cleansing yang isinya tidak berubah (mis. hanya sheet Tindak Lanjut yang diedit) tidak memicu bangun ulang cache / email
       if (berubah || status !== 'OK') n++;
-      if (o.cleansing && hc && berubah) email.push({ o: o, h: hc, lama: lama });
+      if (o.cleansing && hc && berubah && hc.email !== false) email.push({ o: o, h: hc, lama: lama });
       if (o.cleansing && status !== 'OK' && !(lama && /^GAGAL/.test(lama.status))) email.push({ o: o, gagal: status, lama: lama });
     }
     if (email.length) try { kirimEmailUpdate_(email); } catch (e) { Logger.log('Email update gagal dikirim: ' + e.message); }
@@ -1566,7 +1568,7 @@ function prosesCleansing_(folder, o, peta, sidikLama) {
   if (!sh) throw new Error('sheet "Event Sistem" tidak ditemukan');
   const v = sh.getDataRange().getDisplayValues();   // teks persis seperti yang tampil (jam WIB), tidak terpengaruh zona waktu file
   const k = petaKolom(v[0] || []), kol = h => k[h] === undefined ? -1 : k[h];
-  const cWk = kol('TIME'), cTb = kol('TBBM'), cAl = kol('ALARM STATUS'), cAm = kol('AMT 1'), cRt = kol('RENTANG'), cPj = kol('PROJECT');   // PROJECT: dibaca bila kolomnya ada
+  const cWk = kol('TIME'), cTb = kol('TBBM'), cAl = kol('ALARM STATUS'), cAm = kol('AMT 1'), cRt = kol('RENTANG'), cPj = kol('PROJECT LOKASI') >= 0 ? kol('PROJECT LOKASI') : kol('PROJECT');   // PROJECT LOKASI: dibaca bila kolomnya ada
   if (cWk < 0 || cTb < 0 || cAl < 0) throw new Error('kolom TIME / TBBM / ALARM STATUS tidak ditemukan di sheet Event Sistem');
   const tglMs = t => { const x = new Date(t); return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
   const awal = mulaiTarikan_(o.area), ev = {}, evj = {}, amt = {}, amj = {}, lihat = {};
@@ -1593,8 +1595,14 @@ function prosesCleansing_(folder, o, peta, sidikLama) {
     if (cRt >= 0 && teks(r[cRt])) tambah(h.rentang, teks(r[cRt]));
   }
   const urutJson = x => JSON.stringify(Object.keys(x).sort().map(kk => [kk, x[kk]]));
-  h.sidik = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, urutJson(ev) + urutJson(evj) + urutJson(amt) + urutJson(amj) + o.area));
-  h.berubah = h.sidik !== sidikLama;
+  const sidik = (a, b, c, d) => Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, urutJson(a) + urutJson(b) + urutJson(c) + urutJson(d) + o.area));
+  // tanpa kolom project: kunci dijumlahkan tanpa bagian project (sama dengan sidik versi lama)
+  const tanpaPj = x => { if (cPj < 0) return x; const y = {}; Object.keys(x).forEach(kk => { const b = kk.slice(0, kk.lastIndexOf('\u0001')); y[b] = (y[b] || 0) + x[kk]; }); return y; };
+  const penuh = sidik(ev, evj, amt, amj), lamaV0 = !!sidikLama && !/^p1:/.test(sidikLama);
+  const sama0 = lamaV0 && sidik(tanpaPj(ev), tanpaPj(evj), tanpaPj(amt), tanpaPj(amj)) === sidikLama;   // jumlahnya sama dengan hasil lama (versi tanpa project)
+  h.sidik = 'p1:' + penuh;
+  h.berubah = h.sidik !== sidikLama && !(sama0 && cPj < 0);
+  h.email = h.berubah && !sama0;   // hanya kolom project yang baru: Tarikan ditulis ulang tanpa email update
   if (!h.berubah) return h;
   const bulan = {}; bulan[+o.tgl.slice(5, 7)] = 1;
   Object.keys(ev).forEach(x => { bulan[+x.slice(5, 7)] = 1; });
@@ -1792,7 +1800,14 @@ const HDR_TARIKAN = {
   'Event Jam': ['Tanggal', 'Jam', 'Area', 'Lokasi', 'Case', 'Jumlah', 'Sumber'], 'AMT Jam': ['Tanggal', 'Jam', 'Area', 'Lokasi', 'Nama AMT', 'Case', 'Jumlah', 'Sumber'],
 };
 /** Project: huruf besar tanpa spasi berlebih; '' = tanpa project (data lama / file tanpa kolom PROJECT). */
-const projNorm_ = x => teks(x).toUpperCase();
+/** Nama project diseragamkan: huruf besar, ejaan lain dari project yang dikenal (POLTA PLUS, Poltaplus) disamakan;
+ *  TIDAK TERDAFTAR / kosong / "-" = tanpa project (tidak tampil sebagai pilihan di dashboard). */
+const PROJECT_DIKENAL = ['APMS', 'AVIASI', 'BBK', 'LPG', 'PERTASHOP', 'POLATARIF', 'POLTAPLUS', 'SPBUK'];
+const projNorm_ = x => {
+  const u = teks(x).toUpperCase(), k = u.replace(/[^A-Z0-9]/g, '');
+  if (!k || k === 'TIDAKTERDAFTAR' || /^(NA|N\/A|NULL|0)$/.test(u)) return '';
+  return PROJECT_DIKENAL.filter(p => p === k)[0] || u;
+};
 /** Indeks kolom Project dan Sumber di sheet Tarikan dari judul kolom; Project -1 bila kolomnya belum ada, Sumber = kolom terakhir bila tidak berjudul. */
 function kolTarikan_(hdr) {
   const u = (hdr || []).map(h => teks(h).toUpperCase()), s0 = u.lastIndexOf('SUMBER');
