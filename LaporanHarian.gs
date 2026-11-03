@@ -52,6 +52,8 @@ const LH_PANEL = [
 /** Panel yang tidak tampil bawaan untuk akun Command Center & Control Room (tanpa pilihan di filter Event);
  *  tetap ada di daftar filter Event dan tampil bila dipilih. Kosong: semua jenis event tampil (keputusan pengguna, Nov 2026). */
 const LH_SEMBUNYI_LOKASI = [];
+/** Panel yang sama sekali tidak tampil untuk akun Command Center & Control Room (juga tidak ada di filter Event): SOS & Seat Belt. */
+const LH_KHUSUS_RTC = ['SO', 'SB'];
 
 function halamanLaporanHarian_() {
   return HtmlService.createHtmlOutputFromFile('HalamanHarian')
@@ -236,7 +238,7 @@ function lhLaporan(token, periode, area, lokasi) {
   else info.filter(o => cocokLH_(c, o.n, o.a)).forEach(o => tambah(o.n, o.a));
 
   // event
-  const V = LH_PANEL.map(() => []), evHari = {}, tampil = LH_PANEL.map(() => true), bawaan = LH_PANEL.map(p => !(ses.peran !== 'PUSAT' && LH_SEMBUNYI_LOKASI.indexOf(p.k) >= 0));
+  const V = LH_PANEL.map(() => []), evHari = {}, tampil = LH_PANEL.map(p => !(ses.peran !== 'PUSAT' && LH_KHUSUS_RTC.indexOf(p.k) >= 0)), bawaan = LH_PANEL.map(p => !(ses.peran !== 'PUSAT' && LH_SEMBUNYI_LOKASI.indexOf(p.k) >= 0));
   let adaEvent = false;
   Object.keys(E.tanggal).filter(diHari).forEach(d => E.tanggal[d].forEach(r => {
     if (!tampil[r[2]] || !masuk(r[0], r[1])) return;

@@ -61,7 +61,7 @@ const TIPE = {
   'DISTRACTION MENGEMUDI': 'CCTV', 'SEAT BELT': 'CCTV', 'SOS': 'GPS',
 };
 /** Parameter yang hanya tampil untuk akun RTC (PUSAT); akun Area & Lokasi tidak menerimanya sama sekali (nama parameter huruf besar). */
-const PARAM_KHUSUS_RTC = [];   // dikosongkan 2 Nov 2026: semua event terbuka untuk semua akun (dulu: SOS, SEAT BELT)
+const PARAM_KHUSUS_RTC = ['SOS', 'SEAT BELT'];   // 3 Nov 2026: SOS & Seat Belt disembunyikan lagi untuk Command Center & Control Room
 /** Parameter yang tidak ditampilkan untuk akun Area (Command Center) & Lokasi (Control Room); keduanya hanya melihat 9 event + GPS/Dashcam Offline di Laporan Harian. */
 const PARAM_SEMBUNYI_LOKASI = [];   // dikosongkan 2 Nov 2026 (dulu: ILLEGAL SHUTDOWN, CAMERA COVERING, MICROSLEEP, DRIVING > 4 HOURS, DISTRACTION MENGEMUDI)
 /** Nama event yang tampil di dashboard dan export (nama parameter huruf besar -> label). Kunci parameter tetap mengikuti sheet Pemetaan. */
@@ -108,7 +108,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-11-03b';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-11-03c';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
