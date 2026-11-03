@@ -350,7 +350,7 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
         <label class="pick" id="lBln" hidden>Bulan <select id="fBln"></select></label>
         <label class="pick" id="lArea">Area <select id="fArea"></select></label>
         <label class="pick" id="lLok">Lokasi <select id="fLok"></select></label>
-        <span class="pick" id="lEvt" hidden>Event <span class="msel" id="msEvt"><button type="button" class="msbtn" id="selEvt" aria-haspopup="true" aria-expanded="false">Semua event</button><div class="mspop" hidden><input type="search" class="mscari" placeholder="Cari event…" aria-label="Cari event"><div class="msacts"><button type="button" data-a="semua">Pilih semua</button><button type="button" data-a="hapus">Hapus pilihan</button></div><div class="mslist" role="group" aria-label="Daftar event"></div></div></span></span>
+        <span class="pick" id="lEvt" hidden>Event <span class="msel" id="msEvt"><button type="button" class="msbtn" id="selEvt" aria-haspopup="true" aria-expanded="false">Event standar</button><div class="mspop" hidden><input type="search" class="mscari" placeholder="Cari event…" aria-label="Cari event"><div class="msacts"><button type="button" data-a="semua">Pilih semua</button><button type="button" data-a="hapus">Hapus pilihan</button></div><div class="mslist" role="group" aria-label="Daftar event"></div></div></span></span>
         <label class="pick" id="lRentang" hidden>Rentang <select id="fRentang"></select></label>
         <button class="hbtn pdf" id="btnPdf" type="button" disabled>Export PDF</button>
         <button class="hbtn pdf" id="btnJpg" type="button" disabled hidden title="Gambar JPG selebar layar HP (tegak)">Download JPG</button>
@@ -1433,10 +1433,12 @@ function pasangMulti(host, grup, S, ubah, tutup) {
   return {isi};
 }
 const MS_EV = pasangMulti($('msEvt'), () => [{nama: '', item: (LAP && LAP.panel ? LAP.panel : []).map(p => ({k: String(p.w), n: p.grafik}))}], EVSEL, () => { if (LAP && LAP.panel) gambar(LAP); });
+// tanpa pilihan: event bawaan akun (p.bawaan; Microsleep, SOS, dll. hanya tampil bila dipilih)
 function saringEvent(L) {
-  const pil = L.panel.map(p => EVSEL.has(String(p.w)));
-  if (!EVSEL.size || !pil.some(x => x) || pil.every(x => x)) return L;
-  const K = L.panel.map((_, k) => k).filter(k => pil[k]), X = Object.assign({}, L, {panel: K.map(k => L.panel[k]), _evt: K.map(k => L.panel[k].grafik)});
+  const dipilih = L.panel.map(p => EVSEL.has(String(p.w))), ada = dipilih.some(x => x);
+  const pil = ada ? dipilih : L.panel.map(p => p.bawaan !== false);
+  if (pil.every(x => x)) return L;
+  const K = L.panel.map((_, k) => k).filter(k => pil[k]), X = Object.assign({}, L, {panel: K.map(k => L.panel[k]), _evt: ada ? K.map(k => L.panel[k].grafik) : null});
   if (L.tren) X.tren = Object.assign({}, L.tren, {rows: L.tren.rows.map(r => Object.assign({}, r, {h: K.map(k => r.h[k] || []), l: K.map(k => r.l[k] || 0)}))});
   // Event harian (Monthly): dijumlahkan ulang dari tren per tanggal, hanya event terpilih
   if (L.mode === 'bulanan' && L.tren && L.perHari) X.perHari = L.perHari.map(o => Object.assign({}, o, {event: X.tren.rows.reduce((s, r) => s + r.h.reduce((t, a) => t + (a[o.d - 1] || 0), 0), 0)}));
@@ -1444,7 +1446,7 @@ function saringEvent(L) {
 }
 function pilihanEvent() {
   const P = LAP && LAP.panel ? LAP.panel : [], pil = P.filter(p => EVSEL.has(String(p.w))), el = $('selEvt');
-  el.textContent = !pil.length || pil.length === P.length ? 'Semua event' : pil.length === 1 ? pil[0].grafik : pil.length + ' event dipilih';
+  el.textContent = !pil.length ? (P.some(p => p.bawaan === false) ? `Event standar (${P.filter(p => p.bawaan !== false).length})` : 'Semua event') : pil.length === P.length ? `Semua event (${P.length})` : pil.length === 1 ? pil[0].grafik : pil.length + ' event dipilih';
   el.title = pil.map(p => p.grafik).join(', ');
 }
 function gambar(L) {
@@ -1477,7 +1479,7 @@ function gambar(L) {
   $('isi').innerHTML = h;
 }
 // warna tetap per jenis event (urutan panel di LaporanHarian.gs)
-const WARNA_EV = ['#7a5cc7', '#0f78bf', '#c0392b', '#e8833a', '#d4a017', '#5d6d7e', '#1b1f1d', '#8e2418', '#3f8a3a', '#a0522d', '#e05c9a', '#17a2a2', '#b8ca10', '#2e86de'];
+const WARNA_EV = ['#7a5cc7', '#0f78bf', '#c0392b', '#e8833a', '#d4a017', '#5d6d7e', '#1b1f1d', '#8e2418', '#3f8a3a', '#a0522d', '#e05c9a', '#17a2a2', '#b8ca10', '#2e86de', '#6b4f2a', '#4d5f8c'];
 const sk = n => n >= 1e6 ? (n / 1e6).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' jt' : n >= 1e4 ? Math.round(n / 1e3) + ' rb' : n >= 1e3 ? (n / 1e3).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' rb' : nf(n);
 // Event di Setiap Lokasi: grafik batang total per lokasi + kartu kecil per lokasi (batang tiap jenis event)
 function grafikLokasi(L) {

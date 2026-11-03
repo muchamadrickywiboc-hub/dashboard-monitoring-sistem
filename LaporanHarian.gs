@@ -45,10 +45,13 @@ const LH_PANEL = [
   { k: 'SO', tabel: 'SOS', grafik: 'SOS', kasus: ['SOS', 'SOS ALARM'], param: ['SOS'] },
   { k: 'SB', tabel: 'Seat Belt', grafik: 'Seat Belt', kasus: ['SEAT BELT', 'SEATBELT', 'NO SEAT BELT'], param: ['SEAT BELT'] },
   { k: 'D4', tabel: 'Driving > 4 hrs', grafik: 'Driving > 4 hrs', kasus: ['DRIVING > 4 HOURS', 'OVER DRIVING (4 HOURS)'], param: ['DRIVING > 4 HOURS'] },
+  { k: 'CC', tabel: 'Camera Covering', grafik: 'Camera Covering', kasus: ['CAMERA COVERING ALARM', 'CAMERA COVERING'], param: ['CAMERA COVERING'] },
+  { k: 'IS', tabel: 'Illegal Shutdown', grafik: 'Illegal Shutdown', kasus: ['ILLEGAL SHUTDOWN', 'ILLEGAL SHUTDOWN ALARM'], param: ['ILLEGAL SHUTDOWN'] },
 ];
 
-/** Panel yang hanya untuk akun RTC (Pusat): Microsleep, Driver Distracted, SOS, Seat Belt, Driving > 4 hrs. */
-const LH_SEMBUNYI_LOKASI = ['FT', 'DS', 'SO', 'SB', 'D4'];
+/** Panel yang tidak tampil bawaan untuk akun Command Center & Control Room (tanpa pilihan di filter Event);
+ *  tetap ada di daftar filter Event dan tampil bila dipilih. */
+const LH_SEMBUNYI_LOKASI = ['FT', 'DS', 'SO', 'SB', 'D4', 'CC', 'IS'];
 
 function halamanLaporanHarian_() {
   return HtmlService.createHtmlOutputFromFile('HalamanHarian')
@@ -74,7 +77,7 @@ function sesiLH_(token) {
  * Disimpan di cache 6 jam; kuncinya ikut versi data (berganti setiap tarikan / summary baru), jadi tidak basi.
  */
 function eventBulanLH_(m) {
-  const kunci = 'LH2_' + versiData_() + '_' + m, ada = ambilCache_(kunci);
+  const kunci = 'LH3_' + versiData_() + '_' + m, ada = ambilCache_(kunci);
   if (ada) return JSON.parse(ada);
   const folder = DriveApp.getFolderById(CFG.FOLDER_ID), S = sumberBulan_(folder), src = S.perBulan[m] || [];
   const out = { sumber: src.map(o => o.f.getName()).join(' + '), tanggal: {}, lokArea: {} };
@@ -233,7 +236,7 @@ function lhLaporan(token, periode, area, lokasi) {
   else info.filter(o => cocokLH_(c, o.n, o.a)).forEach(o => tambah(o.n, o.a));
 
   // event
-  const V = LH_PANEL.map(() => []), evHari = {}, tampil = LH_PANEL.map(p => !(ses.peran !== 'PUSAT' && LH_SEMBUNYI_LOKASI.indexOf(p.k) >= 0));
+  const V = LH_PANEL.map(() => []), evHari = {}, tampil = LH_PANEL.map(() => true), bawaan = LH_PANEL.map(p => !(ses.peran !== 'PUSAT' && LH_SEMBUNYI_LOKASI.indexOf(p.k) >= 0));
   let adaEvent = false;
   Object.keys(E.tanggal).filter(diHari).forEach(d => E.tanggal[d].forEach(r => {
     if (!tampil[r[2]] || !masuk(r[0], r[1])) return;
@@ -304,7 +307,7 @@ function lhLaporan(token, periode, area, lokasi) {
     mode: bulanan ? 'bulanan' : 'harian', periode: bulanan ? awal.slice(0, 7) : awal,
     area: c.area || (c.lok ? areaDari(c.lok, '') : ''),
     lokasi: c.lok || (c.area ? 'Command Center ' + c.area : 'Semua Area'), baris: perArea ? 'Area' : 'Lokasi', sumber: E.sumber,
-    panel: LH_PANEL.map((pn, i) => ({ w: i, tabel: pn.tabel, grafik: pn.grafik, rows: baris.map((n, j) => ({ n: n, v: V[i][j] || 0 })), total: V[i].reduce((s, v) => s + (v || 0), 0) })).filter((_, i) => tampil[i]),
+    panel: LH_PANEL.map((pn, i) => ({ w: i, bawaan: bawaan[i], tabel: pn.tabel, grafik: pn.grafik, rows: baris.map((n, j) => ({ n: n, v: V[i][j] || 0 })), total: V[i].reduce((s, v) => s + (v || 0), 0) })).filter((_, i) => tampil[i]),
     perangkat: {
       gps: bagi(up.gps), dashcam: bagi(up.cctv), rtc: rtc,
       adaJustifikasi: adaJust, lokasiInput: inp.filter(r => r !== cc).length, lokasiCakupan: perArea ? info.length : baris.length,
