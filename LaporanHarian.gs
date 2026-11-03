@@ -50,8 +50,8 @@ const LH_PANEL = [
 ];
 
 /** Panel yang tidak tampil bawaan untuk akun Command Center & Control Room (tanpa pilihan di filter Event);
- *  tetap ada di daftar filter Event dan tampil bila dipilih. */
-const LH_SEMBUNYI_LOKASI = ['FT', 'DS', 'SO', 'SB', 'D4', 'CC', 'IS'];
+ *  tetap ada di daftar filter Event dan tampil bila dipilih. Kosong: semua jenis event tampil (keputusan pengguna, Nov 2026). */
+const LH_SEMBUNYI_LOKASI = [];
 
 function halamanLaporanHarian_() {
   return HtmlService.createHtmlOutputFromFile('HalamanHarian')
