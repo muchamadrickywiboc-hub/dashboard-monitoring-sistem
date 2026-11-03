@@ -912,6 +912,7 @@ function nilaiSheet(ss, nama) {
  *   Sum_AMT     : Area | Lokasi | Nama AMT | satu kolom per parameter          <- Top Driver
  *   Sum_Jam     : Tanggal | Jam | Area | Lokasi | satu kolom per parameter     <- filter Tanggal / Shift / Jam (Jam kosong = event tanpa jam)
  *   Sum_AMT_Jam : Tanggal | Area | Lokasi | Rincian (jam, NAMA, PARAMETER=jumlah ... dipisah tab; satu baris per AMT per jam) <- Top Driver saat filter waktu
+ *   Sum_Project : Area | Lokasi | Project | parameter ... | Total (hanya bila file sumber punya kolom PROJECT LOKASI)
  *   Info        : sumber dan tanda sumber.
  * Diisi otomatis dari file sumber (Data / Jam / Tarikan) dan ditulis ulang setiap file sumber bulan itu atau sheet Pemetaan berubah.
  * Koreksi manual di Summary dipakai dashboard sampai summary ditulis ulang.
@@ -1209,7 +1210,28 @@ function tulisSummary_(ss, sf, m, x, j, peta, src, tanda) {
   shB.getRange(r0, 1, lokasi.length + 1, kol.length + 1).setBorder(true, true, true, true, true, true);
   shB.getRange(4, 2, kol.length, 1).setNumberFormat('#,##0;-#,##0;;@');
   if (lokasi.length) shB.getRange(r0 + 1, 2, lokasi.length, kol.length).setNumberFormat('#,##0;-#,##0;;@');   // 0 tampil kosong
-  shB.autoResizeColumns(1, kol.length + 1);
+  // per project (file sumber berkolom PROJECT LOKASI): tabel Jumlah Event per Project di Sum_Bulanan dan sheet Sum_Project (Area x Lokasi x Project)
+  const TANPA_PJ = '(Tanpa project)';
+  if (adaPj) {
+    const pjCol = huruf(4 + kol.length), pjRg = 'Sum_Harian!$' + pjCol + '$2:$' + pjCol + '$' + Math.max(2, nH);
+    const daftarPj = Object.keys(harian.reduce((o, r) => { o[r[r.length - 1] || ''] = 1; return o; }, {})).sort((a, b) => !a ? 1 : !b ? -1 : banding(a, b));
+    const r1 = r0 + lokasi.length + 3;
+    shB.getRange(r1, 1, 1, kol.length + 2).setValues([['Jumlah Event per Project'].concat(judul, ['Total'])]).setFontWeight('bold');
+    shB.getRange(r1 + 1, 1, daftarPj.length, kol.length + 2).setFormulas(daftarPj.map((pj, i) => {
+      const krit = pj ? '$A' + (r1 + 1 + i) : '""';
+      return ['="' + (pj || TANPA_PJ).replace(/"/g, '""') + '"'].concat(kol.map((k, c) => '=SUMIFS(' + kolH(c) + ',' + pjRg + ',' + krit + ')'),
+        ['=SUM(B' + (r1 + 1 + i) + ':' + huruf(1 + kol.length) + (r1 + 1 + i) + ')']);
+    }));
+    shB.getRange(r1, 1, daftarPj.length + 1, kol.length + 2).setBorder(true, true, true, true, true, true);
+    shB.getRange(r1 + 1, 2, daftarPj.length, kol.length + 1).setNumberFormat('#,##0;-#,##0;;@');
+    const T = {};
+    x.EV.forEach(e => { const k = [e[1], e[2] || SUM_TANPA_LOKASI, e[5] || TANPA_PJ].join('\u0001'), t = T[k] || (T[k] = { r: [e[1], e[2] || SUM_TANPA_LOKASI, e[5] || TANPA_PJ].concat(kol.map(() => '')), n: 0 });
+      const i = 3 + ci[e[3].toUpperCase()]; t.r[i] = (t.r[i] || 0) + e[4]; t.n += e[4]; });
+    const rowsPj = Object.keys(T).map(k => T[k].r.concat([T[k].n]))
+      .sort((a, b) => ai(a[0]) - ai(b[0]) || banding(a[1], b[1]) || (a[2] === TANPA_PJ ? 1 : b[2] === TANPA_PJ ? -1 : banding(a[2], b[2])));
+    tabel(sheet('Sum_Project'), ['Area', 'Lokasi', 'Project'].concat(judul, ['Total']), rowsPj, true);
+  } else { const lama = ss.getSheetByName('Sum_Project'); if (lama) ss.deleteSheet(lama); }
+  shB.autoResizeColumns(1, kol.length + 2);
 
   const shI = sheet('Info');
   shI.getRange(1, 1, 6, 2).setValues([
@@ -1220,7 +1242,8 @@ function tulisSummary_(ss, sf, m, x, j, peta, src, tanda) {
     ['Baris jam', perJam.length],
     [SUM_TANDA, tanda],
   ]);
-  ss.getSheets().forEach((sh, i) => { const urut = ['Sum_Bulanan', 'Sum_Harian', 'Sum_AMT', 'Sum_Jam', 'Sum_AMT_Jam', 'Info'].indexOf(sh.getName()); if (urut >= 0 && urut !== i) { ss.setActiveSheet(sh); ss.moveActiveSheet(urut + 1); } });
+  const URUT = ['Sum_Bulanan', 'Sum_Harian', 'Sum_Project', 'Sum_AMT', 'Sum_Jam', 'Sum_AMT_Jam', 'Info'].filter(n => ss.getSheetByName(n));
+  ss.getSheets().forEach((sh, i) => { const urut = URUT.indexOf(sh.getName()); if (urut >= 0 && urut !== i) { ss.setActiveSheet(sh); ss.moveActiveSheet(urut + 1); } });
   Logger.log('Summary ' + namaBulan_('Summary', m) + ': ' + harian.length + ' baris harian, ' + amt.length + ' baris AMT, ' + perJam.length + ' baris jam, ' + amtJam.length + ' baris AMT jam.');
 }
 
@@ -1235,7 +1258,8 @@ function anomali_(area, m, d) {
 function tandaSumber_(src, peta, m) {
   // bulan berjalan / akan datang: Summary dibangun ulang tiap hari, karena tanggal yang belum terjadi tidak dihitung (lihat anomali_)
   const hi = hariIni_(), bln = CFG.TAHUN + '-' + ('0' + (m + 1)).slice(-2);
-  const isi = ['amt4', bln >= hi.slice(0, 7) ? hi : '', CFG.MULAI_TARIKAN, JSON.stringify(CFG.MULAI_TARIKAN_AREA || {}), JSON.stringify(CFG.TANGGAL_ANOMALI || {}), JSON.stringify(peta.kasus)]
+  // -pj1: Summary Oktober dst. ditulis ulang sekali (Sum_Project & tabel Jumlah Event per Project)
+  const isi = ['amt4' + (m >= 9 ? '-pj1' : ''), bln >= hi.slice(0, 7) ? hi : '', CFG.MULAI_TARIKAN, JSON.stringify(CFG.MULAI_TARIKAN_AREA || {}), JSON.stringify(CFG.TANGGAL_ANOMALI || {}), JSON.stringify(peta.kasus)]
     .concat(src.map(o => o.f.getId() + '@' + o.f.getLastUpdated().getTime())).join('|');
   return 'v1-' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, isi, Utilities.Charset.UTF_8)).slice(0, 22);
 }
