@@ -274,7 +274,7 @@ tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
 .msel{position:relative;display:inline-block}
 .msbtn{font:600 13.5px var(--f-ui);color:var(--ink);background:#fff;border:0;border-radius:8px;padding:7px 30px 7px 12px;cursor:pointer;min-width:190px;max-width:280px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
 .msbtn::after{content:"";position:absolute;right:12px;top:50%;width:7px;height:7px;border-right:2px solid var(--ink);border-bottom:2px solid var(--ink);transform:translateY(-70%) rotate(45deg)}
-.mspop{position:fixed;z-index:200;top:0;left:0;width:290px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:10px;color:var(--ink);font-weight:500}
+.mspop{position:fixed;z-index:950;top:0;left:0;width:290px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:10px;color:var(--ink);font-weight:500}
 .mscari{width:100%;box-sizing:border-box;font:500 13.5px var(--f-ui);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 .msacts{display:flex;gap:8px;margin:8px 0 4px}.msacts button{font:600 12px var(--f-ui);border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;color:var(--forest)}
 .mslist{max-height:340px;overflow-y:auto}
@@ -1117,8 +1117,9 @@ function kontrolTanggal() {
 document.getElementById('selMon').onchange = e => { mon = +e.target.value; tgl = tgl2 = 0; ERRW = ''; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
 // pilihan bercentang: host = .msel, grup() -> [{nama, item: [{k, n}]}], S = Set kunci terpilih, ubah() dipanggil tiap centang berubah
-function pasangMulti(host, grup, S, ubah) {
+function pasangMulti(host, grup, S, ubah, tutup) {
   const btn = host.querySelector('.msbtn'), pop = host.querySelector('.mspop'), cari = pop.querySelector('.mscari'), list = pop.querySelector('.mslist');
+  document.body.appendChild(pop);   // di luar header: tidak terpotong dan tetap di atas lapisan "Memuat…" (z-index di tingkat halaman)
   const isi = () => { const q = cari.value.trim().toLowerCase(); let h = '';
     grup().forEach((g, gi) => { const it = g.item.filter(o => !q || o.n.toLowerCase().indexOf(q) >= 0); if (!it.length) return;
       const semua = it.every(o => S.has(o.k)), ada = it.some(o => S.has(o.k));
@@ -1130,7 +1131,7 @@ function pasangMulti(host, grup, S, ubah) {
   const letak = () => { const r = btn.getBoundingClientRect(), w = Math.min(290, innerWidth - 32), bawah = innerHeight - r.bottom - 16;
     pop.style.left = Math.max(16, Math.min(r.left, innerWidth - w - 16)) + 'px'; pop.style.top = (r.bottom + 6) + 'px';
     list.style.maxHeight = Math.max(160, Math.min(340, bawah - 110)) + 'px'; };
-  const buka = v => { pop.hidden = !v; btn.setAttribute('aria-expanded', v); if (v) { cari.value = ''; isi(); if (btn.getBoundingClientRect().bottom > innerHeight - 280) scrollBy(0, btn.getBoundingClientRect().top - 80); letak(); cari.focus({preventScroll: true}); } };
+  const buka = v => { const tadi = !pop.hidden; pop.hidden = !v; if (tadi && !v && tutup) tutup(); btn.setAttribute('aria-expanded', v); if (v) { cari.value = ''; isi(); if (btn.getBoundingClientRect().bottom > innerHeight - 280) scrollBy(0, btn.getBoundingClientRect().top - 80); letak(); cari.focus({preventScroll: true}); } };
   addEventListener('resize', () => { if (!pop.hidden) letak(); });
   addEventListener('scroll', () => { if (!pop.hidden) letak(); }, true);
   btn.onclick = e => { e.stopPropagation(); document.querySelectorAll('.mspop').forEach(x => { if (x !== pop) x.hidden = true; }); buka(pop.hidden); };
@@ -1217,7 +1218,7 @@ function pilihanPj() {
 const EVTS = new Set(); let EVD = {};
 const escH = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
 const MS_EVT = pasangMulti(document.getElementById('msEvt'), () => CATS.map(c => ({nama: c.name, item: catParams(c.key).map(p => ({k: p.key, n: p.label}))})).filter(g => g.item.length), EVTS,
-  () => { const ada = !!EVTS.size, baru = ada && document.getElementById('panelEvt').hidden; render(); if (baru) document.getElementById('panelEvt').scrollIntoView({behavior: 'smooth', block: 'nearest'}); });
+  render, () => { if (EVTS.size) document.getElementById('panelEvt').scrollIntoView({behavior: 'smooth', block: 'nearest'}); });   // halaman digeser ke panel sesudah daftar ditutup, bukan saat mencentang
 function muatEvent(m) {
   if (m === null || EVD[m]) return;
   EVD[m] = 'muat';
