@@ -34,6 +34,18 @@ h1{margin:2px 0 4px;font-size:clamp(22px,3vw,34px);font-weight:700;letter-spacin
 .seg{display:inline-flex;background:rgba(0,0,0,.18);border-radius:999px;padding:3px}
 .seg button{appearance:none;border:0;background:transparent;color:#fff;font:600 13.5px var(--f-ui);padding:7px 18px;border-radius:999px;cursor:pointer}
 .seg button[aria-selected="true"]{background:#fff;color:var(--forest)}
+/* pilihan bercentang (filter Event) */
+.msel{position:relative;display:inline-block}
+.msbtn{font:600 13.5px var(--f-ui);color:var(--ink);background:#fff;border:0;border-radius:8px;padding:7px 30px 7px 12px;cursor:pointer;min-width:190px;max-width:280px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
+.msbtn::after{content:"";position:absolute;right:12px;top:50%;width:7px;height:7px;border-right:2px solid var(--ink);border-bottom:2px solid var(--ink);transform:translateY(-70%) rotate(45deg)}
+.mspop{position:fixed;z-index:950;top:0;left:0;width:290px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:10px;color:var(--ink);font-weight:500}
+.mscari{width:100%;box-sizing:border-box;font:500 13.5px var(--f-ui);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.msacts{display:flex;gap:8px;margin:8px 0 4px}.msacts button{font:600 12px var(--f-ui);border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;color:var(--forest)}
+.mslist{max-height:340px;overflow-y:auto}
+.msgrp{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:8px 6px 4px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.msopt{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13.5px}.msopt:hover{background:var(--accent-wash)}
+.msopt input,.msgrp input{width:16px;height:16px;accent-color:var(--forest);margin:0;cursor:pointer}
+.mskosong{padding:8px;font-size:13px;color:var(--muted)}
 .pick{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
 .pick select,.pick input{font:600 13.5px var(--f-ui);color:var(--ink);background:#fff;border:0;border-radius:8px;padding:7px 12px;cursor:pointer;max-width:100%}
 .hbtn{font:600 13px var(--f-ui);border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:7px 14px;cursor:pointer}
@@ -338,6 +350,7 @@ dialog::backdrop{background:rgba(20,30,25,.45)}
         <label class="pick" id="lBln" hidden>Bulan <select id="fBln"></select></label>
         <label class="pick" id="lArea">Area <select id="fArea"></select></label>
         <label class="pick" id="lLok">Lokasi <select id="fLok"></select></label>
+        <span class="pick" id="lEvt" hidden>Event <span class="msel" id="msEvt"><button type="button" class="msbtn" id="selEvt" aria-haspopup="true" aria-expanded="false">Semua event</button><div class="mspop" hidden><input type="search" class="mscari" placeholder="Cari event…" aria-label="Cari event"><div class="msacts"><button type="button" data-a="semua">Pilih semua</button><button type="button" data-a="hapus">Hapus pilihan</button></div><div class="mslist" role="group" aria-label="Daftar event"></div></div></span></span>
         <label class="pick" id="lRentang" hidden>Rentang <select id="fRentang"></select></label>
         <button class="hbtn pdf" id="btnPdf" type="button" disabled>Export PDF</button>
         <button class="hbtn pdf" id="btnJpg" type="button" disabled hidden title="Gambar JPG selebar layar HP (tegak)">Download JPG</button>
@@ -1168,6 +1181,7 @@ function mulai() {
     isiLokasi();
     const rtc = a.peran === 'PUSAT';
     if (rtc) { $('fRentang').innerHTML = J4_RENTANG.map((o, i) => `<option value="${i}">${o.l}</option>`).join(''); /* pilihan Rentang disembunyikan untuk saat ini: selalu semua jam s/d data terakhir */ }
+    $('lEvt').hidden = rtc;   // filter Event: akun Command Center & Control Room (laporan Daily / Monthly)
     if (rtc) { MODE = 'harian'; document.querySelector('.seg').hidden = true; document.querySelector('.hero h1').textContent = 'Laporan Per 4 Jam'; }   // akun RTC: tanpa Daily / Monthly
     const akhir = new Date(Date.now() + 7 * 36e5 - (rtc ? 0 : 864e5)).toISOString().slice(0, 10);   // pelaporan H+1: bawaan tanggal kemarin (WIB); RTC: hari ini
     if (!$('fTgl').value) $('fTgl').value = akhir;
@@ -1385,10 +1399,59 @@ function kolomNama(judulK, f, L) {
   return `<div><div class="k">${judulK}</div><div class="namabox"><span class="v">${esc(L[f] || '–')}</span>` +
     (bisa ? `<button type="button" class="pensil" data-ubah="${f}" data-html2canvas-ignore title="${L[f] ? 'Ganti' : 'Isi'} nama">${L[f] ? 'Ganti' : 'Isi nama'}</button>` : `<span class="hint2" data-html2canvas-ignore>Pilih lokasi untuk mengisi nama</span>`) + '</div></div>';
 }
+/* ================= FILTER EVENT (Daily / Monthly) ================= */
+// EVSEL: indeks jenis event (p.w, urutan LH_PANEL) yang dipilih; kosong / semua = semua event. Tampilan & Export PDF mengikuti pilihan ini.
+const EVSEL = new Set();
+function pasangMulti(host, grup, S, ubah, tutup) {
+  const btn = host.querySelector('.msbtn'), pop = host.querySelector('.mspop'), cari = pop.querySelector('.mscari'), list = pop.querySelector('.mslist');
+  document.body.appendChild(pop);   // di luar header: tidak terpotong dan tetap di atas lapisan "Memuat…" (z-index di tingkat halaman)
+  const isi = () => { const q = cari.value.trim().toLowerCase(); let h = '';
+    grup().forEach((g, gi) => { const it = g.item.filter(o => !q || o.n.toLowerCase().indexOf(q) >= 0); if (!it.length) return;
+      const semua = it.every(o => S.has(o.k)), ada = it.some(o => S.has(o.k));
+      if (g.nama) h += `<label class="msgrp"><input type="checkbox" data-g="${gi}" ${semua ? 'checked' : ''} ${!semua && ada ? 'data-sebagian="1"' : ''}>${esc(g.nama)}</label>`;
+      h += it.map(o => `<label class="msopt"><input type="checkbox" value="${esc(o.k)}" ${S.has(o.k) ? 'checked' : ''}>${esc(o.n)}</label>`).join(''); });
+    list.innerHTML = h || '<div class="mskosong">Tidak ada yang cocok.</div>';
+    list.querySelectorAll('[data-sebagian]').forEach(x => { x.indeterminate = true; }); };
+  // posisi fixed (dihitung dari tombol): tidak terpotong header hijau (.hero overflow:hidden) dan tetap di dalam layar
+  const letak = () => { const r = btn.getBoundingClientRect(), w = Math.min(290, innerWidth - 32), bawah = innerHeight - r.bottom - 16;
+    pop.style.left = Math.max(16, Math.min(r.left, innerWidth - w - 16)) + 'px'; pop.style.top = (r.bottom + 6) + 'px';
+    list.style.maxHeight = Math.max(160, Math.min(340, bawah - 110)) + 'px'; };
+  const buka = v => { const tadi = !pop.hidden; pop.hidden = !v; if (tadi && !v && tutup) tutup(); btn.setAttribute('aria-expanded', v); if (v) { cari.value = ''; isi(); if (btn.getBoundingClientRect().bottom > innerHeight - 280) scrollBy(0, btn.getBoundingClientRect().top - 80); letak(); cari.focus({preventScroll: true}); } };
+  addEventListener('resize', () => { if (!pop.hidden) letak(); });
+  addEventListener('scroll', () => { if (!pop.hidden) letak(); }, true);
+  btn.onclick = e => { e.stopPropagation(); document.querySelectorAll('.mspop').forEach(x => { if (x !== pop) x.hidden = true; }); buka(pop.hidden); };
+  pop.onclick = e => e.stopPropagation();
+  document.addEventListener('click', () => buka(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) { buka(false); btn.focus(); } });
+  cari.oninput = isi;
+  list.onchange = e => { const x = e.target, q = cari.value.trim().toLowerCase();
+    if (x.dataset.g !== undefined) grup()[+x.dataset.g].item.filter(o => !q || o.n.toLowerCase().indexOf(q) >= 0).forEach(o => x.checked ? S.add(o.k) : S.delete(o.k));
+    else x.checked ? S.add(x.value) : S.delete(x.value);
+    isi(); ubah(); };
+  pop.querySelector('.msacts').onclick = e => { const a = e.target.dataset.a; if (!a) return;
+    grup().forEach(g => g.item.forEach(o => a === 'semua' ? S.add(o.k) : S.delete(o.k))); isi(); ubah(); };
+  return {isi};
+}
+const MS_EV = pasangMulti($('msEvt'), () => [{nama: '', item: (LAP && LAP.panel ? LAP.panel : []).map(p => ({k: String(p.w), n: p.grafik}))}], EVSEL, () => { if (LAP && LAP.panel) gambar(LAP); });
+function saringEvent(L) {
+  const pil = L.panel.map(p => EVSEL.has(String(p.w)));
+  if (!EVSEL.size || !pil.some(x => x) || pil.every(x => x)) return L;
+  const K = L.panel.map((_, k) => k).filter(k => pil[k]), X = Object.assign({}, L, {panel: K.map(k => L.panel[k]), _evt: K.map(k => L.panel[k].grafik)});
+  if (L.tren) X.tren = Object.assign({}, L.tren, {rows: L.tren.rows.map(r => Object.assign({}, r, {h: K.map(k => r.h[k] || []), l: K.map(k => r.l[k] || 0)}))});
+  // Event harian (Monthly): dijumlahkan ulang dari tren per tanggal, hanya event terpilih
+  if (L.mode === 'bulanan' && L.tren && L.perHari) X.perHari = L.perHari.map(o => Object.assign({}, o, {event: X.tren.rows.reduce((s, r) => s + r.h.reduce((t, a) => t + (a[o.d - 1] || 0), 0), 0)}));
+  return X;
+}
+function pilihanEvent() {
+  const P = LAP && LAP.panel ? LAP.panel : [], pil = P.filter(p => EVSEL.has(String(p.w))), el = $('selEvt');
+  el.textContent = !pil.length || pil.length === P.length ? 'Semua event' : pil.length === 1 ? pil[0].grafik : pil.length + ' event dipilih';
+  el.title = pil.map(p => p.grafik).join(', ');
+}
 function gambar(L) {
+  pilihanEvent(); L = saringEvent(L);
   const bln = L.mode === 'bulanan', P = L.perangkat, lbl = L.baris === 'Area' ? L.lokasi : judul(L.lokasi);
   const per = bln ? blnPanjang(L.periode) : tglPanjang(L.periode);
-  $('tSub').textContent = `${bln ? 'Monthly' : 'Daily'} · ${per} · ${lbl}`;
+  $('tSub').textContent = `${bln ? 'Monthly' : 'Daily'} · ${per} · ${lbl}` + (L._evt ? ' · Event: ' + L._evt.join(', ') : '');
   const satuan = bln ? 'Nopol-hari' : 'Nopol', totalEv = L.panel.reduce((s, p) => s + p.total, 0);
   const cat = (L.gagal || []).slice();   // sumber yang gagal dibaca; bagian lain tetap ditampilkan
   if (!L.adaEvent) cat.push(`Belum ada data event untuk ${per}${L.sumber ? '' : ' (file tarikan bulan ini belum ada di folder data)'}.`);
@@ -1407,7 +1470,7 @@ function gambar(L) {
   if (bln) h += `<section class="grid g-2">
     <div class="panel"><div class="ph"><h2>Uptime harian</h2><p>Persentase Nopol online per tanggal</p></div>
       <div class="legend"><span><i style="background:var(--gps)"></i>GPS</span><span><i style="background:var(--cam)"></i>Dashcam (ADAS)</span></div>${grafikGaris(L.perHari)}</div>
-    <div class="panel"><div class="ph"><h2>Event harian</h2><p>Jumlah seluruh event per tanggal</p></div>${grafikKolom(L.perHari)}</div>
+    <div class="panel"><div class="ph"><h2>Event harian</h2><p>Jumlah ${L._evt ? 'event terpilih' : 'seluruh event'} per tanggal</p></div>${grafikKolom(L.perHari)}</div>
   </section>`;
   if (L.tren && INFO.akun.peran !== 'LOKASI') h += `<section class="panel"><div class="ph"><h2>Tren &amp; Parameter per Jenis Event</h2><p>Jumlah event per ${L.baris.toLowerCase()} pada ${esc(per)}, diurutkan dari yang tertinggi · batang paling kanan = TOTAL</p></div>${trenLokasi(L)}</section>`;
   h += `<section class="panel"><div class="ph"><h2>Event di Setiap ${L.baris === 'Area' ? 'Area' : 'Lokasi'}</h2><p>${bln ? 'Total sebulan' : 'Total hari ini'} · ${L.panel[0] && L.panel[0].rows.length === 1 ? 'jumlah case per jenis event · batang gelap = terbanyak, garis putus-putus = rata-rata' : 'jumlah case per jenis event, diurutkan dari yang terbanyak'}</p></div>${grafikLokasi(L)}</section>`;
