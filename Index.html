@@ -274,7 +274,7 @@ tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
 .msel{position:relative;display:inline-block}
 .msbtn{font:600 13.5px var(--f-ui);color:var(--ink);background:#fff;border:0;border-radius:8px;padding:7px 30px 7px 12px;cursor:pointer;min-width:190px;max-width:280px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
 .msbtn::after{content:"";position:absolute;right:12px;top:50%;width:7px;height:7px;border-right:2px solid var(--ink);border-bottom:2px solid var(--ink);transform:translateY(-70%) rotate(45deg)}
-.mspop{position:absolute;z-index:60;top:calc(100% + 6px);left:0;width:290px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:10px;color:var(--ink);font-weight:500}
+.mspop{position:fixed;z-index:200;top:0;left:0;width:290px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:10px;color:var(--ink);font-weight:500}
 .mscari{width:100%;box-sizing:border-box;font:500 13.5px var(--f-ui);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 .msacts{display:flex;gap:8px;margin:8px 0 4px}.msacts button{font:600 12px var(--f-ui);border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;color:var(--forest)}
 .mslist{max-height:340px;overflow-y:auto}
@@ -1126,7 +1126,13 @@ function pasangMulti(host, grup, S, ubah) {
       h += it.map(o => `<label class="msopt"><input type="checkbox" value="${escH(o.k)}" ${S.has(o.k) ? 'checked' : ''}>${escH(o.n)}</label>`).join(''); });
     list.innerHTML = h || '<div class="mskosong">Tidak ada yang cocok.</div>';
     list.querySelectorAll('[data-sebagian]').forEach(x => { x.indeterminate = true; }); };
-  const buka = v => { pop.hidden = !v; btn.setAttribute('aria-expanded', v); if (v) { cari.value = ''; isi(); cari.focus(); } };
+  // posisi fixed (dihitung dari tombol): tidak terpotong header hijau (.hero overflow:hidden) dan tetap di dalam layar
+  const letak = () => { const r = btn.getBoundingClientRect(), w = Math.min(290, innerWidth - 32), bawah = innerHeight - r.bottom - 16;
+    pop.style.left = Math.max(16, Math.min(r.left, innerWidth - w - 16)) + 'px'; pop.style.top = (r.bottom + 6) + 'px';
+    list.style.maxHeight = Math.max(160, Math.min(340, bawah - 110)) + 'px'; };
+  const buka = v => { pop.hidden = !v; btn.setAttribute('aria-expanded', v); if (v) { cari.value = ''; isi(); if (btn.getBoundingClientRect().bottom > innerHeight - 280) scrollBy(0, btn.getBoundingClientRect().top - 80); letak(); cari.focus({preventScroll: true}); } };
+  addEventListener('resize', () => { if (!pop.hidden) letak(); });
+  addEventListener('scroll', () => { if (!pop.hidden) letak(); }, true);
   btn.onclick = e => { e.stopPropagation(); document.querySelectorAll('.mspop').forEach(x => { if (x !== pop) x.hidden = true; }); buka(pop.hidden); };
   pop.onclick = e => e.stopPropagation();
   document.addEventListener('click', () => buka(false));
