@@ -108,7 +108,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-11-03c';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-11-04a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -1436,9 +1436,9 @@ function prosesTarikan() {
     const email = [];   // file Cleansing yang hasilnya berubah / gagal: dikirim satu email di akhir jalan ini
 
     // baru, berubah, gagal sebelumnya, atau file per 4 jam yang belum selesai terbaca
-    // file Cleansing yang diproses sebelum kolom PROJECT LOKASI dibaca (sidik tanpa awalan p1:) dibaca ulang sekali
+    // file Cleansing yang diproses dengan aturan lama (sidik tanpa awalan p2:, mis. sebelum kolom PROJECT LOKASI / batas rentang upload) dibaca ulang sekali
     const antre = daftar.filter(o => !sudah[o.id] || sudah[o.id].diubah !== o.diubah || /^(GAGAL|SEBAGIAN)/.test(sudah[o.id].status)
-      || (o.cleansing && /^OK/.test(sudah[o.id].status) && !!sudah[o.id].sidik && !/^p1:/.test(sudah[o.id].sidik)));
+      || (o.cleansing && /^OK/.test(sudah[o.id].status) && !!sudah[o.id].sidik && !/^p2:/.test(sudah[o.id].sidik)));
     // file yang pernah gagal diproses paling akhir, supaya tidak menahan file lain (file yang dibaca bertahap tidak ditunda)
     const gagal = o => sudah[o.id] && /^GAGAL/.test(sudah[o.id].status) ? 1 : 0;
     antre.sort((a, b) => gagal(a) - gagal(b) || (a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0));
@@ -1467,7 +1467,9 @@ function prosesTarikan() {
       logSh.getRange(sudah[o.id].baris, 1, 1, row.length).setValues([row]);
       // file Cleansing yang isinya tidak berubah (mis. hanya sheet Tindak Lanjut yang diedit) tidak memicu bangun ulang cache / email
       if (berubah || status !== 'OK') n++;
-      if (o.cleansing && hc && berubah && hc.email !== false) email.push({ o: o, h: hc, lama: lama });
+      // dibaca ulang karena aturan baru (p1 -> p2) dan jumlah per parameter tidak berubah: tanpa email
+      const ulangSaja = lama && /^p1:/.test(lama.sidik || '') && lama.ring === JSON.stringify(hc ? hc.param : null);
+      if (o.cleansing && hc && berubah && hc.email !== false && !ulangSaja) email.push({ o: o, h: hc, lama: lama });
       if (o.cleansing && status !== 'OK' && !(lama && /^GAGAL/.test(lama.status))) email.push({ o: o, gagal: status, lama: lama });
     }
     if (email.length) try { kirimEmailUpdate_(email); } catch (e) { Logger.log('Email update gagal dikirim: ' + e.message); }
@@ -1602,11 +1604,14 @@ function prosesCleansing_(folder, o, peta, sidikLama) {
     const r = v[i], c = normKasus(r[cAl]);
     if (!c) continue;   // baris kosong / tanpa alarm
     if (CFG.CLEANSING_BUANG_KEMBAR) { const kk = r.join('\u0001'); if (lihat[kk]) { h.kembar++; continue; } lihat[kk] = 1; }
-    const t = waktuMs(r[cWk], true);
-    if (t === null || t === undefined) { h.tanpaWaktu++; continue; }
+    const t0 = waktuMs(r[cWk], true);
+    if (t0 === null || t0 === undefined) { h.tanpaWaktu++; continue; }
+    // TIME tepat di akhir rentang upload (mis. 08:00:00 pada "Upload 08:00 (04:00 - 08:00)") dihitung ke jam sebelumnya,
+    // supaya jam berikutnya tidak terisi 1-2 event dan perbandingan H-1 di Laporan Per 4 Jam tidak ikut diperpanjang
+    const batas = cRt >= 0 && batasRentang_(r[cWk], r[cRt]), t = batas ? t0 - 1000 : t0;
     const tg = tglMs(t);
     if (tg < awal || +tg.slice(0, 4) !== CFG.TAHUN) { h.diluar++; continue; }
-    const pj = cPj >= 0 ? projNorm_(r[cPj]) : '', lok = teks(r[cTb]).toUpperCase(), jam = jamDari(r[cWk]), ke = lok + '\u0001' + c + (cPj >= 0 ? '\u0001' + pj : ''), kt = tg + '\u0001' + ke;
+    const j0 = jamDari(r[cWk]), pj = cPj >= 0 ? projNorm_(r[cPj]) : '', lok = teks(r[cTb]).toUpperCase(), jam = batas && j0 !== null ? (j0 + 23) % 24 : j0, ke = lok + '\u0001' + c + (cPj >= 0 ? '\u0001' + pj : ''), kt = tg + '\u0001' + ke;
     ev[kt] = (ev[kt] || 0) + 1; h.n++; tambah(h.tanggal, tg);
     if (jam !== null) { const kj = tg + '\u0001' + jam + '\u0001' + ke; evj[kj] = (evj[kj] || 0) + 1; }
     const nama = cAm >= 0 ? namaAmt(r[cAm]) : '';
@@ -1622,9 +1627,9 @@ function prosesCleansing_(folder, o, peta, sidikLama) {
   const sidik = (a, b, c, d) => Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, urutJson(a) + urutJson(b) + urutJson(c) + urutJson(d) + o.area));
   // tanpa kolom project: kunci dijumlahkan tanpa bagian project (sama dengan sidik versi lama)
   const tanpaPj = x => { if (cPj < 0) return x; const y = {}; Object.keys(x).forEach(kk => { const b = kk.slice(0, kk.lastIndexOf('\u0001')); y[b] = (y[b] || 0) + x[kk]; }); return y; };
-  const penuh = sidik(ev, evj, amt, amj), lamaV0 = !!sidikLama && !/^p1:/.test(sidikLama);
+  const penuh = sidik(ev, evj, amt, amj), lamaV0 = !!sidikLama && !/^p\d:/.test(sidikLama);
   const sama0 = lamaV0 && sidik(tanpaPj(ev), tanpaPj(evj), tanpaPj(amt), tanpaPj(amj)) === sidikLama;   // jumlahnya sama dengan hasil lama (versi tanpa project)
-  h.sidik = 'p1:' + penuh;
+  h.sidik = 'p2:' + penuh;
   h.berubah = h.sidik !== sidikLama && !(sama0 && cPj < 0);
   h.email = h.berubah && !sama0;   // hanya kolom project yang baru: Tarikan ditulis ulang tanpa email update
   if (!h.berubah) return h;
@@ -2102,6 +2107,11 @@ function waktuMs(x, bulanDulu) {
   return u ? new Date(+u[3] < 100 ? 2000 + +u[3] : +u[3], +u[1] - 1, +u[2], +u[4], +u[5], +(u[6] || 0)).getTime() : null;
 }
 /** Jam kejadian (0-23) dari kolom Time: nilai tanggal-jam Sheets atau teks "yyyy-mm-ddThh:mm:ss". */
+/** true bila TIME tepat jam bulat (HH:00 / HH:00:00) dan jam itu = akhir rentang di kolom RENTANG ("... (04:00 - 08:00)", "Rentang 23:00 - 03:00"). */
+function batasRentang_(waktu, rentang) {
+  const w = teks(waktu).match(/[T ](\d{1,2}):00(?::00)?$/), e = teks(rentang).match(/(\d{1,2}):(\d{2})\s*\)?\s*$/);
+  return !!(w && e && +e[2] === 0 && +w[1] % 24 === +e[1] % 24);
+}
 function jamDari(x) {
   if (x instanceof Date) return x.getHours();
   const v = teks(x), t = v.match(/[T ](\d{1,2}):\d{2}/);
