@@ -108,7 +108,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-11-04a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-11-05a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -701,7 +701,8 @@ function dataWaktu_(m, d, s, h, d2) {
     X.EJ.forEach(e => { const x = w(e[0], e[1], b); if (x >= 0) EV.push([x, e[1] < 0 ? 0 : e[1] + 1, e[2], e[3], e[4], kat[e[4]], e[5], e[6] || '']); });
     X.AJ.forEach(r => { const x = w(r[0], r[1], b); if (x >= 0) AM.push([x, r[2], r[3], r[4], r[5], kat[r[5]], r[6], r[7] || '']); });
   });
-  const hasil = hitung_(EV, AM, peta, [], []);
+  // nama & area lokasi diambil dari jendela terpilih dulu (sama dengan data utama = bulan terbaru), baru pembanding
+  const hasil = hitung_(EV, AM, peta, [], [], b => [3, 1, 2, 0][b]);
   hasil.waktu = { m: m, d: d, d2: d2, s: s, h: h, adaPrev: JP.EJ.length > 0, pm: m - 1, tMaks: tMaks };
   const json = JSON.stringify(hasil);
   simpanCache_(json, kunci, CFG.CACHE_DETIK);   // kunci ikut versi data: berganti setiap tarikan / summary baru
@@ -2267,7 +2268,9 @@ function bacaLogTarikan(folder) {
  *   driver : { all, area, lok, nama } -> [[bulan, indeks area, indeks lokasi, indeks parameter, indeks nama, jumlah]]
  *            5 Driver teratas per bulan x parameter, untuk semua area, per area, dan per lokasi (kolom AMT 1).
  */
-function hitung_(EV, AM, peta, catatan, peringatan) {
+// urutM (opsional): urutan "kebaruan" kolom bulan untuk memilih ejaan nama & area lokasi (bawaan: bulan terbesar = terbaru)
+function hitung_(EV, AM, peta, catatan, peringatan, urutM) {
+  const rk = typeof urutM === 'function' ? urutM : x => x;
   const ada = {}; EV.forEach(e => { ada[e[0]] = 1; });
   const bulanAda = Object.keys(ada).map(Number).sort((a, b) => a - b);
 
@@ -2281,8 +2284,9 @@ function hitung_(EV, AM, peta, catatan, peringatan) {
   // Satu lokasi = satu nama & satu area di semua bulan. Ejaan disamakan (tanda hubung/spasi diabaikan, ALIAS_LOKASI),
   // nama dan area diambil dari bulan terbaru (data tarikan mengikuti pembagian folder di Tarikan Sistem).
   const info = {};   // kunci -> {m, nama, area: {bulan: {area: jumlah}}}
-  const catat = (m, a, l, n) => {
+  const catat = (m0, a, l, n) => {
     if (!l) return;
+    const m = rk(m0);
     const k = kunciLok(l), o = info[k] || (info[k] = { m: -1, nama: l, area: {} });
     if (m >= o.m) { o.m = m; o.nama = ALIAS_LOKASI[l] || l; }
     if (a) { const x = o.area[m] || (o.area[m] = {}); x[a] = (x[a] || 0) + n; }

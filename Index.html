@@ -868,8 +868,11 @@ function muatLayar(d, teks) {
 }
 function siapkanWin(w) {
   saringPj(w);
-  const idx = {}; RAW.lok.forEach((x, i) => idx[x[0] + '|' + x[1]] = i);
-  w.lokMap = w.lok.map(x => idx[x[0] + '|' + x[1]] === undefined ? -1 : idx[x[0] + '|' + x[1]]);
+  // lokasi dicocokkan dengan nama + area; bila ejaan (spasi / tanda hubung) atau areanya beda dengan data utama, dengan nama yang dinormalkan
+  const idx = {}, kn = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), byN = {}, byNA = {};
+  RAW.lok.forEach((x, i) => { idx[x[0] + '|' + x[1]] = i; if (!x[0]) return; const k = kn(x[0]); byNA[k + '|' + x[1]] = i; byN[k] = byN[k] === undefined ? i : -2; });
+  w.lokMap = w.lok.map(x => { const i = idx[x[0] + '|' + x[1]]; if (i !== undefined) return i; if (!x[0]) return -1;
+    const k = kn(x[0]), j = byNA[k + '|' + x[1]]; return j !== undefined ? j : byN[k] >= 0 ? byN[k] : -1; });
   w.pMap = w.params.map(p => P.findIndex(q => q.key === p.key));
   return w;
 }
