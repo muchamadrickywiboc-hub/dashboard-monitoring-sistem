@@ -1592,7 +1592,7 @@ function dmFilterTeks() {
 function dmPesan(id, teks) { const e = document.getElementById(id); e.hidden = !teks; e.textContent = teks || ''; }
 function dmKuotaTeks() {
   const q = DM.info; if (!q) return 'Memeriksa batas export…';
-  const dasar = `Hanya ${q.hariTerakhir || 3} hari terakhir yang bisa di-export: ${tglId(q.awal)} s/d ${tglId(q.akhir)}.`;
+  const dasar = q.bebas ? `Pilih tanggal ${tglId(q.awal)} s/d ${tglId(q.akhir)}, maksimal ${q.maksHari} hari per export.` : `Hanya ${q.hariTerakhir || 3} hari terakhir yang bisa di-export: ${tglId(q.awal)} s/d ${tglId(q.akhir)}.`;
   if (q.sisa < 0) return dasar;
   return `${dasar} Sisa export ${q.per === 'BULAN' ? 'bulan' : 'hari'} ini: ${q.sisa} dari ${q.batas}.` + (q.sisa ? '' : ' Batas sudah tercapai, silakan hubungi Tim Pusat.');
 }
@@ -1601,6 +1601,7 @@ const tglId = x => x ? x.split('-').reverse().join('/') : '';
 // tanggal yang boleh di-export: dari server (jam WIB); sebelum jawaban server datang, dihitung dari jam perangkat
 function dmJendela() {
   if (DM.info && DM.info.awal) return {awal: DM.info.awal, akhir: DM.info.akhir};
+  if (AKUN && AKUN.peran === 'PUSAT') { const n = new Date(); return {awal: '2026-10-31', akhir: isoTglY(n.getFullYear(), n.getMonth(), n.getDate())}; }
   const n = new Date(), a = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 2);
   return {awal: isoTglY(a.getFullYear(), a.getMonth(), a.getDate()), akhir: isoTglY(n.getFullYear(), n.getMonth(), n.getDate())};
 }
@@ -1620,6 +1621,8 @@ document.getElementById('btnMentah').onclick = () => {
   let a, b;
   if (tgl > 0) { a = isoTglY(y, mon, tgl); b = isoTglY(y, mon, Math.max(tgl, tgl2 || tgl)); } else { a = b = w.akhir; }
   // filter tanggal dashboard di luar jendela: diberi tanda, tanggal disesuaikan ke jendela
+  const maksH = DM.info ? DM.info.maksHari : 3;
+  if ((Date.parse(b) - Date.parse(a)) / 864e5 + 1 > maksH) { const t = new Date(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10) + maksH - 1); b = isoTglY(t.getFullYear(), t.getMonth(), t.getDate()); }
   const luar = a < w.awal || b > w.akhir, ket = document.getElementById('dmTanda');
   ket.hidden = !luar;
   if (luar) { ket.textContent = `Filter tanggal dashboard (${tglId(a)}${b !== a ? ' s/d ' + tglId(b) : ''}) tidak bisa di-export: hanya ${tglId(w.awal)} s/d ${tglId(w.akhir)} yang tersedia. Tanggal di bawah sudah disesuaikan.`;
