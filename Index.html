@@ -153,6 +153,7 @@ body:not(.master) #selMaster,body.master:not(.peran-area):not(.peran-lokasi) #se
 #dlgMentah .kartu{background:var(--surface);border-radius:16px;box-shadow:0 8px 24px rgba(30,60,40,.2);padding:18px 20px;width:min(440px,100%);font-size:14px;color:var(--ink-2)}
 #dlgMentah h3{margin:0 0 6px;font-size:17px;color:var(--ink)}#dlgMentah .baris{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
 #dlgMentah input[type=date]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px}#dlgMentah .ket{font-size:12.5px;color:var(--muted);line-height:1.45}
+#dlgMentah .tanda{background:#fff4e5;border:1px solid #f0c27a;color:#8a4b00;border-radius:8px;padding:8px 10px;font-size:13px;margin-top:8px}
 #dlgMentah .aksi{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}#dlgMentah .err{color:#b3261e;font-size:13px;margin-top:8px}#dlgMentah .prog{font-size:13px;margin-top:8px}
 #pageLoad{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:rgba(245,248,244,.55);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .15s}
 #pageLoad.on{opacity:1;pointer-events:auto}
@@ -440,6 +441,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
   <div class="ket">Baris event persis seperti sheet Event Sistem (TBBM, TIME, IMEI, PLATE … PROJECT LOKASI), sesuai cakupan akun dan filter yang aktif: <b id="dmFilter"></b>.</div>
   <div class="baris"><label>Dari <input type="date" id="dmDari"></label><label>s/d <input type="date" id="dmSampai"></label></div>
   <div class="ket" id="dmKuota"></div>
+  <div class="tanda" id="dmTanda" hidden></div>
   <div class="prog" id="dmProg" hidden></div><div class="err" id="dmErr" hidden></div>
   <div class="aksi"><button type="button" id="dmBatal">Tutup</button><button type="button" id="dmOk">Export Excel</button></div>
 </div></div>
@@ -1590,34 +1592,58 @@ function dmFilterTeks() {
 function dmPesan(id, teks) { const e = document.getElementById(id); e.hidden = !teks; e.textContent = teks || ''; }
 function dmKuotaTeks() {
   const q = DM.info; if (!q) return 'Memeriksa batas export…';
-  const dasar = `Maksimal ${q.maksHari} hari per export, data tersedia mulai ${q.mulai.split('-').reverse().join('/')}.`;
+  const dasar = `Hanya ${q.hariTerakhir || 3} hari terakhir yang bisa di-export: ${tglId(q.awal)} s/d ${tglId(q.akhir)}.`;
   if (q.sisa < 0) return dasar;
   return `${dasar} Sisa export ${q.per === 'BULAN' ? 'bulan' : 'hari'} ini: ${q.sisa} dari ${q.batas}.` + (q.sisa ? '' : ' Batas sudah tercapai, silakan hubungi Tim Pusat.');
 }
+function dmCekSesudah() { const e = document.getElementById('dmErr'), t = e.hidden ? '' : e.textContent; dmCek(); if (t && e.hidden) dmPesan('dmErr', t); }
+const tglId = x => x ? x.split('-').reverse().join('/') : '';
+// tanggal yang boleh di-export: dari server (jam WIB); sebelum jawaban server datang, dihitung dari jam perangkat
+function dmJendela() {
+  if (DM.info && DM.info.awal) return {awal: DM.info.awal, akhir: DM.info.akhir};
+  const n = new Date(), a = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 2);
+  return {awal: isoTglY(a.getFullYear(), a.getMonth(), a.getDate()), akhir: isoTglY(n.getFullYear(), n.getMonth(), n.getDate())};
+}
+// tanggal di luar jendela: diberi tanda merah dan tombol Export dimatikan
+function dmCek() {
+  const dA = document.getElementById('dmDari'), dB = document.getElementById('dmSampai'), w = dmJendela(), luar = x => x && (x < w.awal || x > w.akhir);
+  dA.min = dB.min = w.awal; dA.max = dB.max = w.akhir;
+  [dA, dB].forEach(x => { x.style.borderColor = luar(x.value) ? '#b3261e' : ''; x.style.color = luar(x.value) ? '#b3261e' : ''; });
+  const bad = [dA.value, dB.value].filter(luar);
+  const habis = DM.info && DM.info.sisa === 0;
+  dmPesan('dmErr', bad.length ? `Tanggal ${[...new Set(bad)].map(tglId).join(' dan ')} tidak bisa di-export. Pilih tanggal ${tglId(w.awal)} s/d ${tglId(w.akhir)}.` : habis ? 'Batas export hari ini sudah tercapai. Silakan hubungi Tim Pusat.' : '');
+  document.getElementById('dmOk').disabled = DM.jalan || !!bad.length || habis;
+}
 document.getElementById('btnMentah').onclick = () => {
   if (!D || DM.jalan) return;
-  const y = D.tahun, now = new Date(), kini = isoTglY(now.getFullYear(), now.getMonth(), now.getDate());
+  const y = D.tahun, w = dmJendela();
   let a, b;
-  if (tgl > 0) { a = isoTglY(y, mon, tgl); b = isoTglY(y, mon, Math.max(tgl, tgl2 || tgl)); }
-  else { b = now.getFullYear() === y && now.getMonth() === mon ? kini : isoTglY(y, mon, new Date(y, mon + 1, 0).getDate()); a = b; }
+  if (tgl > 0) { a = isoTglY(y, mon, tgl); b = isoTglY(y, mon, Math.max(tgl, tgl2 || tgl)); } else { a = b = w.akhir; }
+  // filter tanggal dashboard di luar jendela: diberi tanda, tanggal disesuaikan ke jendela
+  const luar = a < w.awal || b > w.akhir, ket = document.getElementById('dmTanda');
+  ket.hidden = !luar;
+  if (luar) { ket.textContent = `Filter tanggal dashboard (${tglId(a)}${b !== a ? ' s/d ' + tglId(b) : ''}) tidak bisa di-export: hanya ${tglId(w.awal)} s/d ${tglId(w.akhir)} yang tersedia. Tanggal di bawah sudah disesuaikan.`;
+    a = a < w.awal ? w.awal : a > w.akhir ? w.akhir : a; b = b > w.akhir ? w.akhir : b < w.awal ? w.awal : b; if (b < a) b = a; }
   const dA = document.getElementById('dmDari'), dB = document.getElementById('dmSampai');
-  dA.value = a; dB.value = b; dA.max = dB.max = kini;
+  dA.value = a; dB.value = b;
   document.getElementById('dmFilter').textContent = dmFilterTeks();
-  dmPesan('dmErr', ''); dmPesan('dmProg', '');
+  dmPesan('dmProg', '');
   document.getElementById('dmKuota').textContent = dmKuotaTeks();
-  document.getElementById('dmOk').disabled = false;
+  dmCek();
   document.getElementById('dlgMentah').hidden = false;
-  gsr('infoEksporMentah', TOKEN).then(j => { DM.info = JSON.parse(j); dA.min = dB.min = DM.info.mulai; document.getElementById('dmKuota').textContent = dmKuotaTeks(); })
+  gsr('infoEksporMentah', TOKEN).then(j => { DM.info = JSON.parse(j); document.getElementById('dmKuota').textContent = dmKuotaTeks(); dmCek(); })
     .catch(e => { if (!perluLogin(e)) dmPesan('dmErr', 'Batas export tidak terbaca: ' + (e && e.message ? e.message : e)); });
 };
+document.getElementById('dmDari').onchange = document.getElementById('dmSampai').onchange = () => dmCek();
 document.getElementById('dmBatal').onclick = () => { if (!DM.jalan) document.getElementById('dlgMentah').hidden = true; };
 document.getElementById('dmOk').onclick = async () => {
   if (DM.jalan) return;
   const dari = document.getElementById('dmDari').value, sampai = document.getElementById('dmSampai').value, ok = document.getElementById('dmOk'), tutup = document.getElementById('dmBatal');
   dmPesan('dmErr', '');
   if (!dari || !sampai || sampai < dari) return dmPesan('dmErr', 'Isi tanggal Dari dan s/d dengan benar.');
-  const hari = (Date.parse(sampai) - Date.parse(dari)) / 864e5 + 1, maks = DM.info ? DM.info.maksHari : 7;
+  const hari = (Date.parse(sampai) - Date.parse(dari)) / 864e5 + 1, maks = DM.info ? DM.info.maksHari : 3;
   if (hari > maks) return dmPesan('dmErr', `Rentang maksimal ${maks} hari.`);
+  const w = dmJendela(); if (dari < w.awal || sampai > w.akhir) return dmCek();
   DM.jalan = true; ok.disabled = tutup.disabled = true;
   let job = null;
   try {
@@ -1654,7 +1680,7 @@ document.getElementById('dmOk').onclick = async () => {
     if (perluLogin(e)) { document.getElementById('dlgMentah').hidden = true; return; }
     dmPesan('dmProg', ''); dmPesan('dmErr', e && e.message ? e.message : String(e));
     if (job) gsr('selesaiEksporMentah', TOKEN, job.id, 0, e && e.message ? e.message : String(e)).catch(() => {});
-  } finally { DM.jalan = false; ok.disabled = tutup.disabled = false; }
+  } finally { DM.jalan = false; tutup.disabled = false; dmCekSesudah(); }
 };
 function alertPdf(m) { const l = document.getElementById('bwarn'); l.hidden = false; l.textContent = 'Export PDF gagal: ' + m; }
 
