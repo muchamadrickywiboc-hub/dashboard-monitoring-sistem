@@ -108,7 +108,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-11-05a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-11-06a';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -584,6 +584,134 @@ function catatEkspor(token, o) {
     if (status) sh.getRange(2, 9).setFontColor(status === 'Tepat waktu' ? '#2e7d32' : /^Terlambat/.test(status) ? '#c62828' : '#b26a00');
   } finally { lock.releaseLock(); }
   return true;
+}
+
+/* ============================== EXPORT DATA MENTAH ============================== */
+/**
+ * Export baris sheet "Event Sistem" file Cleansing apa adanya (kolom TBBM ... PROJECT LOKASI), sesuai cakupan akun
+ * dan filter dashboard (tanggal, area/lokasi, event, project). Dashboard membuat file Excel-nya di browser.
+ *   1. mulaiEksporMentah: cek rentang & batas, catat pemakaian, simpan daftar file di cache -> { id, file: jumlah file, hdr }
+ *   2. ambilEksporMentah(id, i): baris file ke-i yang lolos saringan (gzip) -> dipanggil berurutan oleh dashboard
+ * Command Center & Control Room dibatasi EKSPOR_MENTAH.BATAS kali per hari; RTC & Master tanpa batas.
+ */
+const EKSPOR_MENTAH = { BATAS: 5, PER: 'HARI', MAKS_HARI: 7, MAKS_BARIS: 300000 };
+// spreadsheet pemantau di folder data: satu baris per export (terbaru di atas) + sheet Rekap per Akun
+const LOG_MENTAH = 'Log Export Data Mentah', LOG_MENTAH_SH = 'Log', LOG_MENTAH_REKAP = 'Rekap per Akun';
+const LOG_MENTAH_HDR = ['ID', 'Waktu Mulai (WIB)', 'Akun', 'Username', 'Peran', 'Area', 'Lokasi', 'Tanggal Dari', 'Tanggal Sampai', 'Filter Event', 'Filter Project', 'Export ke- (hari ini)', 'Status', 'Jumlah Baris', 'Waktu Selesai (WIB)'];
+const wibTeks_ = d => Utilities.formatDate(d || new Date(), 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+function bukaLogMentah_() {
+  const ss = bukaAtauBuat(DriveApp.getFolderById(CFG.FOLDER_ID), LOG_MENTAH, [[LOG_MENTAH_SH, LOG_MENTAH_HDR]]);
+  if (!ss.getSheetByName(LOG_MENTAH_REKAP)) {
+    const r = ss.insertSheet(LOG_MENTAH_REKAP);
+    r.getRange('A1').setFormula("=QUERY(" + LOG_MENTAH_SH + "!A:N,\"select C, E, count(A), sum(N) where C is not null group by C, E order by count(A) desc label C 'Akun', E 'Peran', count(A) 'Jumlah export', sum(N) 'Total baris'\",1)");
+    r.getRange(1, 1, 1, 4).setFontWeight('bold');
+  }
+  return ss.getSheetByName(LOG_MENTAH_SH);
+}
+function catatMentah_(id, ses, area, lok, dari, sampai, job, ke) {
+  const t = x => { const v = teks(x).slice(0, 300); return /^[=+\-@]/.test(v) ? "'" + v : v; };
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const sh = bukaLogMentah_();
+    sh.insertRowAfter(1);
+    sh.getRange(2, 1, 1, LOG_MENTAH_HDR.length).setNumberFormat('@').setValues([[id, wibTeks_(), t(labelAkun_(ses) + (ses.master ? ' (via Master)' : '')), t(ses.u), ses.peran === 'PUSAT' ? 'RTC' : ses.peran === 'AREA' ? 'Command Center' : 'Control Room',
+      t(area || 'Semua area'), t(lok || 'Semua lokasi'), dari, sampai, t(job.event.length ? job.event.join(', ') : 'Semua event'), t(job.project.length ? job.project.map(x => x || 'Tanpa project').join(', ') : 'Semua project'), ke, 'Dimulai', '', '']])
+      .setFontWeight('normal').setFontColor('#000000').setBackground(null);
+    sh.getRange(2, 14).setNumberFormat('#,##0');
+  } finally { lock.releaseLock(); }
+}
+/** Dipanggil dashboard setelah file Excel dibuat (atau gagal): Status, Jumlah Baris, Waktu Selesai di Log Export Data Mentah. */
+function selesaiEksporMentah(token, id, n, pesan) {
+  const ses = sesi_(token), job = JSON.parse(CacheService.getScriptCache().get('EXJ_' + teks(id)) || 'null');
+  if (!job || job.u !== ses.u) return false;
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const sh = bukaLogMentah_(), m = Math.min(500, sh.getLastRow() - 1); if (m < 1) return false;
+    const i = sh.getRange(2, 1, m, 1).getValues().findIndex(r => teks(r[0]) === teks(id)); if (i < 0) return false;
+    const gagal = !!teks(pesan);
+    sh.getRange(i + 2, 13, 1, 3).setValues([[gagal ? 'Gagal: ' + teks(pesan).slice(0, 200) : 'Selesai', +n || 0, wibTeks_()]]);
+    sh.getRange(i + 2, 13).setFontColor(gagal ? '#c62828' : '#2e7d32');
+  } finally { lock.releaseLock(); }
+  return true;
+}
+const kunciKuota_ = ses => { const t = Utilities.formatDate(new Date(), 'Asia/Jakarta', EKSPOR_MENTAH.PER === 'BULAN' ? 'yyyy-MM' : 'yyyy-MM-dd'); return 'EXM|' + ses.u + '|' + t; };
+const tanpaBatas_ = ses => ses.peran === 'PUSAT' || !!ses.master;
+function kuotaEkspor_(ses) {
+  if (tanpaBatas_(ses)) return { batas: 0, pakai: 0, sisa: -1 };
+  const pakai = +(PropertiesService.getScriptProperties().getProperty(kunciKuota_(ses)) || 0);
+  return { batas: EKSPOR_MENTAH.BATAS, pakai: pakai, sisa: Math.max(0, EKSPOR_MENTAH.BATAS - pakai), per: EKSPOR_MENTAH.PER };
+}
+/** Untuk dialog export: sisa kuota akun dan tanggal awal data mentah. */
+function infoEksporMentah(token) {
+  const ses = sesi_(token);
+  return JSON.stringify(Object.assign(kuotaEkspor_(ses), { mulai: CFG.MULAI_CLEANSING, maksHari: EKSPOR_MENTAH.MAKS_HARI, hariIni: hariIni_() }));
+}
+/** o: { dari, sampai (yyyy-mm-dd), area, lok (filter dashboard, kosong = semua dalam cakupan), event: [kunci parameter], project: [nama project; '' = tanpa project] } */
+function mulaiEksporMentah(token, o) {
+  const ses = sesi_(token); o = o || {};
+  const tg = x => /^\d{4}-\d{2}-\d{2}$/.test(teks(x)) ? teks(x) : '';
+  const dari = tg(o.dari), sampai = tg(o.sampai), hari = x => Date.UTC(+x.slice(0, 4), +x.slice(5, 7) - 1, +x.slice(8, 10)) / 864e5;
+  if (!dari || !sampai || sampai < dari) throw new Error('Rentang tanggal tidak valid.');
+  if (hari(sampai) - hari(dari) + 1 > EKSPOR_MENTAH.MAKS_HARI) throw new Error('Rentang maksimal ' + EKSPOR_MENTAH.MAKS_HARI + ' hari.');
+  if (sampai < CFG.MULAI_CLEANSING) throw new Error('Data mentah tersedia mulai ' + CFG.MULAI_CLEANSING + '.');
+  // cakupan: akun Area / Lokasi tidak bisa keluar dari cakupannya; filter dashboard hanya mempersempit
+  const area = ses.peran === 'PUSAT' ? areaNorm(o.area) : ses.area || '';
+  const lok = ses.peran === 'LOKASI' ? ses.lok : teks(o.lok).toUpperCase();
+  const geser = (x, n) => Utilities.formatDate(new Date(Date.UTC(+x.slice(0, 4), +x.slice(5, 7) - 1, +x.slice(8, 10) + n, 12)), 'UTC', 'yyyy-MM-dd');
+  // file tanggal sebelah ikut dibaca (baris shift malam bisa ada di file tanggal lain); baris disaring per tanggal di kolom TIME
+  const f0 = geser(dari, -1), f1 = geser(sampai, 1);
+  const file = daftarCleansing_().filter(x => x.tgl >= f0 && x.tgl <= f1 && (!area || x.area === area))
+    .sort((a, b) => a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : AREAS.indexOf(a.area) - AREAS.indexOf(b.area));
+  if (!file.length) throw new Error('Tidak ada data mentah untuk rentang dan cakupan ini.');
+  // perkiraan jumlah baris dari Log Tarikan (kolom Baris event): ditolak sebelum kuota terpakai bila terlalu besar
+  const it = DriveApp.getFolderById(CFG.FOLDER_ID).getFilesByName(LOG_NAMA), nLog = {};
+  if (it.hasNext()) (nilaiSheet(SpreadsheetApp.open(it.next()), LOG_NAMA) || []).slice(1).forEach(r => { nLog[teks(r[0])] = angka(r[5]) || 0; });
+  const isi = file.filter(x => x.tgl >= dari && x.tgl <= sampai).reduce((a, x) => a + (nLog[x.id] || 0), 0);
+  if (!lok && isi > EKSPOR_MENTAH.MAKS_BARIS) throw new Error('Perkiraan ' + isi.toLocaleString('id-ID') + ' baris, melebihi batas ' + EKSPOR_MENTAH.MAKS_BARIS.toLocaleString('id-ID') + ' baris per export. Persempit rentang tanggal atau pilih satu area / lokasi.');
+  // kuota: dihitung saat export dimulai
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const q = kuotaEkspor_(ses);
+    if (!tanpaBatas_(ses)) {
+      if (q.sisa <= 0) throw new Error('Batas export data mentah (' + q.batas + ' kali ' + (q.per === 'BULAN' ? 'per bulan' : 'per hari') + ') sudah tercapai. Silakan hubungi Tim Pusat.');
+      const P = PropertiesService.getScriptProperties(), k = kunciKuota_(ses);
+      Object.keys(P.getProperties()).forEach(x => { if (x.indexOf('EXM|' + ses.u + '|') === 0 && x !== k) P.deleteProperty(x); });   // periode lama dibuang
+      P.setProperty(k, String(q.pakai + 1));
+    }
+  } finally { lock.releaseLock(); }
+  const id = Utilities.getUuid().replace(/-/g, '').slice(0, 20);
+  const job = { u: ses.u, dari: dari, sampai: sampai, lok: lok ? kunciLok(lok) : '', file: file.map(x => x.id), event: (o.event || []).map(teks), project: (o.project || []).map(x => teks(x).toUpperCase()), hdr: null };
+  CacheService.getScriptCache().put('EXJ_' + id, JSON.stringify(job), 6 * 3600);
+  const ke = tanpaBatas_(ses) ? 'tanpa batas' : kuotaEkspor_(ses).pakai + ' dari ' + EKSPOR_MENTAH.BATAS;
+  try { catatMentah_(id, ses, area, lok, dari, sampai, job, ke); } catch (e) { Logger.log('Log export data mentah gagal: ' + e.message); }
+  return JSON.stringify({ id: id, file: file.length, sisa: tanpaBatas_(ses) ? -1 : kuotaEkspor_(ses).sisa });
+}
+/** Baris file ke-i dari export `id` yang lolos saringan; baris pertama hasil = judul kolom file itu. Hasil: 'Z\n' + gzip base64 dari {hdr, baris}. */
+function ambilEksporMentah(token, id, i) {
+  const ses = sesi_(token), job = JSON.parse(CacheService.getScriptCache().get('EXJ_' + teks(id)) || 'null');
+  if (!job || job.u !== ses.u) throw new Error('Export sudah kedaluwarsa. Ulangi export.');
+  const fid = job.file[+i]; if (!fid) return 'Z\n' + zip_(JSON.stringify({ hdr: [], baris: [] }));
+  const sh = SpreadsheetApp.openById(fid).getSheetByName('Event Sistem');
+  if (!sh) return 'Z\n' + zip_(JSON.stringify({ hdr: [], baris: [] }));
+  const v = sh.getDataRange().getDisplayValues(), hdr = v[0] || [], k = petaKolom(hdr), kol = h => k[h] === undefined ? -1 : k[h];
+  const cWk = kol('TIME'), cTb = kol('TBBM'), cAl = kol('ALARM STATUS'), cPj = kol('PROJECT LOKASI') >= 0 ? kol('PROJECT LOKASI') : kol('PROJECT');
+  if (cWk < 0 || cTb < 0 || cAl < 0) return 'Z\n' + zip_(JSON.stringify({ hdr: [], baris: [] }));
+  const atur = sumberBulan_(DriveApp.getFolderById(CFG.FOLDER_ID)).atur, peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(atur), 'Pemetaan') || []);
+  const sembunyi = ses.peran === 'PUSAT' ? [] : PARAM_KHUSUS_RTC.concat(PARAM_SEMBUNYI_LOKASI);
+  const ev = {}; job.event.forEach(x => { ev[x] = 1; }); const pjOk = {}; job.project.forEach(x => { pjOk[x] = 1; });
+  const out = [], lihat = {};
+  for (let r = 1; r < v.length; r++) {
+    const b = v[r], tgl = teks(b[cWk]).slice(0, 10);
+    if (!teks(b[cAl]) || tgl < job.dari || tgl > job.sampai) continue;
+    if (job.lok && kunciLok(b[cTb]) !== job.lok) continue;
+    const c = peta.kasus[normKasus(b[cAl])], p = c ? c.p : '';
+    if (p && sembunyi.indexOf(teks(p).toUpperCase()) >= 0) continue;
+    if (job.event.length && !(p && ev[p])) continue;
+    if (job.project.length && !pjOk[cPj >= 0 ? projNorm_(b[cPj]) : '']) continue;
+    if (CFG.CLEANSING_BUANG_KEMBAR) { const kk = b.join('\u0001'); if (lihat[kk]) continue; lihat[kk] = 1; }   // sama dengan hitungan dashboard
+    out.push(b);
+  }
+  return 'Z\n' + zip_(JSON.stringify({ hdr: hdr, baris: out }));
 }
 
 /** Nama akun seperti di dashboard: RTC / Command Center <AREA> / Control Room <LOKASI>. */
