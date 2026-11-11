@@ -1601,7 +1601,7 @@ const tglId = x => x ? x.split('-').reverse().join('/') : '';
 // tanggal yang boleh di-export: dari server (jam WIB); sebelum jawaban server datang, dihitung dari jam perangkat
 function dmJendela() {
   if (DM.info && DM.info.awal) return {awal: DM.info.awal, akhir: DM.info.akhir};
-  if (AKUN && AKUN.peran === 'PUSAT') { const n = new Date(); return {awal: '2026-10-31', akhir: isoTglY(n.getFullYear(), n.getMonth(), n.getDate())}; }
+  { const n = new Date(); return {awal: '2026-10-31', akhir: isoTglY(n.getFullYear(), n.getMonth(), n.getDate())}; }   // semua akun bebas memilih tanggal (server tetap memeriksa)
   const n = new Date(), a = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 2);
   return {awal: isoTglY(a.getFullYear(), a.getMonth(), a.getDate()), akhir: isoTglY(n.getFullYear(), n.getMonth(), n.getDate())};
 }

@@ -1638,7 +1638,7 @@ $('btnPdf').onclick = async () => {
   // akun RTC (Laporan Per 4 Jam): selalu waktu sekarang, tanpa pilihan waktu export pertama
   if (LAP.mode !== 'per4jam') try { pertama = await run('lhEksporPertama', TOKEN, kunci); } catch (e) { /* tanpa riwayat: pakai waktu sekarang */ }
   const tPertama = pertama ? new Date(pertama) : null;
-  const waktu = tPertama && !isNaN(tPertama) ? await pilihWaktu(tPertama) : new Date();
+  const waktu = tPertama && !isNaN(tPertama) ? tPertama : new Date();   // export ulang selalu memakai waktu export pertama (tanpa pilihan)
   if (!waktu) { b.disabled = false; b.textContent = 'Export PDF'; return; }
   b.textContent = 'Menyiapkan PDF…';
   let box = null;

@@ -108,7 +108,7 @@ function hapusCache() {
 }
 
 /** Versi data untuk kunci cache per tanggal/jam dan Laporan Harian: diganti setiap data berubah, jadi cache lama tidak terpakai lagi. */
-const VERSI_KODE = '2026-11-06c';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
+const VERSI_KODE = '2026-11-06d';   // ubah setiap kali cara hitung berubah, supaya cache lama otomatis dibangun ulang
 function versiData_() { return (PropertiesService.getScriptProperties().getProperty('VERSI_DATA') || '0') + '|' + VERSI_KODE + '|' + hariIni_(); }   // berganti tiap hari: tanggal yang baru lewat ikut dihitung
 function gantiVersiData_() { PropertiesService.getScriptProperties().setProperty('VERSI_DATA', String(Date.now() % 1e8)); }
 
@@ -594,12 +594,13 @@ function catatEkspor(token, o) {
  *   2. ambilEksporMentah(id, i): baris file ke-i yang lolos saringan (gzip) -> dipanggil berurutan oleh dashboard
  * Command Center & Control Room dibatasi EKSPOR_MENTAH.BATAS kali per hari; RTC & Master tanpa batas.
  */
-// HARI_TERAKHIR: hanya tanggal hari ini dan (HARI_TERAKHIR - 1) hari sebelumnya yang bisa di-export (3 = mis. 04-06 Nov bila hari ini 06 Nov)
-const EKSPOR_MENTAH = { BATAS: 5, PER: 'HARI', MAKS_HARI: 3, HARI_TERAKHIR: 3, MAKS_BARIS: 300000 };
+// MAKS_HARI: panjang rentang per export. HARI_TERAKHIR: bila > 0, Command Center & Control Room hanya bisa export hari ini dan (HARI_TERAKHIR - 1) hari sebelumnya;
+// 0 = semua akun bebas memilih tanggal (6 Nov 2026: dibebaskan untuk semua akun, tetap maks. 3 hari per export)
+const EKSPOR_MENTAH = { BATAS: 5, PER: 'HARI', MAKS_HARI: 3, HARI_TERAKHIR: 0, MAKS_BARIS: 300000 };
 const geserTgl_ = (x, n) => Utilities.formatDate(new Date(Date.UTC(+x.slice(0, 4), +x.slice(5, 7) - 1, +x.slice(8, 10) + n, 12)), 'UTC', 'yyyy-MM-dd');
 /** Rentang tanggal yang boleh di-export hari ini (WIB): { awal, akhir } */
 // RTC & Master: tanggal bebas (mulai MULAI_CLEANSING), tetap maks. MAKS_HARI hari per export; Command Center & Control Room: HARI_TERAKHIR hari terakhir
-function jendelaEkspor_(ses) { const hi = hariIni_(), a = ses && tanpaBatas_(ses) ? CFG.MULAI_CLEANSING : geserTgl_(hi, 1 - EKSPOR_MENTAH.HARI_TERAKHIR); return { awal: a > CFG.MULAI_CLEANSING ? a : CFG.MULAI_CLEANSING, akhir: hi, bebas: !!(ses && tanpaBatas_(ses)) }; }
+function jendelaEkspor_(ses) { const hi = hariIni_(), bebas = !EKSPOR_MENTAH.HARI_TERAKHIR || !!(ses && tanpaBatas_(ses)), a = bebas ? CFG.MULAI_CLEANSING : geserTgl_(hi, 1 - EKSPOR_MENTAH.HARI_TERAKHIR); return { awal: a > CFG.MULAI_CLEANSING ? a : CFG.MULAI_CLEANSING, akhir: hi, bebas: bebas }; }
 const tglId_ = x => x.slice(8, 10) + '/' + x.slice(5, 7) + '/' + x.slice(0, 4);
 // spreadsheet pemantau di folder data: satu baris per export (terbaru di atas) + sheet Rekap per Akun
 const LOG_MENTAH = 'Log Export Data Mentah', LOG_MENTAH_SH = 'Log', LOG_MENTAH_REKAP = 'Rekap per Akun';
