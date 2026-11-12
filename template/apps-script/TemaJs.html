@@ -1,0 +1,218 @@
+<script>
+/* =====================================================================
+   TEMA DASHBOARD MONITORING — fungsi bantu (tanpa library luar)
+   Semua fungsi ada di objek global `Tema`. Panduan: template/README.md
+   ===================================================================== */
+(function () {
+  'use strict';
+  const NS = 'http://www.w3.org/2000/svg';
+  const nfmt = new Intl.NumberFormat('id-ID');
+  const BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  const WARNA = ['var(--c1)','var(--c2)','var(--c3)','var(--c4)','var(--c5)','var(--c6)','var(--c7)'];
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const host = h => typeof h === 'string' ? $(h) : h;
+  function el(tag, attr, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attr || {}) e.setAttribute(k, attr[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  /* ---------- angka & teks ---------- */
+  const angka = v => v === null || v === undefined || isNaN(v) ? '–' : nfmt.format(Math.round(v));
+  const ringkas = v => { const a = Math.abs(v); return a >= 1e9 ? (v/1e9).toLocaleString('id-ID',{maximumFractionDigits:1}) + ' M' : a >= 1e6 ? (v/1e6).toLocaleString('id-ID',{maximumFractionDigits:1}) + ' jt' : a >= 1e3 ? (v/1e3).toLocaleString('id-ID',{maximumFractionDigits:1}) + ' rb' : angka(v); };
+  /** Perubahan persen berwarna. naikBuruk=true (default): naik = merah (pelanggaran bertambah). */
+  function persen(kini, lalu, naikBuruk = true) {
+    if (!lalu) return kini ? '<span class="up">baru</span>' : '<span class="flat">0%</span>';
+    const p = (kini - lalu) / lalu * 100;
+    if (Math.abs(p) < 0.05) return '<span class="flat">0%</span>';
+    const naik = p > 0, cls = naik === naikBuruk ? 'up' : 'down';
+    return `<span class="${cls}">${naik ? '▲' : '▼'} ${Math.abs(p).toLocaleString('id-ID',{maximumFractionDigits:1})}%</span>`;
+  }
+  function tanggal(d = new Date(), denganJam = false) {
+    let s = `${HARI[d.getDay()]}, ${d.getDate()} ${BULAN[d.getMonth()]} ${d.getFullYear()}`;
+    if (denganJam) s += ' pukul ' + String(d.getHours()).padStart(2,'0') + '.' + String(d.getMinutes()).padStart(2,'0');
+    return s;
+  }
+  function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v || 1))), f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
+
+  /* ---------- tooltip ---------- */
+  let tip;
+  function pasangTip(target, isi) {
+    if (!tip) { tip = document.getElementById('tip') || Object.assign(document.body.appendChild(document.createElement('div')), {id: 'tip'}); }
+    target.addEventListener('mousemove', e => {
+      tip.innerHTML = typeof isi === 'function' ? isi() : isi;
+      const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+      tip.style.left = x + 'px'; tip.style.top = y + 'px'; tip.style.opacity = 1;
+    });
+    target.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
+  }
+
+  /* ---------- grafik batang (+ garis tren, + garis pembanding putus-putus) ----------
+     opsi: { label:[], nilai:[], sorot: indeks batang yang ditebalkan, warna: warna batang,
+             tren: true (rata-rata bergerak 3 titik, merah), banding: [] nilai pembanding,
+             tinggi: 250, satuan: 'event', klik: i => {} } */
+  function grafikBatang(h, o) {
+    h = host(h); h.innerHTML = '';
+    const lbl = o.label, val = o.nilai.map(v => v ?? null), n = lbl.length;
+    const W = o.lebar || 640, H = o.tinggi || 250, m = {l: 50, r: 16, t: 26, b: 28}, iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const slot = iw / n, bw = Math.min(48, slot * .66), cx = i => m.l + slot * i + slot / 2;
+    const semua = val.concat(o.banding || []).filter(v => v !== null);
+    const ymax = niceMax(Math.max(1, ...semua) * 1.12), y = v => m.t + ih - v / ymax * ih;
+    const svg = el('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': o.judul || 'Grafik'});
+    for (let i = 0; i <= 4; i++) {
+      const v = ymax * i / 4;
+      el('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: i ? 'gl' : 'base'}, svg);
+      el('text', {x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'tick'}, svg).textContent = ringkas(v);
+    }
+    const tegak = slot < 30, tiap = Math.ceil(n / 16);
+    val.forEach((v, i) => {
+      const sorot = o.sorot === i;
+      if (v !== null && v > 0) {
+        const x = cx(i) - bw / 2, top = y(v), hh = y(0) - top, r = Math.min(4, bw / 2, hh);
+        el('path', {d: `M${x},${y(0)}V${top + r}Q${x},${top} ${x + r},${top}H${x + bw - r}Q${x + bw},${top} ${x + bw},${top + r}V${y(0)}Z`,
+          style: 'fill:' + (o.warna ? o.warna : sorot ? 'var(--bar-now)' : 'var(--bar)') + (o.warna && o.sorot !== undefined && !sorot ? ';opacity:.55' : '')}, svg);
+        const t = el('text', {x: cx(i), y: top - 6, 'text-anchor': tegak ? 'start' : 'middle', style: `fill:var(--ink);font-size:${tegak ? 10.5 : 12}px;paint-order:stroke;stroke:#fff;stroke-width:3px;font-weight:${sorot ? 700 : 500}`}, svg);
+        if (tegak) { t.setAttribute('transform', `rotate(-90 ${cx(i)} ${top - 6})`); t.setAttribute('dy', '.35em'); }
+        t.textContent = ringkas(v);
+      }
+      if (i % tiap === 0 || sorot) el('text', {x: cx(i), y: H - 9, 'text-anchor': 'middle', class: 'tick', style: sorot ? 'font-weight:700;fill:var(--ink)' : ''}, svg).textContent = lbl[i];
+      const hit = el('rect', {x: m.l + slot * i, y: m.t, width: slot, height: ih, class: 'hit'}, svg);
+      pasangTip(hit, () => `<b>${esc(lbl[i])}</b><br>${v === null ? 'belum ada data' : angka(v) + ' ' + (o.satuan || '')}` +
+        (o.banding && o.banding[i] != null ? `<br>pembanding: ${angka(o.banding[i])}` : ''));
+      if (o.klik) hit.addEventListener('click', () => o.klik(i));
+    });
+    const garis = (arr, gaya) => {
+      const t = arr.map((v, i) => [i, v]).filter(p => p[1] !== null);
+      if (t.length < 2) return;
+      el('path', {d: t.map((p, k) => (k ? 'L' : 'M') + cx(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1)).join(''), style: 'fill:none;stroke-linejoin:round;stroke-linecap:round;pointer-events:none;' + gaya}, svg);
+    };
+    if (o.banding) garis(o.banding, 'stroke:var(--ink-2);stroke-width:2;stroke-dasharray:5 5;opacity:.7');
+    if (o.tren !== false) {
+      const t = val.map((v, i) => { if (v === null) return null; const w = val.slice(Math.max(0, i - 1), i + 2).filter(x => x !== null); return w.reduce((s, x) => s + x, 0) / w.length; });
+      garis(t, 'stroke:var(--trend);stroke-width:3;opacity:.9');
+    }
+    h.appendChild(svg);
+    return svg;
+  }
+
+  /* ---------- peringkat (Top 10) ----------
+     data: [{nama, nilai, sub (html), warna}]  opsi: {klik: (item, i) => {}} */
+  function peringkat(h, data, opsi = {}) {
+    h = host(h);
+    const mx = Math.max(1, ...data.map(d => d.nilai));
+    h.className = 'rank';
+    h.innerHTML = data.map((d, i) => `<button type="button" class="rrow" data-i="${i}">
+      <span class="rname"><span class="rnum">${i + 1}</span>${esc(d.nama)}</span>
+      <span class="rtrack"><span class="rfill" style="display:block;width:${(d.nilai / mx * 100).toFixed(1)}%;background:${d.warna || WARNA[0]}"></span></span>
+      <span class="rval">${opsi.ringkas === false ? angka(d.nilai) : ringkas(d.nilai)}</span>
+      ${d.sub ? `<span class="rsub">${d.sub}</span>` : ''}</button>`).join('');
+    if (opsi.klik) h.querySelectorAll('.rrow').forEach(b => b.addEventListener('click', () => {
+      const sel = b.classList.toggle('sel');
+      h.querySelectorAll('.rrow').forEach(x => { if (x !== b) x.classList.remove('sel'); x.classList.toggle('dim', sel && x !== b); });
+      opsi.klik(sel ? data[b.dataset.i] : null, +b.dataset.i);
+    }));
+  }
+
+  /* ---------- tabel (header hijau, baris total, klik judul untuk urutkan) ----------
+     kolom: [{judul, kunci, format: 'angka'|'persen'|fungsi(v, baris), kiri: true, urut: true}]
+     baris: [{...}], opsi: {total: {...} | true, urut: 'kunci', klikBaris: baris => {}} */
+  function tabel(h, kolom, baris, opsi = {}) {
+    h = host(h);
+    let urut = opsi.urut || null, turun = true;
+    const sel = (k, b) => {
+      const v = b[k.kunci];
+      if (typeof k.format === 'function') return k.format(v, b);
+      if (k.format === 'angka') return angka(v);
+      if (k.format === 'persen' && k.banding) return persen(v, b[k.banding]);
+      return esc(v);
+    };
+    const total = opsi.total === true ? Object.fromEntries(kolom.map((k, i) => [k.kunci, i === 0 ? 'TOTAL' : typeof baris[0]?.[k.kunci] === 'number' ? baris.reduce((s, b) => s + (b[k.kunci] || 0), 0) : ''])) : opsi.total;
+    function gambar() {
+      const rows = urut ? baris.slice().sort((a, b) => (turun ? -1 : 1) * ((a[urut] ?? -Infinity) > (b[urut] ?? -Infinity) ? 1 : (a[urut] ?? -Infinity) < (b[urut] ?? -Infinity) ? -1 : 0)) : baris;
+      h.classList.add('tbl');
+      h.innerHTML = `<table><thead><tr>${kolom.map(k => `<th class="${k.kiri ? 'l' : ''}" ${k.urut ? `data-sort="${k.kunci}"` : ''} ${urut === k.kunci ? `aria-sort="${turun ? 'descending' : 'ascending'}"` : ''}>${esc(k.judul)}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map((b, i) => `<tr data-i="${baris.indexOf(b)}" ${opsi.klikBaris ? 'style="cursor:pointer"' : ''}>${kolom.map(k => `<td class="${k.kiri ? 'l' : ''}">${sel(k, b)}</td>`).join('')}</tr>`).join('')}
+        ${total ? `<tr class="tot">${kolom.map(k => `<td class="${k.kiri ? 'l' : ''}">${sel(k, total)}</td>`).join('')}</tr>` : ''}</tbody></table>`;
+      h.querySelectorAll('th[data-sort]').forEach(th => th.addEventListener('click', () => { const k = th.dataset.sort; turun = urut === k ? !turun : true; urut = k; gambar(); }));
+      if (opsi.klikBaris) h.querySelectorAll('tbody tr[data-i]').forEach(tr => tr.addEventListener('click', () => opsi.klikBaris(baris[tr.dataset.i])));
+    }
+    gambar();
+  }
+
+  /* ---------- logo & gambar ----------
+     <img data-aset="danantara|elnusa|rtc|ilustrasi|heksagon"> diisi dari window.ASET_TEMA (Aset.html / aset.js) */
+  function pasangAset(r = document) {
+    const A = window.ASET_TEMA || {};
+    r.querySelectorAll('img[data-aset]').forEach(img => { if (A[img.dataset.aset]) img.src = A[img.dataset.aset]; });
+  }
+
+  /* ---------- memuat ---------- */
+  function memuat(on, teks = 'Memuat data…') {
+    let d = document.getElementById('pageLoad');
+    if (!d) { d = document.body.appendChild(document.createElement('div')); d.id = 'pageLoad'; d.setAttribute('role', 'status'); d.innerHTML = '<div class="kartu"><span class="spin"></span><span></span></div>'; }
+    d.querySelector('.kartu span:last-child').textContent = teks;
+    d.classList.toggle('on', !!on);
+  }
+
+  /* ---------- Mode TV: isi diperkecil otomatis agar muat satu layar ----------
+     batasIsi: elemen yang menjadi batas bawah isi (default .wrap terakhir) */
+  let tvJam = null;
+  function modeTV(on, opsi = {}) {
+    const b = document.body, lebar = opsi.lebar || 2400;
+    b.classList.toggle('tv', !!on);
+    clearInterval(tvJam);
+    if (!on) { b.style.zoom = ''; b.style.width = ''; b.style.marginLeft = ''; removeEventListener('resize', pas); return; }
+    const jam = () => document.querySelectorAll('.tvjam').forEach(e => e.textContent = tanggal(new Date(), true));
+    jam(); tvJam = setInterval(jam, 20000);
+    function pas() {
+      if (!b.classList.contains('tv')) return;
+      b.style.width = lebar + 'px'; b.style.zoom = 1; b.style.marginLeft = '0px';
+      const isi = opsi.batasIsi ? host(opsi.batasIsi) : [...document.querySelectorAll('.wrap')].pop();
+      const tinggi = () => Math.ceil(isi.getBoundingClientRect().bottom - b.getBoundingClientRect().top);
+      let z = Math.min(innerWidth / lebar, innerHeight / tinggi());
+      for (let i = 0; i < 6; i++) { b.style.zoom = z; const t = tinggi(); if (t <= innerHeight + 1) break; z *= innerHeight / t * 0.995; }
+      b.style.marginLeft = Math.max(0, (innerWidth - lebar * z) / 2 / z) + 'px';   // tengahkan bila isi lebih pendek dari layar
+    }
+    modeTV.pas = pas;
+    addEventListener('resize', pas);
+    requestAnimationFrame(pas);
+  }
+
+  /* ---------- login dua langkah (pilih jenis akun -> password) ----------
+     opsi.masuk(peran, password) harus mengembalikan Promise; resolve = berhasil, reject(pesan) = gagal */
+  function login(opsi) {
+    const f = $('#loginForm'); if (!f) return;
+    const s1 = $('#lgStep1'), s2 = $('#lgStep2'), err = $('#lgErr'), btn = $('#lgBtn'), pw = $('#lgP');
+    let peran = null;
+    const tgl = $('#lgTgl'); if (tgl) tgl.textContent = tanggal();
+    f.querySelectorAll('.lg-role').forEach(b => b.addEventListener('click', () => {
+      peran = b.dataset.peran; s1.hidden = true; s2.hidden = false;
+      $('#lgJudul').textContent = 'Masuk sebagai ' + b.querySelector('b').textContent; err.textContent = ''; pw.value = ''; pw.focus();
+    }));
+    $('#lgBack').addEventListener('click', () => { s2.hidden = true; s1.hidden = false; });
+    $('#lgEye').addEventListener('click', e => { const t = pw.type === 'password'; pw.type = t ? 'text' : 'password'; e.target.textContent = t ? 'Sembunyi' : 'Lihat'; });
+    f.addEventListener('submit', e => {
+      e.preventDefault(); err.textContent = ''; btn.disabled = true; btn.textContent = 'Memeriksa…';
+      Promise.resolve(opsi.masuk(peran, pw.value))
+        .then(() => document.body.classList.remove('login'))
+        .catch(p => { err.textContent = p || 'Password salah.'; })
+        .finally(() => { btn.disabled = false; btn.textContent = 'Masuk'; });
+    });
+  }
+
+  /* ---------- panggil Apps Script sebagai Promise ---------- */
+  function server(nama, ...arg) {
+    return new Promise((ok, gagal) => {
+      if (!(window.google && google.script && google.script.run)) return gagal('Bukan di Apps Script');
+      google.script.run.withSuccessHandler(ok).withFailureHandler(e => gagal(e && e.message || e))[nama](...arg);
+    });
+  }
+
+  window.Tema = {angka, ringkas, persen, tanggal, esc, BULAN, HARI, WARNA, grafikBatang, peringkat, tabel, pasangTip, pasangAset, memuat, modeTV, login, server};
+  document.addEventListener('DOMContentLoaded', () => pasangAset());
+})();
+</script>
