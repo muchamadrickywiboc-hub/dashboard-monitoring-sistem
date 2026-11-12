@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contoh Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
+<?!= include('Tema') ?>
+<style>
+  /* Gaya khusus dashboard ini (kalau perlu) taruh di sini. Jangan ubah tema.css per dashboard. */
+</style>
+</head>
+<body class="login">
+
+<!-- =============== 1. LOGIN (hapus blok ini kalau dashboard tidak butuh login) =============== -->
+<div class="lg">
+  <section class="lg-art" aria-hidden="true">
+    <div class="lg-logo"><img data-aset="danantara" alt="Danantara Indonesia"><img data-aset="elnusa" alt="Elnusa Petrofin" class="lg-eln"><i class="lsep"></i><img data-aset="rtc" alt="RTC" class="lg-rtc"></div>
+    <h1>Judul Dashboard Anda</h1>
+    <p>Satu kalimat yang menjelaskan isi dashboard ini.</p>
+    <div class="lg-pills"><span>Kategori 1</span><span>Kategori 2</span><span>Kategori 3</span></div>
+    <div class="lg-scene"><img data-aset="ilustrasi" alt=""></div>
+  </section>
+  <section class="lg-panel">
+    <div class="lg-top"><span class="lg-live"><i></i>Monitoring Armada 2026</span><span id="lgTgl"></span></div>
+    <div class="lg-mid">
+      <form class="lg-card" id="loginForm" novalidate>
+        <img class="lg-hex" data-aset="heksagon" alt="">
+        <div class="lg-step" id="lgStep1">
+          <h2>Selamat datang</h2>
+          <p class="lg-sub">Pilih jenis akun untuk masuk ke dashboard.</p>
+          <div class="lg-roles">
+            <button type="button" class="lg-role" data-peran="PUSAT"><span class="lg-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/></svg></span><span><b>RTC</b><small>Seluruh Command Center dan Control Room</small></span><span class="chev">›</span></button>
+            <button type="button" class="lg-role" data-peran="AREA"><span class="lg-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/></svg></span><span><b>Command Center</b><small>Semua Control Room di satu area</small></span><span class="chev">›</span></button>
+            <button type="button" class="lg-role" data-peran="LOKASI"><span class="lg-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></span><span><b>Control Room</b><small>Cari Control Room Anda</small></span><span class="chev">›</span></button>
+          </div>
+        </div>
+        <div class="lg-step" id="lgStep2" hidden>
+          <button type="button" class="lg-back" id="lgBack">← Ganti jenis akun</button>
+          <h2 id="lgJudul">Masuk</h2>
+          <div class="lg-lbl">Password</div>
+          <div class="lg-field">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            <input id="lgP" type="password" autocomplete="current-password" placeholder="Masukkan password">
+            <button type="button" class="lg-eye" id="lgEye">Lihat</button>
+          </div>
+          <div class="lgerr" id="lgErr" role="alert"></div>
+          <button type="submit" class="lg-go" id="lgBtn">Masuk</button>
+        </div>
+      </form>
+    </div>
+    <div class="lg-bottom"><span>Elnusa Petrofin · RTC</span><span>Nama sistem · Kategori</span></div>
+  </section>
+</div>
+
+<!-- =============== 2. HEADER HIJAU =============== -->
+<header class="hero">
+  <div class="brandbar">
+    <div class="tab l"><img data-aset="danantara" alt="Danantara Indonesia"></div>
+    <div class="tab r"><img data-aset="elnusa" alt="Elnusa Petrofin" class="lg-eln"><i class="lsep"></i><img data-aset="rtc" alt="RTC" class="lg-rtc"></div>
+  </div>
+  <div class="heroin">
+    <div class="hero-top">
+      <div>
+        <div class="eyebrow">RTC · Monitoring Armada</div>
+        <h1>Judul Dashboard Anda — <span id="tBulan">Oktober 2026</span></h1>
+        <div class="sub">Penjelasan singkat isi dashboard · data Januari–Oktober 2026</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <div class="preview" id="tUpdate">Data s/d Oktober 2026</div>
+        <span class="preview tvjam"></span>
+        <div class="preview tv-sembunyi"><button type="button" id="btnTV">Mode TV</button><button type="button" id="btnKeluar">Keluar</button></div>
+      </div>
+    </div>
+    <nav class="tvnav"><button type="button" aria-pressed="true">Mode Utama</button><button type="button" aria-pressed="false">Mode Detail</button><button type="button" id="btnTVKeluar" style="margin-left:auto;background:none">Keluar Mode TV ✕</button></nav>
+    <div class="ctrlrow">
+      <div class="seg" role="tablist"><button type="button" role="tab" aria-selected="true">Bulan</button><button type="button" role="tab" aria-selected="false">Tahun</button></div>
+      <label class="pick">Bulan <select id="selBulan"></select></label>
+      <label class="pick">Dibanding <select><option>Bulan sebelumnya</option></select></label>
+    </div>
+    <nav class="filters" aria-label="Filter area">
+      <span class="flabel">Area:</span>
+      <div id="chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <label class="pick">Lokasi <select><option>Semua lokasi</option></select></label>
+    </nav>
+  </div>
+</header>
+
+<!-- =============== 3. ISI =============== -->
+<main class="wrap">
+  <!-- 3a. KPI -->
+  <div class="kpis">
+    <div class="kpi utama"><span class="l">Total event</span><span class="v" id="kTotal">–</span><span class="n" id="kTotalN"></span></div>
+    <div class="kpi"><span class="l">Kategori 1</span><span class="v" id="kK1">–</span><span class="n" id="kK1N"></span></div>
+    <div class="kpi"><span class="l">Kategori 2</span><span class="v" id="kK2">–</span><span class="n" id="kK2N"></span></div>
+    <div class="kpi"><span class="l">Kategori 3</span><span class="v" id="kK3">–</span><span class="n" id="kK3N"></span></div>
+  </div>
+
+  <!-- 3b. Bingkai: judul bagian + 3 kartu kategori -->
+  <section class="bingkai">
+    <div class="anahead"><h2>Tren &amp; parameter per kategori</h2><span class="hint">semua area · Oktober 2026 per tanggal · garis merah = tren</span></div>
+    <div class="grid g-111" id="kartuKategori"></div>
+  </section>
+
+  <!-- 3c. Dua panel peringkat -->
+  <div class="grid g-11">
+    <section class="panel"><div class="ph"><h2>Top area dengan pelanggaran terbanyak</h2><p>Oktober 2026 · klik untuk memfilter</p></div><div id="topArea"></div></section>
+    <section class="panel"><div class="ph"><h2>Top 10 lokasi</h2><p>Oktober 2026 · semua area</p></div><div id="topLokasi"></div></section>
+  </div>
+
+  <!-- 3d. Tabel rekap (class tv-sembunyi = tidak tampil di Mode TV) -->
+  <section class="panel tv-sembunyi">
+    <div class="ph"><h2>Rekap per area</h2><p>Oktober 2026 dibanding September · klik judul kolom untuk mengurutkan</p></div>
+    <div id="tblArea"></div>
+  </section>
+
+  <!-- 3e. Kartu Top Driver -->
+  <section class="anahead"><h2>Top pelanggaran driver</h2><span class="hint">Oktober 2026 · semua area</span></section>
+  <div class="grid g-auto" id="topDriver"></div>
+
+  <!-- 3f. Catatan & peringatan -->
+  <div class="warnbar tv-sembunyi">⚠ Contoh peringatan: data Sumbagsel baru sampai 26 Oktober.</div>
+  <section class="panel tv-sembunyi"><div class="ph"><h2>Catatan</h2></div>
+    <ul class="notes"><li><b>Sumber data:</b> sheet Event Sistem, diperbarui tiap jam.</li><li><b>Kenaikan</b> dibanding bulan sebelumnya; merah = naik.</li></ul>
+  </section>
+</main>
+
+<!-- =============== 4. FOOTER =============== -->
+<footer class="footer">
+  <div class="redtab">www.elnusapetrofin.co.id</div>
+  <div class="src">Sumber: tulis sumber data dashboard ini.</div>
+</footer>
+
+<div id="tip"></div>
+<?!= include('Aset') ?>
+<?!= include('TemaJs') ?>
+<script>
+/* ===== Contoh data & pemakaian. Ganti bagian ini dengan data dashboard Anda. ===== */
+(function () {
+  const KAT = [{nama: 'Kategori 1', sub: 'Driving Behaviour', warna: 'var(--c1)'}, {nama: 'Kategori 2', sub: 'Driver Discipline', warna: 'var(--c2)'}, {nama: 'Kategori 3', sub: 'Fatigue Management', warna: 'var(--c3)'}];
+  const AREA = ['Sumbagut', 'Sulawesi', 'Sumbagsel', 'Jabalinus', 'Malupa', 'Kalimantan'];
+  const acak = (a, b, s) => { const x = Math.sin(s) * 10000; return Math.round(a + (x - Math.floor(x)) * (b - a)); };
+  const hari = Array.from({length: 31}, (_, i) => String(i + 1));
+
+  function render() {
+    // KPI
+    const tot = KAT.map((k, j) => hari.reduce((s, _, i) => s + acak(20e3, 90e3, i * 7 + j * 31), 0));
+    const lalu = tot.map((v, j) => Math.round(v * (0.8 + j * 0.15)));
+    const sum = a => a.reduce((s, v) => s + v, 0);
+    document.getElementById('kTotal').textContent = Tema.angka(sum(tot));
+    document.getElementById('kTotalN').innerHTML = Tema.persen(sum(tot), sum(lalu)) + ' vs September';
+    KAT.forEach((k, j) => { document.getElementById('kK' + (j + 1)).textContent = Tema.ringkas(tot[j]); document.getElementById('kK' + (j + 1) + 'N').innerHTML = Tema.persen(tot[j], lalu[j]) + ' · ' + k.sub; });
+
+    // Kartu kategori
+    const host = document.getElementById('kartuKategori');
+    host.innerHTML = KAT.map((k, j) => `<article class="ana">
+      <h3><span class="hname"><span><i style="background:${k.warna}"></i>${k.nama.toUpperCase()}</span><small>${k.sub}</small></span><span class="chg">${Tema.persen(tot[j], lalu[j])}</span></h3>
+      <div class="boxes"><div><div class="k">Total (Okt / Sep)</div><div class="v">${Tema.angka(tot[j])} / ${Tema.angka(lalu[j])}</div></div>
+        <div><div class="k">Kenaikan tertinggi</div><div class="v up"><span class="pn">Parameter A</span>+12.345</div></div>
+        <div><div class="k">Penurunan tertinggi</div><div class="v down"><span class="pn">Parameter B</span>−4.321</div></div></div>
+      <div class="anachart" id="gk${j}"></div>
+      <div class="cattbl"><div class="tblket">Tabel: <b>Oktober 2026</b> dibanding <b>September 2026</b>.</div><div class="tbl rapat" id="tk${j}"></div></div>
+    </article>`).join('');
+    KAT.forEach((k, j) => {
+      Tema.grafikBatang('#gk' + j, {label: hari, nilai: hari.map((_, i) => i < 28 ? acak(20e3, 90e3, i * 7 + j * 31) : null), warna: k.warna, satuan: 'event', judul: k.nama});
+      const p = ['Parameter A', 'Parameter B', 'Parameter C', 'Parameter D'].map((n, i) => ({param: n, lalu: acak(1e3, 9e5, i + j * 9), kini: acak(1e3, 9e5, i + j * 9 + 3)}));
+      Tema.tabel('#tk' + j, [{judul: 'Parameter', kunci: 'param', kiri: true}, {judul: 'Sep', kunci: 'lalu', format: 'angka'}, {judul: 'Okt', kunci: 'kini', format: 'angka'}, {judul: 'Kenaikan', kunci: 'kini', format: 'persen', banding: 'lalu'}], p, {total: true});
+    });
+
+    // Peringkat
+    const area = AREA.map((a, i) => ({nama: a, nilai: acak(1e4, 2.5e6, i * 13), lalu: acak(1e4, 2.5e6, i * 17), warna: Tema.WARNA[i]})).sort((a, b) => b.nilai - a.nilai);
+    area.forEach(a => a.sub = Tema.angka(a.nilai) + ' event · ' + Tema.persen(a.nilai, a.lalu) + ' vs Sep');
+    Tema.peringkat('#topArea', area, {klik: a => console.log('filter area', a && a.nama)});
+    const lok = Array.from({length: 10}, (_, i) => ({nama: 'Lokasi ' + (i + 1), nilai: 5e5 - i * 4.2e4, warna: Tema.WARNA[i % 6], sub: AREA[i % 6]}));
+    Tema.peringkat('#topLokasi', lok);
+
+    // Tabel rekap
+    Tema.tabel('#tblArea', [
+      {judul: 'Regional', kunci: 'nama', kiri: true, format: (v, b) => b.warna ? `<span class="rdot" style="background:${b.warna}"></span>${v}` : v},
+      {judul: 'Okt', kunci: 'nilai', format: 'angka', urut: true}, {judul: 'Sep', kunci: 'lalu', format: 'angka', urut: true},
+      {judul: 'Kenaikan', kunci: 'nilai', format: 'persen', banding: 'lalu'}], area, {total: true, urut: 'nilai'});
+
+    // Top driver
+    const PAR = [['Overspeed', 'c1'], ['Drive > 4 Hr', 'c1'], ['Blackzone', 'c2'], ['Idle', 'c2'], ['Fatigue', 'c3'], ['Menguap', 'c3']];
+    document.getElementById('topDriver').innerHTML = PAR.map(([p, c], j) => {
+      const d = Array.from({length: 5}, (_, i) => ({nama: 'Nama Driver ' + (i + 1), lok: 'IT LOKASI ' + (i + 1), n: 400 - i * 60 - j * 10}));
+      return `<section class="panel drv"><div class="ph" style="border-color:var(--${c});background:color-mix(in srgb,var(--${c}) 9%,#fff)"><h2><i class="dot" style="background:var(--${c})"></i>${p}</h2><p>${KAT[+c[1] - 1].sub}</p></div>
+        <table class="drvtbl"><tbody>${d.map((x, i) => `<tr><td>${i + 1}</td><td>${x.nama}</td><td><span class="rdot" style="background:var(--${c})"></span>${x.lok}</td><td>${x.n}<span class="amtbar"><i style="width:${x.n / d[0].n * 100}%"></i></span></td></tr>`).join('')}</tbody></table></section>`;
+    }).join('');
+  }
+
+  // Filter
+  document.getElementById('chips').innerHTML = '<button type="button" class="chip" aria-pressed="true">Semua area</button>' +
+    AREA.map((a, i) => `<button type="button" class="chip" aria-pressed="false"><i class="sw" style="background:${Tema.WARNA[i]}"></i>${a}</button>`).join('');
+  document.querySelectorAll('#chips .chip').forEach(c => c.addEventListener('click', () => { document.querySelectorAll('#chips .chip').forEach(x => x.setAttribute('aria-pressed', x === c)); }));
+  document.getElementById('selBulan').innerHTML = Tema.BULAN.slice(0, 10).map((b, i) => `<option ${i === 9 ? 'selected' : ''}>${b} 2026</option>`).join('');
+
+  // Login: ganti fungsi masuk dengan pemeriksaan sungguhan, mis. Tema.server('cekLogin', peran, pw)
+  Tema.login({masuk: (peran, pw) => pw ? Promise.resolve() : Promise.reject('Isi password terlebih dahulu.')});
+  if (/[?&]tanpaLogin/.test(location.search)) document.body.classList.remove('login');
+
+  // Mode TV
+  document.getElementById('btnTV').addEventListener('click', () => Tema.modeTV(true));
+  document.getElementById('btnTVKeluar').addEventListener('click', () => Tema.modeTV(false));
+  document.getElementById('btnKeluar').addEventListener('click', () => document.body.classList.add('login'));
+  if (/[?&]tv/.test(location.search)) Tema.modeTV(true);
+
+  render();
+})();
+</script>
+</body>
+</html>

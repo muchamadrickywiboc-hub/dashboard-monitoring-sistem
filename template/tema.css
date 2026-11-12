@@ -1,0 +1,289 @@
+/* =====================================================================
+   TEMA DASHBOARD MONITORING — Elnusa Petrofin · RTC
+   Diambil dari dashboard "Monitoring Driving Behaviour, Driver Discipline
+   & Fatigue Management" (Index.html). Pakai file ini di semua dashboard
+   agar tampilannya seragam. Panduan lengkap: template/README.md
+   ===================================================================== */
+
+/* ---------- 1. Token warna, huruf, jarak ---------- */
+:root{
+  color-scheme:light;
+  /* dasar */
+  --bg:#f6f7f6; --surface:#fff; --surface-2:#f3f5f3;
+  --ink:#1b1f1d; --ink-2:#47504b; --muted:#737b76;
+  --grid:#e6e9e6; --axis:#c9cec9; --line:rgba(27,31,29,.09);
+  /* merek (hijau Elnusa Petrofin) */
+  --forest-dark:#3f6e4b; --forest:#4a7a53; --leaf:#6aa459; --leaf-2:#93b833; --lime:#b8ca10;
+  --accent-wash:#eef4e6; --red:#e03d3e;
+  /* status */
+  --up:#b42324;      /* naik = memburuk (pelanggaran bertambah) */
+  --down:#2f7a2f;    /* turun = membaik */
+  --warn-bg:#fdf0cf; --warn-ink:#7a5200; --serious-ink:#b42324;
+  /* warna seri / kategori (urut dipakai untuk area, kategori, dsb.) */
+  --c1:#0f78bf; --c2:#e8833a; --c3:#1aa58a; --c4:#c99a00; --c5:#d9579a; --c6:#3f8a3a; --c7:#7a5cc4;
+  /* batang grafik */
+  --bar-now:#2e7d4f; --bar-prev:#5fa36d; --bar:#8cc49a; --trend:#d64541;
+  /* gradien khas */
+  --grad-hero:linear-gradient(115deg,var(--forest-dark) 0%,var(--forest) 22%,var(--leaf) 58%,var(--leaf-2) 100%);
+  --grad-art:linear-gradient(150deg,var(--forest-dark) 0%,var(--forest) 30%,var(--leaf) 70%,var(--leaf-2) 100%);
+  --grad-btn:linear-gradient(115deg,var(--forest-dark),var(--forest) 40%,var(--leaf));
+  /* huruf & bentuk */
+  --f-ui:"Poppins",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --gut:clamp(20px,2.2vw,56px);
+  --r-card:16px; --r-ctl:12px; --r-pill:999px;
+  --shadow:0 8px 24px rgba(30,60,40,.10);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:var(--f-ui)}
+button,select,input{font-family:var(--f-ui)}
+
+/* ---------- 2. Header hijau (hero) ---------- */
+.hero{position:relative;background:var(--grad-hero);color:#fff;padding:0 var(--gut) 92px;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-120px;top:-160px;width:520px;height:520px;border-radius:50%;border:1px solid rgba(255,255,255,.16);box-shadow:0 0 0 60px rgba(255,255,255,.04),0 0 0 140px rgba(255,255,255,.03);pointer-events:none}
+.hero.ringkas{padding-bottom:28px}               /* header tanpa kartu yang "naik" ke atasnya */
+.brandbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;position:relative;z-index:2}
+.tab{background:#fff;display:flex;align-items:center;gap:14px;padding:10px 26px 12px;min-height:58px}
+.tab.l{border-radius:0 0 46px 0;margin-left:calc(-1*var(--gut));padding-left:var(--gut)}
+.tab.r{border-radius:0 0 0 46px;margin-right:calc(-1*var(--gut));padding-right:var(--gut)}
+.tab img{height:38px;width:auto;display:block}
+.tab img.lg-eln{height:32px}.tab img.lg-rtc{height:44px}
+.lsep{width:1px;align-self:stretch;background:#d9dfdb;margin:4px 0}
+.heroin{position:relative;z-index:2;padding-top:26px;display:flex;flex-direction:column;gap:18px}
+.hero-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px 24px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.82)}
+.hero h1{margin:2px 0 4px;font-size:clamp(24px,3.2vw,36px);font-weight:700;letter-spacing:-.01em;line-height:1.15}
+.sub{color:rgba(255,255,255,.88);font-size:15px}
+.preview{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);padding:6px 12px;border-radius:var(--r-pill);font-size:12.5px;font-weight:500}
+.preview button,.preview a{font:600 12px var(--f-ui);border:0;background:#fff;color:var(--forest);border-radius:var(--r-pill);padding:3px 10px;cursor:pointer;text-decoration:none}
+
+/* kontrol di atas header hijau */
+.ctrlrow,.filters{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.filters{gap:8px}
+.flabel{font-size:13px;font-weight:600;margin-right:4px}
+.seg{display:inline-flex;background:rgba(0,0,0,.18);border-radius:var(--r-pill);padding:3px}
+.seg button{appearance:none;border:0;background:transparent;color:#fff;font:600 13.5px var(--f-ui);padding:7px 16px;border-radius:var(--r-pill);cursor:pointer}
+.seg button[aria-selected="true"]{background:#fff;color:var(--forest)}
+.pick{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.pick select,.pick input{font:600 13.5px var(--f-ui);color:var(--ink);background:#fff;border:0;border-radius:8px;padding:7px 12px;cursor:pointer}
+.pick select:disabled{opacity:.55;cursor:not-allowed}
+.chip{appearance:none;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;font:500 13.5px var(--f-ui);padding:7px 14px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.chip:hover{background:rgba(255,255,255,.24)}
+.chip[aria-pressed="true"]{background:var(--lime);border-color:var(--lime);color:var(--ink);font-weight:600}
+.chip .sw{width:11px;height:11px;border-radius:3px;box-shadow:0 0 0 1.5px #fff}
+.btn-hero{font:600 12.5px var(--f-ui);color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.55);border-radius:var(--r-pill);padding:6px 12px;cursor:pointer}
+.btn-hero:hover{background:rgba(255,255,255,.25)}
+
+/* ---------- 3. Area isi ---------- */
+.wrap{position:relative;z-index:1;margin:-72px 0 0;padding:0 var(--gut) 40px;display:flex;flex-direction:column;gap:20px}
+.hero.ringkas + .wrap{margin-top:20px}
+.grid{display:grid;gap:20px}
+.g-11{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g-21{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+.g-111{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g-auto{grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))}
+
+/* bingkai abu yang mengelompokkan beberapa kartu */
+.bingkai{display:flex;flex-direction:column;gap:14px;background:var(--surface-2);border:1px solid var(--line);border-radius:20px;padding:14px}
+/* judul bagian: "Tren & parameter per kategori  keterangan kecil" */
+.anahead{display:flex;align-items:baseline;gap:6px 12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:14px 22px}
+.anahead h2{margin:0;font-size:17.5px;font-weight:700}
+.hint{font-size:13px;color:var(--muted)}
+
+/* panel umum */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:20px 22px 22px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.ph h2{margin:0;font-size:17.5px;font-weight:600}
+.ph p{margin:3px 0 0;font-size:13.5px;color:var(--ink-2)}
+
+/* ---------- 4. KPI ---------- */
+.infobar{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:hidden}
+.infobar.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.infobar>div{padding:14px 18px;border-right:1px solid var(--grid);min-width:0}
+.infobar>div:last-child{border-right:0}
+.k{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.infobar .v{font-size:17px;font-weight:700;margin-top:2px}
+.infobar .v small{font-size:12.5px;font-weight:500;color:var(--muted);display:block}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.kpis.k3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.kpi{background:var(--surface);border-radius:var(--r-card);padding:18px 20px;display:flex;flex-direction:column;gap:6px;min-width:0;box-shadow:var(--shadow)}
+.kpi .l{font-size:13.5px;color:var(--ink-2);font-weight:500}
+.kpi .v{font-size:32px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi .n{font-size:13px;color:var(--muted)}
+.kpi.utama .v{color:var(--forest)}
+
+/* kartu kategori: judul + persen perubahan, 3 kotak angka, grafik, tabel */
+.ana{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.ana h3{margin:0;padding:14px 20px;font-size:15px;font-weight:700;letter-spacing:.02em;border-bottom:1px solid var(--grid);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ana h3 .hname{display:flex;flex-direction:column;flex:1;min-width:0}
+.ana h3 .hname>span{display:flex;align-items:center;gap:10px}
+.ana h3 small{font-weight:500;color:var(--muted);font-size:12.5px;letter-spacing:0;margin-top:2px}
+.ana h3 i,.dot{width:12px;height:12px;border-radius:3px;display:inline-block;flex:none}
+.chg{flex:none;font-size:15px;font-weight:700;white-space:nowrap;padding:5px 10px;border-radius:8px;background:var(--surface-2)}
+.boxes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--surface-2)}
+.boxes>div{padding:10px 18px;border-right:1px solid var(--grid);min-width:0}
+.boxes>div:last-child{border-right:0}
+.boxes .k{font-size:11.5px}
+.boxes .v{font-size:15px;font-weight:700;margin-top:2px;overflow-wrap:anywhere}
+.boxes .v .pn{display:block;font-size:11.5px;font-weight:500;color:var(--ink-2);line-height:1.3;margin-bottom:1px}
+.anachart{padding:12px 16px 14px;width:100%;overflow-x:auto}
+.cattbl{padding:4px 12px 14px}
+.tblket{font-size:11.5px;color:var(--muted);line-height:1.45;padding:2px 2px 6px}.tblket b{color:var(--ink-2);font-weight:600}
+
+/* ---------- 5. Tabel ---------- */
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+th{font-size:12px;color:#fff;background:var(--forest);font-weight:600;text-align:right;padding:9px 10px;white-space:nowrap}
+th:first-child{border-radius:8px 0 0 8px}th:last-child{border-radius:0 8px 8px 0}
+th:first-child,td:first-child{text-align:left}
+th.l,td.l{text-align:left}
+td{padding:9px 10px;border-bottom:1px solid var(--grid);text-align:right;white-space:nowrap}
+tbody tr:hover{background:var(--surface-2)}
+tr.tot td{font-weight:700;background:var(--surface-2);border-bottom:0}
+th[data-sort]{cursor:pointer}th[data-sort]::after{content:" ⇅";opacity:.6}
+th[aria-sort=descending]::after{content:" ▼";opacity:1}th[aria-sort=ascending]::after{content:" ▲";opacity:1}
+.tbl.rapat th{padding:7px 6px;font-size:11px}.tbl.rapat td{padding:6px 6px;font-size:12.5px}
+.rdot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px}
+.small{display:block;font-size:12.5px;color:var(--muted);margin-top:3px}
+.up{color:var(--up);font-weight:600}.down{color:var(--down);font-weight:600}.flat{color:var(--muted)}
+
+/* ---------- 6. Peringkat (Top 10) ---------- */
+.rank{display:flex;flex-direction:column;gap:4px}
+.rrow{appearance:none;border:0;background:transparent;font:inherit;color:inherit;text-align:left;cursor:pointer;display:grid;grid-template-columns:minmax(120px,200px) minmax(0,1fr) 76px;align-items:center;gap:2px 12px;padding:6px 8px;border-radius:10px}
+.rrow:hover{background:var(--surface-2)}
+.rrow.sel{background:var(--accent-wash)}.rrow.dim{opacity:.45}
+.rname{font-weight:500;display:flex;align-items:center;gap:8px;font-size:14px;line-height:1.25}
+.rnum{display:inline-grid;place-items:center;min-width:22px;height:22px;border-radius:6px;background:var(--surface-2);font-size:12px;font-weight:700;color:var(--ink-2)}
+.rtrack{height:14px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.rfill{height:100%;border-radius:0 4px 4px 0;background:var(--c1)}
+.rval{font-weight:700;font-size:16px;text-align:right;font-variant-numeric:tabular-nums}
+.rsub{grid-column:2/4;font-size:12.5px;color:var(--muted)}
+
+/* kartu Top Driver per parameter */
+.drv .ph{border-left:4px solid var(--c1);border-radius:10px;padding:10px 14px;background:color-mix(in srgb,var(--c1) 9%,#fff)}
+.drv .ph h2{display:flex;align-items:center;gap:8px;font-size:15.5px}
+.drvtbl{width:100%;border-collapse:collapse;font-size:13px}
+.drvtbl td{white-space:normal;overflow-wrap:anywhere;padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+.drvtbl td:first-child{color:var(--muted);width:22px}
+.drvtbl td:nth-child(2){font-weight:700;text-transform:uppercase;font-size:12.5px}
+.drvtbl td:last-child{text-align:right;width:72px;white-space:nowrap;font-weight:700}
+.amtbar{display:block;height:4px;background:#e8eee9;border-radius:2px;margin-top:3px;min-width:50px}
+.amtbar i{display:block;height:100%;background:#c0392b;border-radius:2px}
+
+/* ---------- 7. Grafik (SVG) ---------- */
+.chart{width:100%;overflow-x:auto}
+.tick{fill:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.gl{stroke:var(--grid)}.base{stroke:var(--axis)}
+.hit{fill:transparent;cursor:pointer}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.legend i.garis{height:3px;border-radius:2px}
+.split{height:10px;border-radius:5px;display:flex;gap:2px;overflow:hidden;margin-top:6px}
+.split i{display:block;height:100%}
+#tip{position:fixed;pointer-events:none;z-index:50;background:var(--ink);color:#fff;font-size:13px;padding:10px 12px;border-radius:10px;max-width:280px;opacity:0;transition:opacity .08s}
+
+/* ---------- 8. Catatan, peringatan, tombol ---------- */
+.warnbar{display:flex;gap:10px;align-items:flex-start;background:var(--warn-bg);color:var(--warn-ink);border-radius:12px;padding:10px 14px;font-size:13.5px}
+.notes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 28px;margin:0;padding:0;list-style:none}
+.notes li{border-left:3px solid var(--lime);padding:2px 0 2px 14px;font-size:13.5px;color:var(--ink-2)}
+.notes li b{color:var(--ink)}
+.btn{appearance:none;font:600 13.5px var(--f-ui);border:0;border-radius:10px;padding:9px 16px;cursor:pointer;color:#fff;background:var(--grad-btn);box-shadow:0 8px 18px rgba(74,122,83,.24)}
+.btn:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
+.btn.sekunder{background:#fff;color:var(--forest);border:1px solid var(--forest);box-shadow:none}
+.btn.sekunder:hover{background:var(--accent-wash)}
+
+/* ---------- 9. Memuat ---------- */
+.spin{width:18px;height:18px;border-radius:50%;border:3px solid var(--grid);border-top-color:var(--forest);animation:sp .8s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+.loading{background:var(--surface);border-radius:var(--r-card);box-shadow:var(--shadow);padding:18px 22px;font-size:15px;color:var(--ink-2);display:flex;align-items:center;gap:12px}
+#pageLoad{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:rgba(245,248,244,.55);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .15s}
+#pageLoad.on{opacity:1;pointer-events:auto}
+#pageLoad .kartu{background:var(--surface);border-radius:var(--r-card);box-shadow:0 8px 24px rgba(30,60,40,.16);padding:18px 24px;display:flex;align-items:center;gap:12px;font-size:15px;color:var(--ink-2)}
+
+/* ---------- 10. Footer ---------- */
+.footer{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
+.redtab{background:var(--red);color:#fff;padding:14px 64px 14px 24px;border-radius:0 60px 0 0;font-size:13.5px;font-weight:500}
+.src{font-size:12px;color:var(--muted);padding:0 24px 16px;max-width:640px;text-align:right}
+
+/* ---------- 11. Halaman login (dua kolom) ---------- */
+.lg{min-height:100vh;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);background:var(--bg)}
+.lg-art{position:relative;overflow:hidden;color:#fff;padding:36px clamp(24px,4vw,56px) 0;display:flex;flex-direction:column;gap:18px;background:var(--grad-art)}
+.lg-art::before{content:"";position:absolute;right:-160px;top:-180px;width:560px;height:560px;border-radius:50%;border:1px solid rgba(255,255,255,.18);box-shadow:0 0 0 70px rgba(255,255,255,.05),0 0 0 160px rgba(255,255,255,.035);pointer-events:none}
+.lg-art>*{position:relative}
+.lg-logo{display:inline-flex;align-self:flex-start;align-items:center;gap:18px;background:#fff;border-radius:14px;padding:10px 18px;box-shadow:0 6px 20px rgba(0,0,0,.12)}
+.lg-logo img{height:34px;width:auto;display:block}
+.lg-logo img.lg-eln{height:28px}.lg-logo img.lg-rtc{height:40px}
+.lg-logo .lsep{margin:2px 0}
+.lg-art h1{font-size:clamp(26px,3vw,40px);line-height:1.12;margin:10px 0 0;max-width:15ch}
+.lg-art p{margin:0;max-width:44ch;color:rgba(255,255,255,.9);font-size:15.5px}
+.lg-pills{display:flex;flex-wrap:wrap;gap:8px}
+.lg-pills span{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);border-radius:var(--r-pill);padding:5px 12px;font-size:12.5px;font-weight:600}
+.lg-scene{margin-top:auto;margin-left:calc(-1*clamp(24px,4vw,56px));margin-right:calc(-1*clamp(24px,4vw,56px))}
+.lg-scene img{display:block;width:100%;height:auto;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 14%);mask-image:linear-gradient(to bottom,transparent 0,#000 14%)}
+.lg-panel{position:relative;overflow:hidden auto;display:flex;flex-direction:column;align-items:center;gap:22px;padding:26px clamp(18px,4vw,56px) 20px;background:radial-gradient(circle at 100% 0,rgba(106,164,89,.16),transparent 42%),radial-gradient(circle at 0 100%,rgba(147,184,51,.12),transparent 38%),var(--bg)}
+.lg-panel::before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(63,110,75,.10) 1px,transparent 1.2px);background-size:22px 22px;-webkit-mask-image:linear-gradient(160deg,#000,transparent 55%);mask-image:linear-gradient(160deg,#000,transparent 55%);pointer-events:none}
+.lg-panel>*{position:relative}
+.lg-top,.lg-bottom{width:100%;max-width:520px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:12.5px;color:var(--muted)}
+.lg-live{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--grid);border-radius:var(--r-pill);padding:5px 12px;font-weight:600;color:var(--ink-2)}
+.lg-live i{width:8px;height:8px;border-radius:50%;background:var(--leaf);box-shadow:0 0 0 4px rgba(106,164,89,.2)}
+.lg-mid{flex:1;width:100%;max-width:520px;display:flex;flex-direction:column;justify-content:center;gap:22px}
+.lg-card,.lg-step{width:100%;display:flex;flex-direction:column;gap:18px}
+.lg-step{gap:16px}
+.lg-hex{width:112px;height:auto;display:block;filter:drop-shadow(0 10px 18px rgba(31,61,40,.18))}
+.lg-card h2{margin:0;font-size:26px;line-height:1.2}
+.lg-sub{margin:-10px 0 0;color:var(--muted);font-size:14px}
+.lg-roles{display:flex;flex-direction:column;gap:12px}
+.lg-role{appearance:none;display:grid;grid-template-columns:52px minmax(0,1fr) 20px;align-items:center;gap:14px;text-align:left;width:100%;background:var(--surface);border:1.5px solid var(--grid);border-radius:var(--r-card);padding:14px 16px;cursor:pointer;font:inherit;color:inherit;transition:border-color .15s,box-shadow .15s,transform .15s}
+.lg-role:hover,.lg-role:focus-visible{border-color:var(--leaf);box-shadow:0 10px 24px rgba(74,122,83,.14);transform:translateY(-1px);outline:none}
+.lg-ico{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;background:var(--accent-wash);color:var(--forest)}
+.lg-ico svg{width:26px;height:26px}
+.lg-role b{display:block;font-size:16px}.lg-role small{display:block;color:var(--muted);font-size:13px;line-height:1.35}
+.lg-role .chev{color:var(--axis);font-size:22px;line-height:1}
+.lg-back{appearance:none;align-self:flex-start;border:0;background:none;color:var(--forest);font:600 13.5px var(--f-ui);padding:4px 0;cursor:pointer}
+.lg-back:hover{text-decoration:underline}
+.lg-lbl{font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:-8px}
+.lg-field{position:relative}
+.lg-field input{width:100%;font:500 15px var(--f-ui);padding:13px 14px 13px 44px;border:1.5px solid var(--grid);border-radius:var(--r-ctl);background:var(--surface);color:var(--ink)}
+.lg-field input:focus{outline:none;border-color:var(--forest);box-shadow:0 0 0 4px rgba(106,164,89,.18)}
+.lg-field>svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--muted);pointer-events:none}
+.lg-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);appearance:none;border:0;background:none;color:var(--muted);font:600 12.5px var(--f-ui);padding:6px 8px;cursor:pointer}
+.lg-go{appearance:none;border:0;border-radius:var(--r-ctl);padding:14px;font:600 15px var(--f-ui);color:#fff;cursor:pointer;background:var(--grad-btn);box-shadow:0 10px 22px rgba(74,122,83,.28)}
+.lg-go:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
+.lgerr{color:var(--serious-ink);font-size:13px;min-height:1em;margin-top:-6px}
+@media (min-width:901px){.lg{height:100vh;min-height:0;overflow:hidden}.lg-art{min-height:0}.lg-scene{flex:1 1 0;min-height:140px}.lg-scene img{height:100%;object-fit:cover;object-position:center 25%}}
+@media (max-width:900px){.lg{grid-template-columns:minmax(0,1fr)}.lg-art{padding-top:22px;gap:12px}.lg-art h1{font-size:24px;max-width:none}.lg-art p,.lg-pills{display:none}.lg-scene img{max-height:220px;object-fit:cover;object-position:center 70%}.lg-hex{display:none}}
+body.login .hero,body.login .wrap,body.login .footer{display:none!important}
+body:not(.login) .lg{display:none}
+
+/* ---------- 12. Mode TV (layar lebar, satu layar tanpa scroll) ----------
+   Aktifkan dengan Tema.modeTV(true). Isi diperkecil otomatis agar muat layar. */
+.tvjam,.tvnav{display:none}
+body.tv{width:2400px;overflow:hidden}
+body.tv .hero{padding-bottom:18px;border-radius:0 0 22px 22px}
+body.tv .hero::after,body.tv .brandbar,body.tv .sub,body.tv .ctrlrow,body.tv .filters,body.tv .footer,body.tv .tv-sembunyi{display:none!important}
+body.tv .heroin{padding-top:16px;gap:10px}
+body.tv .hero h1{font-size:34px;margin:0}
+body.tv .tvjam{display:inline-flex;font-weight:700;font-size:22px;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+body.tv .tvnav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tvnav button{font:inherit;font-size:16px;font-weight:600;padding:8px 18px;border-radius:var(--r-pill);border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+.tvnav button[aria-pressed=true]{background:#fff;color:var(--forest);border-color:#fff}
+body.tv .wrap{margin-top:0;padding:16px 24px 20px;gap:14px}
+body.tv .panel{padding:16px 18px 18px;gap:10px}
+body.tv td{padding:5px 6px;font-size:12.5px}
+
+/* ---------- 13. Responsif & layar besar ---------- */
+@media (max-width:1100px){.g-111{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:1000px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.g-21,.g-11{grid-template-columns:minmax(0,1fr)}.notes{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){
+  .hero{padding-inline:16px}.tab.l{margin-left:-16px;padding-left:16px}.tab.r{display:none}
+  .wrap{padding-inline:16px}.kpis,.kpis.k3,.infobar,.infobar.c3{grid-template-columns:minmax(0,1fr)}
+  .rrow{grid-template-columns:96px minmax(0,1fr) 56px}
+  .footer{flex-direction:column;align-items:flex-start}.src{text-align:left;padding-inline:16px}
+}
+@media (min-width:2200px){body:not(.tv){zoom:1.2}}
+@media (min-width:2700px){body:not(.tv){zoom:1.45}}
+@media (min-width:3300px){body:not(.tv){zoom:1.8}}
+@media print{.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}.ctrlrow,.filters,#pageLoad{display:none!important}}
