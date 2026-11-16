@@ -1592,28 +1592,48 @@ function dmFilterTeks() {
 function dmPesan(id, teks) { const e = document.getElementById(id); e.hidden = !teks; e.textContent = teks || ''; }
 function dmKuotaTeks() {
   const q = DM.info; if (!q) return 'Memeriksa batas export…';
-  const dasar = q.bebas ? `Pilih tanggal ${tglId(q.awal)} s/d ${tglId(q.akhir)}, maksimal ${q.maksHari} hari per export.` : `Hanya ${q.hariTerakhir || 3} hari terakhir yang bisa di-export: ${tglId(q.awal)} s/d ${tglId(q.akhir)}.`;
+  const dasar = `Bebas pilih tanggal ${tglId(q.awal)} s/d ${tglId(q.akhir)}, maksimal ${q.maksHari} hari per export.`;
   if (q.sisa < 0) return dasar;
   return `${dasar} Sisa export ${q.per === 'BULAN' ? 'bulan' : 'hari'} ini: ${q.sisa} dari ${q.batas}.` + (q.sisa ? '' : ' Batas sudah tercapai, silakan hubungi Tim Pusat.');
 }
 function dmCekSesudah() { const e = document.getElementById('dmErr'), t = e.hidden ? '' : e.textContent; dmCek(); if (t && e.hidden) dmPesan('dmErr', t); }
 const tglId = x => x ? x.split('-').reverse().join('/') : '';
-// tanggal yang boleh di-export: dari server (jam WIB); sebelum jawaban server datang, dihitung dari jam perangkat
+// tanggal yang boleh di-export: dari server (jam WIB). Semua akun bebas memilih tanggal mana saja sejak data mentah tersedia,
+// asal rentangnya maksimal DM.info.maksHari hari per export (server tetap memeriksa ulang). Sebelum jawaban server datang: jam perangkat.
+const dmMaks = () => DM.info && DM.info.maksHari ? DM.info.maksHari : 3;
+const dmGeser = (x, n) => { const t = new Date(+x.slice(0, 4), +x.slice(5, 7) - 1, +x.slice(8, 10) + n); return isoTglY(t.getFullYear(), t.getMonth(), t.getDate()); };
+const dmHari = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5) + 1;
 function dmJendela() {
   if (DM.info && DM.info.awal) return {awal: DM.info.awal, akhir: DM.info.akhir};
-  { const n = new Date(); return {awal: '2026-10-31', akhir: isoTglY(n.getFullYear(), n.getMonth(), n.getDate())}; }   // semua akun bebas memilih tanggal (server tetap memeriksa)
-  const n = new Date(), a = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 2);
-  return {awal: isoTglY(a.getFullYear(), a.getMonth(), a.getDate()), akhir: isoTglY(n.getFullYear(), n.getMonth(), n.getDate())};
+  const n = new Date(); return {awal: '2026-10-31', akhir: isoTglY(n.getFullYear(), n.getMonth(), n.getDate())};
 }
-// tanggal di luar jendela: diberi tanda merah dan tombol Export dimatikan
+// Kalender: "Dari" bisa tanggal mana saja dalam jendela; "s/d" otomatis dibatasi Dari .. Dari + (maks - 1) hari
+function dmBatasKalender() {
+  const dA = document.getElementById('dmDari'), dB = document.getElementById('dmSampai'), w = dmJendela();
+  dA.min = w.awal; dA.max = w.akhir;
+  const a = dA.value && dA.value >= w.awal && dA.value <= w.akhir ? dA.value : '';
+  dB.min = a || w.awal;
+  const mx = a ? dmGeser(a, dmMaks() - 1) : w.akhir; dB.max = mx < w.akhir ? mx : w.akhir;
+}
+// Dari diubah: s/d digeser ikut supaya tetap 1..maks hari (tidak perlu memilih ulang)
+function dmSesuaikanSampai() {
+  const dA = document.getElementById('dmDari'), dB = document.getElementById('dmSampai'), w = dmJendela(), a = dA.value;
+  if (!a || a < w.awal || a > w.akhir) return;
+  if (!dB.value || dB.value < a) dB.value = a;
+  else if (dmHari(a, dB.value) > dmMaks()) { const b = dmGeser(a, dmMaks() - 1); dB.value = b < w.akhir ? b : w.akhir; }
+}
+// tanggal di luar jendela / rentang terbalik / lebih dari maks hari: diberi tanda merah dan tombol Export dimatikan
 function dmCek() {
+  dmBatasKalender();
   const dA = document.getElementById('dmDari'), dB = document.getElementById('dmSampai'), w = dmJendela(), luar = x => x && (x < w.awal || x > w.akhir);
-  dA.min = dB.min = w.awal; dA.max = dB.max = w.akhir;
-  [dA, dB].forEach(x => { x.style.borderColor = luar(x.value) ? '#b3261e' : ''; x.style.color = luar(x.value) ? '#b3261e' : ''; });
-  const bad = [dA.value, dB.value].filter(luar);
+  const a = dA.value, b = dB.value, terbalik = a && b && b < a, kepanjangan = a && b && !terbalik && dmHari(a, b) > dmMaks();
+  [dA, dB].forEach(x => { const m = luar(x.value) || ((terbalik || kepanjangan) && x === dB); x.style.borderColor = m ? '#b3261e' : ''; x.style.color = m ? '#b3261e' : ''; });
+  const bad = [a, b].filter(luar);
   const habis = DM.info && DM.info.sisa === 0;
-  dmPesan('dmErr', bad.length ? `Tanggal ${[...new Set(bad)].map(tglId).join(' dan ')} tidak bisa di-export. Pilih tanggal ${tglId(w.awal)} s/d ${tglId(w.akhir)}.` : habis ? 'Batas export hari ini sudah tercapai. Silakan hubungi Tim Pusat.' : '');
-  document.getElementById('dmOk').disabled = DM.jalan || !!bad.length || habis;
+  dmPesan('dmErr', bad.length ? `Tanggal ${[...new Set(bad)].map(tglId).join(' dan ')} tidak bisa di-export. Data mentah tersedia ${tglId(w.awal)} s/d ${tglId(w.akhir)}.`
+    : !a || !b ? 'Isi tanggal Dari dan s/d.' : terbalik ? 'Tanggal s/d tidak boleh sebelum tanggal Dari.' : kepanjangan ? `Rentang maksimal ${dmMaks()} hari per export.`
+    : habis ? 'Batas export hari ini sudah tercapai. Silakan hubungi Tim Pusat.' : '');
+  document.getElementById('dmOk').disabled = DM.jalan || !!bad.length || !a || !b || terbalik || kepanjangan || habis;
 }
 document.getElementById('btnMentah').onclick = () => {
   if (!D || DM.jalan) return;
@@ -1621,8 +1641,7 @@ document.getElementById('btnMentah').onclick = () => {
   let a, b;
   if (tgl > 0) { a = isoTglY(y, mon, tgl); b = isoTglY(y, mon, Math.max(tgl, tgl2 || tgl)); } else { a = b = w.akhir; }
   // filter tanggal dashboard di luar jendela: diberi tanda, tanggal disesuaikan ke jendela
-  const maksH = DM.info ? DM.info.maksHari : 3;
-  if ((Date.parse(b) - Date.parse(a)) / 864e5 + 1 > maksH) { const t = new Date(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10) + maksH - 1); b = isoTglY(t.getFullYear(), t.getMonth(), t.getDate()); }
+  if (dmHari(a, b) > dmMaks()) b = dmGeser(a, dmMaks() - 1);   // filter dashboard lebih dari maks hari: dipotong dari tanggal awal
   const luar = a < w.awal || b > w.akhir, ket = document.getElementById('dmTanda');
   ket.hidden = !luar;
   if (luar) { ket.textContent = `Filter tanggal dashboard (${tglId(a)}${b !== a ? ' s/d ' + tglId(b) : ''}) tidak bisa di-export: hanya ${tglId(w.awal)} s/d ${tglId(w.akhir)} yang tersedia. Tanggal di bawah sudah disesuaikan.`;
@@ -1634,18 +1653,18 @@ document.getElementById('btnMentah').onclick = () => {
   document.getElementById('dmKuota').textContent = dmKuotaTeks();
   dmCek();
   document.getElementById('dlgMentah').hidden = false;
-  gsr('infoEksporMentah', TOKEN).then(j => { DM.info = JSON.parse(j); document.getElementById('dmKuota').textContent = dmKuotaTeks(); dmCek(); })
+  gsr('infoEksporMentah', TOKEN).then(j => { DM.info = JSON.parse(j); document.getElementById('dmKuota').textContent = dmKuotaTeks(); dmSesuaikanSampai(); dmCek(); })
     .catch(e => { if (!perluLogin(e)) dmPesan('dmErr', 'Batas export tidak terbaca: ' + (e && e.message ? e.message : e)); });
 };
-document.getElementById('dmDari').onchange = document.getElementById('dmSampai').onchange = () => dmCek();
+document.getElementById('dmDari').onchange = () => { dmSesuaikanSampai(); dmCek(); };
+document.getElementById('dmSampai').onchange = () => dmCek();
 document.getElementById('dmBatal').onclick = () => { if (!DM.jalan) document.getElementById('dlgMentah').hidden = true; };
 document.getElementById('dmOk').onclick = async () => {
   if (DM.jalan) return;
   const dari = document.getElementById('dmDari').value, sampai = document.getElementById('dmSampai').value, ok = document.getElementById('dmOk'), tutup = document.getElementById('dmBatal');
   dmPesan('dmErr', '');
   if (!dari || !sampai || sampai < dari) return dmPesan('dmErr', 'Isi tanggal Dari dan s/d dengan benar.');
-  const hari = (Date.parse(sampai) - Date.parse(dari)) / 864e5 + 1, maks = DM.info ? DM.info.maksHari : 3;
-  if (hari > maks) return dmPesan('dmErr', `Rentang maksimal ${maks} hari.`);
+  if (dmHari(dari, sampai) > dmMaks()) return dmPesan('dmErr', `Rentang maksimal ${dmMaks()} hari per export.`);
   const w = dmJendela(); if (dari < w.awal || sampai > w.akhir) return dmCek();
   DM.jalan = true; ok.disabled = tutup.disabled = true;
   let job = null;
