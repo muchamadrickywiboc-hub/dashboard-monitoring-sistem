@@ -341,7 +341,7 @@ function tglKendala_(x) {
  * kuncinya ikut waktu ubah spreadsheet kendala, jadi isian baru langsung terbaca.
  */
 function kendalaBulan_(m) {
-  const versi = DriveApp.getFileById(LH.KENDALA_ID).getLastUpdated().getTime(), kunci = x => 'LHJU6_' + x + '_' + versi, ada = ambilCache_(kunci(m));
+  const versi = DriveApp.getFileById(LH.KENDALA_ID).getLastUpdated().getTime(), kunci = x => 'LHJU7_' + x + '_' + versi, ada = ambilCache_(kunci(m));
   if (ada) return JSON.parse(ada);
   const t0 = Date.now(), semua = kendalaSemua_();
   Object.keys(semua).forEach(x => simpanCache_(JSON.stringify(semua[x]), kunci(x), CFG.CACHE_DETIK));
