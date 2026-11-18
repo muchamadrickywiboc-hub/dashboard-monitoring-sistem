@@ -27,7 +27,7 @@ const CFG = {
   TARIKAN_ID: '11akfRibrQLixrBicdNXazEWX-TGmgfYu4zdYYNaOEy8',   // spreadsheet "Tarikan Sistem": kolom Area | linkgdrive (folder tarikan harian per regional)
   // 1-30 Oktober dari "Data 10 Oktober 2026" + "Jam 10 ..." (hasil olah Oktober.zip); mulai 31 Oktober dari folder Data Tarikan Cleansing
   MULAI_TARIKAN: '2026-10-31',   // mulai tanggal ini data HANYA dari tarikan; tanggal sebelumnya dari file "Data <nn> ..." dan "Jam <nn> ..."
-  MULAI_TARIKAN_AREA: {},   // area yang mulai dari tarikan pada tanggal lain, mis. { SUMBAGUT: '2026-10-27' }
+  MULAI_TARIKAN_AREA: { JABALINUS: '2026-11-01' },   // area yang mulai dari tarikan pada tanggal lain. JABALINUS: seluruh Oktober (termasuk 31) dari file Data/Jam 10 (file cleansed, 18 Nov 2026)
   // folder "4. Report Data alert Per 4 Jam": subfolder per regional ("7. Malupa"), isinya file alert mentah sebulan (Google Sheet "MALUPA_OKTOBER 2026") yang diperbarui tiap 4 jam; file Excel di folder ini tidak dibaca.
   // Mulai MULAI_4JAM event area yang filenya sudah terbaca dari folder ini HANYA diambil dari sini (tarikan harian di Tarikan Sistem tidak dipakai lagi untuk area itu).
   ALERT4JAM_ID: '1ZLTierdGgXgpA2BwFszLnGfLa1fHRF0F',
