@@ -136,6 +136,9 @@ body:not(.master) #selMaster,body.master:not(.peran-area):not(.peran-lokasi) #se
 .sebulan{font:600 12.5px var(--f-ui);color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.55);border-radius:999px;padding:6px 12px;cursor:pointer}
 .sebulan:hover{background:rgba(255,255,255,.25)}
 .tglket{font-size:12.5px;color:rgba(255,255,255,.9)}
+/* filter waktu ringkas: Periode (preset / bulan / rentang tanggal), Jam (shift atau jam), Dibanding; kontrol lama tetap ada untuk skrip */
+#bulanRow .pick[for=selShift],#bulanRow .pick[for=selJam],#bulanRow .pick[for=selCmp],#btnSebulan{display:none!important}
+#bulanRow .pick[for=inTgl].sembunyi,#bulanRow .pick[for=inTgl2].sembunyi{display:none!important}
 #view-bulan.memuat .wpanel{opacity:.45;transition:opacity .2s}
 .chip{appearance:none;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;font:500 13.5px var(--f-ui);padding:7px 14px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
 .chip:hover{background:rgba(255,255,255,.24)}
@@ -449,12 +452,14 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
     <div class="ctrlrow" id="bulanRow">
       <div class="seg" role="tablist" aria-label="Periode grafik"><button type="button" role="tab" id="perBln" aria-selected="true">Bulan</button><button type="button" role="tab" id="perThn" aria-selected="false">Tahun</button></div>
       <label class="pick" for="selMon">Bulan <select id="selMon"></select></label>
+      <label class="pick" for="selPer">Periode <select id="selPer"></select></label>
       <label class="pick" for="inTgl">Tanggal <input type="date" id="inTgl"></label><label class="pick" for="inTgl2">s/d <input type="date" id="inTgl2"></label><button type="button" class="sebulan" id="btnSebulan" hidden>Sebulan penuh</button>
       <label class="pick" for="selShift">Shift <select id="selShift"></select></label>
-      <label class="pick" for="selJam">Jam <select id="selJam"></select></label><span class="tglket" id="tglKet"></span>
+      <label class="pick" for="selJam">Jam <select id="selJam"></select></label>
+      <label class="pick" for="selWkt">Jam <select id="selWkt"></select></label>
       <label class="pick" for="selCmp">Dibanding <select id="selCmp"></select></label>
-      <label class="pick" for="selCmpW" id="pickCmpW" hidden>Dibanding <select id="selCmpW"><option value="">Bulan sebelumnya (tanggal sama)</option><option value="sebelum">Periode tepat sebelumnya</option><option value="atur">Pilih tanggal sendiri…</option></select></label>
-      <span id="cmpAtur" hidden><label class="pick" for="inCmp1">Pembanding <input type="date" id="inCmp1"></label><label class="pick" for="inCmp2">s/d <input type="date" id="inCmp2"></label></span>
+      <label class="pick" for="selBand">Dibanding <select id="selBand"></select></label>
+      <span id="cmpAtur" hidden><label class="pick" for="inCmp1">Pembanding <input type="date" id="inCmp1"></label><label class="pick" for="inCmp2">s/d <input type="date" id="inCmp2"></label></span><span class="tglket" id="tglKet"></span>
       <span class="pick">Event <span class="msel" id="msEvt"><button type="button" class="msbtn" id="selEvt" aria-haspopup="true" aria-expanded="false">Pilih event…</button><div class="mspop" hidden><input type="search" class="mscari" placeholder="Cari event…" aria-label="Cari event"><div class="msacts"><button type="button" data-a="semua">Pilih semua</button><button type="button" data-a="hapus">Hapus pilihan</button></div><div class="mslist" role="group" aria-label="Daftar event"></div></div></span></span>
       <span class="pick" id="pickPj" hidden>Project <span class="msel" id="msPj"><button type="button" class="msbtn" id="selPj" aria-haspopup="true" aria-expanded="false">Semua project</button><div class="mspop" hidden><input type="search" class="mscari" placeholder="Cari project…" aria-label="Cari project"><div class="msacts"><button type="button" data-a="semua">Pilih semua</button><button type="button" data-a="hapus">Hapus pilihan</button></div><div class="mslist" role="group" aria-label="Daftar project"></div></div></span></span>
     </div>
@@ -553,7 +558,7 @@ body.tv #panelRegA table,body.tv #panelRegL table{min-width:0;width:100%}
 </footer>
 <div id="tip" role="tooltip"></div>
 <script>
-let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, tgl = 0, tgl2 = 0, cmpW = '', cmpA = '', cmpB = '', shift = 0, jam = -1, WIN = null, WKEY = '', ERRW = '', PERIODE = 'bulan', TOKEN = '', AKUN = null, KC = 0, KP = null, showAllLok = false, showAllDelta = false;
+let RAW, D, REG, P, ADA = [], LAST = -1, sel = 'ALL', selLok = -1, mon = 0, cmp = -1, tgl = 0, tgl2 = 0, cmpW = 'sebelum', perAtur = false, cmpA = '', cmpB = '', shift = 0, jam = -1, WIN = null, WKEY = '', ERRW = '', PERIODE = 'bulan', TOKEN = '', AKUN = null, KC = 0, KP = null, showAllLok = false, showAllDelta = false;
 // urutan tabel rekap (klik judul kolom Total / pembanding / Persentase): k = t | p | n, d = -1 besar ke kecil, 1 kecil ke besar
 const URUT = {a: {k: 't', d: -1}, l: {k: 't', d: -1}};
 const rn = r => String(r || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\b(Ii|Iii|Iv)\b/g, x => x.toUpperCase());
@@ -712,10 +717,15 @@ const tPv = panjang => { if (cmpSendiri()) return teksRentang(WIN.waktu.cmp.a, W
 // 'atur' = rentang pilihan sendiri (cmpA..cmpB, boleh beda bulan); dikirim ke server sebagai "yyyy-mm-dd|yyyy-mm-dd"
 const tglIso = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 function rentangCmp() {
-  if (!tgl || !cmpW) return '';
-  if (cmpW === 'sebelum') { const n = Math.max(tgl2, tgl) - tgl + 1, b = new Date(D.tahun, mon, tgl - 1), a = new Date(D.tahun, mon, tgl - n);
-    return a.getFullYear() === D.tahun ? tglIso(a) + '|' + tglIso(b) : ''; }
+  if (!tgl || cmpW === 'bulan') return '';
+  if (cmpW === 'sebelum') { const [a, b] = rentangSebelum(); return a.getFullYear() === D.tahun ? tglIso(a) + '|' + tglIso(b) : ''; }
   return /^\d{4}-\d{2}-\d{2}$/.test(cmpA) && /^\d{4}-\d{2}-\d{2}$/.test(cmpB) && cmpA <= cmpB ? cmpA + '|' + cmpB : '';
+}
+// periode sebelumnya: rentang sampai 7 hari = hari yang sama seminggu sebelumnya (mis. Senin-Kamis minggu lalu);
+// lebih panjang = rentang sepanjang itu tepat sebelum tanggal awal
+function rentangSebelum() {
+  const n = Math.max(tgl2, tgl) - tgl + 1, g = n <= 7 ? 7 : n;
+  return [new Date(D.tahun, mon, tgl - g), new Date(D.tahun, mon, tgl - g + n - 1)];
 }
 // "25–31 Okt", "28 Okt–3 Nov", "5 Nov" (panjang: nama bulan lengkap)
 function teksRentang(a, b, panjang) {
@@ -1151,24 +1161,90 @@ function kontrolTanggal() {
   it2.min = isoTgl(mon, 1); it2.max = mon === LAST ? isoTgl(LAST, akhir) : isoTgl(mon, nHari(mon));
   it2.value = tgl > 0 && tgl2 > tgl ? isoTgl(mon, tgl2) : '';
   document.getElementById('btnSebulan').hidden = !(tgl > 0);
-  document.querySelector('.pick[for=selCmp]').style.display = modeWaktu() ? 'none' : '';   // per tanggal: pembanding dipilih di selCmpW
   const pw = modeWaktu() && tgl > 0;   // pembanding per tanggal hanya bila ada filter tanggal
-  document.getElementById('pickCmpW').hidden = !pw;
-  document.getElementById('selCmpW').value = cmpW;
   document.getElementById('cmpAtur').hidden = !(pw && cmpW === 'atur');
+  kontrolRingkas(pw);
   const c1 = document.getElementById('inCmp1'), c2 = document.getElementById('inCmp2');
   c1.min = c2.min = isoTgl(ADA[0] || 0, 1); c1.max = c2.max = it.max; c1.value = cmpA; c2.value = cmpB;
-  document.getElementById('tglKet').textContent = ERRW ? ERRW : tgl > 0 ? (!adaJam() ? `Data per tanggal ${BLN[mon]} belum tersedia; ditampilkan sebulan.` : modeWaktu() && !(WIN && WKEY === kunciW()) ? 'Memuat data tanggal…' : `Menampilkan ${tgl2 > tgl ? 'tanggal ' : ''}${tA()} ${BLN[mon]} ${D.tahun}${labelJam() ? ' · ' + labelJam() : ''}`) : `Menampilkan sebulan penuh ${BLN[mon]} ${D.tahun}${modeWaktu() && labelJam() ? ' · ' + labelJam() : ''}`;
+  // keterangan hanya untuk hal yang tidak terlihat di pilihan Periode/Jam: galat, sedang memuat, data per tanggal belum ada
+  document.getElementById('tglKet').textContent = ERRW ? ERRW : tgl > 0 && !adaJam() ? `Data per tanggal ${BLN[mon]} belum tersedia; ditampilkan sebulan.` : modeWaktu() && !(WIN && WKEY === kunciW()) ? 'Memuat data tanggal…' : '';
 }
 document.getElementById('selMon').onchange = e => { mon = +e.target.value; tgl = tgl2 = 0; ERRW = ''; if (cmp === mon) cmp = -1; showAllDelta = false; showAllLok = false; render(); };
 document.getElementById('selCmp').onchange = e => { cmp = +e.target.value; render(); };
-document.getElementById('selCmpW').onchange = e => {
-  cmpW = e.target.value;
+function pilihBanding(v) {
+  cmpW = v;
   if (cmpW === 'atur' && !cmpA) {   // isian awal: periode tepat sebelumnya, tinggal diubah
-    const n = Math.max(tgl2, tgl) - tgl + 1; cmpA = tglIso(new Date(D.tahun, mon, tgl - n)); cmpB = tglIso(new Date(D.tahun, mon, tgl - 1));
+    const [a, b] = rentangSebelum(); cmpA = tglIso(a); cmpB = tglIso(b);
     if (cmpA.slice(0, 4) !== String(D.tahun)) cmpA = isoTgl(0, 1);
   }
   ERRW = ''; render();
+}
+/* ---- kontrol waktu ringkas ---- */
+// tanggal terakhir yang ada datanya (bulan LAST)
+const akhirData = () => LAST >= 0 ? Math.max(0, ...(RAW.harian || []).filter(h => h[0] === LAST).map(h => h[1])) || nHari(LAST) : 1;
+// preset periode -> {m, a, b} (bulan, tanggal awal, tanggal akhir); minggu = Senin-Minggu, dipotong di batas bulan
+function presetPer(k) {
+  if (LAST < 0) return null;
+  const ak = akhirData(), dAk = new Date(D.tahun, LAST, ak), senin = x => { const t = new Date(x); t.setDate(t.getDate() - (t.getDay() + 6) % 7); return t; };
+  const potong = (a, b) => { const m = b.getMonth(); if (b.getFullYear() !== D.tahun || ADA.indexOf(m) < 0) return null;
+    const a1 = a.getMonth() === m && a.getFullYear() === D.tahun ? a.getDate() : 1; return {m, a: a1, b: b.getDate()}; };
+  if (k === 'mw') return potong(senin(dAk), dAk);
+  if (k === 'ml') { const s0 = senin(dAk); const b = new Date(s0); b.setDate(b.getDate() - 1); const a = new Date(b); a.setDate(a.getDate() - 6); return potong(a, b); }
+  if (k === 'h7') { const a = new Date(dAk); a.setDate(a.getDate() - 6); return potong(a, dAk); }
+  return null;
+}
+const PRESET = [['mw', 'Minggu ini'], ['ml', 'Minggu lalu'], ['h7', '7 hari terakhir']];
+function nilaiPer() {
+  if (perAtur && tgl > 0) return 'atur';
+  if (!tgl) return PERIODE === 'tahun' ? 'thn' : 'm' + mon;
+  const x = PRESET.map(p => [p[0], presetPer(p[0])]).find(([, o]) => o && o.m === mon && o.a === tgl && o.b === Math.max(tgl2, tgl));
+  return x ? x[0] : 'atur';
+}
+function kontrolRingkas(pw) {
+  const jOk = adaJam(), pusat = !AKUN || AKUN.peran === 'PUSAT';
+  // Periode
+  const sp = document.getElementById('selPer'), vp = nilaiPer(), rp = o => o ? ` (${o.a === o.b ? o.a : o.a + '–' + o.b} ${B3[o.m]})` : '';
+  sp.innerHTML = `<optgroup label="Cepat">${PRESET.map(([k, n]) => { const o = presetPer(k); return o ? `<option value="${k}">${n}${rp(o)}</option>` : ''; }).join('')}</optgroup>` +
+    `<optgroup label="Sebulan penuh">${ADA.slice().reverse().map(i => `<option value="m${i}">${BLN[i]} ${D.tahun}</option>`).join('')}<option value="thn">Tahun ${D.tahun} (per bulan)</option></optgroup>` +
+    `<option value="atur">Pilih tanggal sendiri…</option>`;
+  sp.value = vp;
+  const tampilTgl = vp === 'atur';
+  document.querySelector('#bulanRow .pick[for=inTgl]').classList.toggle('sembunyi', !tampilTgl);
+  document.querySelector('#bulanRow .pick[for=inTgl2]').classList.toggle('sembunyi', !tampilTgl);
+  // Jam: semua jam / shift / satu jam
+  const sw = document.getElementById('selWkt');
+  sw.innerHTML = '<option value="a">Semua jam</option>' + (pusat ? `<optgroup label="Shift">${[1, 2, 3].map(i => `<option value="s${i}">Shift ${i} (${jj(SHIFT[i][0])}–${jj(SHIFT[i][1])})</option>`).join('')}</optgroup>` : '') +
+    `<optgroup label="Per jam">${Array.from({length: 24}, (_, h) => `<option value="h${h}">${jj(h)}–${jj(h + 1)}</option>`).join('')}</optgroup>`;
+  sw.value = jam >= 0 ? 'h' + jam : shift && pusat ? 's' + shift : 'a';
+  sw.disabled = !jOk; sw.title = jOk ? '' : 'Data jam kejadian bulan ini belum tersedia';
+  // Dibanding
+  const sb = document.getElementById('selBand'), i0 = ADA.indexOf(mon);
+  if (pw) sb.innerHTML = `<option value="sebelum">${Math.max(tgl2, tgl) - tgl < 7 ? 'Minggu sebelumnya' : 'Periode sebelumnya'}${rentangCmpUntuk('sebelum') ? ' (' + teksRentang(...rentangCmpUntuk('sebelum').split('|')) + ')' : ''}</option><option value="bulan">Bulan lalu, tanggal sama</option><option value="atur">Pilih tanggal sendiri…</option>`;
+  else if (modeWaktu()) sb.innerHTML = `<option value="bulan">Bulan lalu (jam sama)</option>`;
+  else if (PERIODE === 'tahun') sb.innerHTML = `<option value="-1">Bulan sebelumnya</option>`;
+  else sb.innerHTML = `<option value="-1">Bulan lalu${i0 > 0 ? ' (' + BLN[ADA[i0 - 1]] + ')' : ''}</option>` + ADA.filter(i => i !== mon).map(i => `<option value="${i}">${BLN[i]} ${D.tahun}</option>`).reverse().join('');
+  sb.value = pw ? cmpW : modeWaktu() ? 'bulan' : String(cmp >= 0 && cmp !== mon ? cmp : -1);
+  sb.disabled = sb.options.length < 2;
+}
+const rentangCmpUntuk = v => { const c = cmpW; cmpW = v; const r = rentangCmp(); cmpW = c; return r; };
+document.getElementById('selPer').onchange = e => {
+  const v = e.target.value; ERRW = ''; showAllLok = false; showAllDelta = false;
+  if (v === 'atur') { perAtur = true; if (!tgl) { const o = presetPer('mw'); if (o) { mon = o.m; tgl = o.a; tgl2 = o.b; } } if (PERIODE !== 'bulan') { aturPeriode('bulan'); return; } render(); return; }
+  perAtur = false;
+  if (v === 'thn') { tgl = tgl2 = 0; shift = 0; jam = -1; aturPeriode('tahun'); return; }   // grafik per bulan: tanpa filter jam
+  if (/^m\d+$/.test(v)) { mon = +v.slice(1); tgl = tgl2 = 0; if (cmp === mon) cmp = -1; }
+  else { const o = presetPer(v); if (!o) return; mon = o.m; tgl = o.a; tgl2 = o.b; if (cmp === mon) cmp = -1; }
+  if (PERIODE !== 'bulan') { aturPeriode('bulan'); return; }
+  render();
+};
+document.getElementById('selWkt').onchange = e => {
+  const v = e.target.value; shift = 0; jam = -1;
+  if (v[0] === 's') shift = +v.slice(1); else if (v[0] === 'h') jam = +v.slice(1);
+  ERRW = ''; showAllLok = false; render();
+};
+document.getElementById('selBand').onchange = e => {
+  const v = e.target.value;
+  if (modeWaktu() && tgl > 0) pilihBanding(v); else if (!modeWaktu()) { cmp = +v; render(); }
 };
 ['inCmp1', 'inCmp2'].forEach((id, i) => document.getElementById(id).onchange = e => {
   const v = e.target.value; if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
