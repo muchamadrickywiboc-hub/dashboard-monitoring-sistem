@@ -1994,7 +1994,17 @@ function bukaTarikan_(folder, m) {
   const ss = bukaAtauBuat(folder, namaTarikan_(m),
     [['Event', HDR_TARIKAN['Event']], ['AMT', HDR_TARIKAN['AMT']]]);
   ss.getSheetByName('Event').getRange('A:A').setNumberFormat('@');   // tanggal disimpan sebagai teks yyyy-mm-dd
+  ss.getSheets().forEach(rampingkanKolom_);
   return ss;
+}
+/**
+ * Kolom kosong di kanan data dibuang. Sheet baru selalu berisi 26 kolom, padahal data Tarikan hanya 7-9 kolom:
+ * sisanya ikut dihitung ke batas 10 juta sel per file Google Sheet, sehingga file Tarikan sebulan cepat penuh
+ * ("This action would increase the number of cells in the workbook above the limit") dan file harian gagal ditulis.
+ */
+function rampingkanKolom_(sh) {
+  const w = Math.max(sh.getLastColumn(), 1), mx = sh.getMaxColumns();
+  if (mx > w) sh.deleteColumns(w + 1, mx - w);
 }
 
 /**
@@ -2259,7 +2269,7 @@ function jamDari(x) {
 }
 function sheetAtauBuat(ss, nama, hdr) {
   let sh = ss.getSheetByName(nama);
-  if (!sh) { sh = ss.insertSheet(nama); sh.getRange(1, 1, 1, hdr.length).setValues([hdr]).setFontWeight('bold'); sh.setFrozenRows(1); sh.getRange('A:A').setNumberFormat('@'); }
+  if (!sh) { sh = ss.insertSheet(nama); sh.getRange(1, 1, 1, hdr.length).setValues([hdr]).setFontWeight('bold'); sh.setFrozenRows(1); sh.getRange('A:A').setNumberFormat('@'); rampingkanKolom_(sh); }
   return sh;
 }
 
