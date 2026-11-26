@@ -805,17 +805,28 @@ const diShift = (j, s) => SHIFT[s][0] < SHIFT[s][1] ? j >= SHIFT[s][0] && j < SH
  * Bentuknya sama dengan hitung_(): "bulan" 0 = jendela terpilih, 1 = pembanding (rentang sepanjang itu tepat sebelumnya, shift/jam yang sama);
  * kolom "tanggal" di harian berisi jam + 1, jadi harian = event per jam.
  */
-function getDataWaktu(token, m, d, s, h, d2) {
-  const ses = sesi_(token);
-  return potongJson_(dataWaktu_(m, d, s, h, d2), ses, 'SW_' + versiData_() + '_' + [m, d, s, h, +d2 || 0].join('_') + '_');
+function getDataWaktu(token, m, d, s, h, d2, cmp) {
+  const ses = sesi_(token), c = rentangBanding_(cmp);
+  return potongJson_(dataWaktu_(m, d, s, h, d2, c), ses, 'SW_' + versiData_() + '_' + [m, d, s, h, +d2 || 0].join('_') + (c ? '_' + c.a + '_' + c.b : '') + '_');
 }
-function dataWaktu_(m, d, s, h, d2) {
+/** Pembanding pilihan sendiri "yyyy-mm-dd|yyyy-mm-dd" (tahun CFG.TAHUN, paling panjang 62 hari) -> {a, b}; selain itu null (= bulan sebelumnya, tanggal sama). */
+function rentangBanding_(cmp) {
+  const t = teks(cmp).match(/^(\d{4})-(\d{2})-(\d{2})\|(\d{4})-(\d{2})-(\d{2})$/);
+  if (!t || +t[1] !== CFG.TAHUN || +t[4] !== CFG.TAHUN) return null;
+  const a = t[1] + '-' + t[2] + '-' + t[3], b = t[4] + '-' + t[5] + '-' + t[6], oa = ordTgl_(+t[2] - 1, +t[3]), ob = ordTgl_(+t[5] - 1, +t[6]);
+  if (isNaN(oa) || isNaN(ob) || ob < oa || ob - oa > 61) return null;
+  return { a: a, b: b, oa: oa, ob: ob, ma: +t[2] - 1, mb: +t[5] - 1 };
+}
+/** Nomor hari dalam tahun CFG.TAHUN (bulan 0-11, tanggal 0 = hari terakhir bulan sebelumnya), untuk rentang yang melewati batas bulan. */
+function ordTgl_(m, t) { return Math.round((Date.UTC(CFG.TAHUN, m, t) - Date.UTC(CFG.TAHUN, 0, 1)) / 864e5); }
+function dataWaktu_(m, d, s, h, d2, cmp) {
   m = +m; d = +d || 0; s = +s || 0; h = (h === undefined || h === null || h === '') ? -1 : +h;
   d2 = d ? Math.max(d, +d2 || d) : 0;
-  // pembanding: bulan sebelumnya, tanggal dan jam/shift yang sama (tanpa filter tanggal: sebulan penuh bulan sebelumnya)
+  // pembanding: bulan sebelumnya, tanggal dan jam/shift yang sama (tanpa filter tanggal: sebulan penuh bulan sebelumnya),
+  // atau rentang tanggal pilihan sendiri (cmp, boleh melewati batas bulan) dengan jam/shift yang sama
   let tMaks = 31;   // tanpa filter tanggal: pembanding sampai tanggal terakhir yang sudah ada datanya bulan ini
   const diJendela = (t, b) => d ? t >= d && t <= d2 : t >= 1 && (!b || t <= tMaks);
-  const kunci = 'WKT4_' + versiData_() + '_' + [m, d, s, h, d2].join('_');
+  const kunci = 'WKT5_' + versiData_() + '_' + [m, d, s, h, d2].join('_') + (cmp ? '_' + cmp.a + '_' + cmp.b : '');
   const kosongW = (pesan) => JSON.stringify(Object.assign(kosong([pesan]), { waktu: { m: m, d: d, d2: d2, s: s, h: h, adaPrev: false } }));
   const ada = ambilCache_(kunci);
   if (ada) return ada;
@@ -825,23 +836,38 @@ function dataWaktu_(m, d, s, h, d2) {
   const J = jamBulan_(folder, m, src, peta);   // Sum_Jam & Sum_AMT_Jam di file Summary bulan itu
   if (!J.EJ.length) return kosongW('Data jam ' + BULAN[m] + ' belum ada.');
   tMaks = J.EJ.reduce((a, e) => Math.max(a, e[0]), 1);
-  const srcP = m > 0 ? (S.perBulan[m - 1] || []) : [], JP = srcP.length ? jamBulan_(folder, m - 1, srcP, peta) : { EJ: [], AJ: [] };
   const okJam = j => (h < 0 || j === h) && (!s || diShift(j, s));
-  // shift yang melewati tengah malam (Shift 3) ikut tanggal mulainya: jam 00.00-07.00 dihitung ke tanggal sebelumnya
-  const jendela = (t0, j, b) => { if (!okJam(j)) return false; const t = s && SHIFT[s][0] > SHIFT[s][1] && j < SHIFT[s][1] ? t0 - 1 : t0; return diJendela(t, b); };
+  const geser = (j) => s && SHIFT[s][0] > SHIFT[s][1] && j >= 0 && j < SHIFT[s][1] ? 1 : 0;   // Shift 3: jam 00.00-07.00 ikut tanggal sebelumnya
   // kode: 0 = jendela terpilih, 1 = pembanding, 2 / 3 = event tanpa jam di tanggal terpilih / pembanding (tidak bisa disaring per jam;
   // dashboard memakainya bila data cakupannya tidak punya jam kejadian)
   const tanpa = !s && h < 0;   // hanya filter tanggal: event tanpa jam tetap dihitung
-  const w = (t0, j, b) => j >= 0 ? (jendela(t0, j, b) ? b : -1) : !diJendela(t0, b) ? -1 : tanpa ? b : b + 2;
   const kat = {}; peta.urut.forEach(o => { kat[o.p] = o.k; });
   const EV = [], AM = [];
-  [[J, 0], [JP, 1]].forEach(([X, b]) => {
-    X.EJ.forEach(e => { const x = w(e[0], e[1], b); if (x >= 0) EV.push([x, e[1] < 0 ? 0 : e[1] + 1, e[2], e[3], e[4], kat[e[4]], e[5], e[6] || '']); });
-    X.AJ.forEach(r => { const x = w(r[0], r[1], b); if (x >= 0) AM.push([x, r[2], r[3], r[4], r[5], kat[r[5]], r[6], r[7] || '']); });
-  });
+  // dasar: tanggal t0 bulan mm masuk rentang? (b = 0 jendela, 1 pembanding)
+  const masuk = cmp ? (mm, t, b) => { if (!b) return mm === m && diJendela(t, 0); const o = ordTgl_(mm, t); return o >= cmp.oa && o <= cmp.ob; }
+                    : (mm, t, b) => diJendela(t, b);
+  const w = (mm, t0, j, b) => j >= 0 ? (okJam(j) && masuk(mm, t0 - geser(j), b) ? b : -1) : !masuk(mm, t0, b) ? -1 : tanpa ? b : b + 2;
+  const pakai = (X, mm, b) => {
+    X.EJ.forEach(e => { const x = w(mm, e[0], e[1], b); if (x >= 0) EV.push([x, e[1] < 0 ? 0 : e[1] + 1, e[2], e[3], e[4], kat[e[4]], e[5], e[6] || '']); });
+    X.AJ.forEach(r => { const x = w(mm, r[0], r[1], b); if (x >= 0) AM.push([x, r[2], r[3], r[4], r[5], kat[r[5]], r[6], r[7] || '']); });
+  };
+  pakai(J, m, 0);
+  let adaPrev = false;
+  if (!cmp) {
+    const srcP = m > 0 ? (S.perBulan[m - 1] || []) : [], JP = srcP.length ? jamBulan_(folder, m - 1, srcP, peta) : { EJ: [], AJ: [] };
+    pakai(JP, m, 1); adaPrev = JP.EJ.length > 0;
+  } else {
+    // bulan-bulan yang dicakup rentang pembanding (Shift 3: jam 00.00-07.00 sehari sesudah tanggal terakhir ikut tanggal terakhir)
+    const akhir = cmp.mb + (s && SHIFT[s][0] > SHIFT[s][1] && new Date(Date.UTC(CFG.TAHUN, cmp.mb + 1, 0)).getUTCDate() === +cmp.b.slice(8, 10) ? 1 : 0);
+    for (let mm = cmp.ma; mm <= Math.min(11, akhir); mm++) {
+      const X = mm === m ? J : (S.perBulan[mm] || []).length ? jamBulan_(folder, mm, S.perBulan[mm], peta) : null;
+      if (!X || !X.EJ.length) continue;
+      const n0 = EV.length; pakai(X, mm, 1); if (EV.length > n0) adaPrev = true;
+    }
+  }
   // nama & area lokasi diambil dari jendela terpilih dulu (sama dengan data utama = bulan terbaru), baru pembanding
   const hasil = hitung_(EV, AM, peta, [], [], b => [3, 1, 2, 0][b]);
-  hasil.waktu = { m: m, d: d, d2: d2, s: s, h: h, adaPrev: JP.EJ.length > 0, pm: m - 1, tMaks: tMaks };
+  hasil.waktu = { m: m, d: d, d2: d2, s: s, h: h, adaPrev: adaPrev, pm: m - 1, tMaks: tMaks, cmp: cmp ? { a: cmp.a, b: cmp.b } : null };
   const json = JSON.stringify(hasil);
   simpanCache_(json, kunci, CFG.CACHE_DETIK);   // kunci ikut versi data: berganti setiap tarikan / summary baru
   return json;
