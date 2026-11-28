@@ -174,28 +174,24 @@ function lhPer4Jam(token, tanggal, area, lokasi) {
   const tg = tanggalTeks(teks(tanggal));
   if (!tg) throw new Error('Tanggal tidak valid.');
   const m = tg.m, d = tg.d, c = cakupanLH_(ses, area, lokasi);
-  const kunci = 'L4J3_' + versiData_() + '_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, [m, d, c.area, c.lok].join('|'))).slice(0, 16);
+  const kunci = 'L4J4_' + versiData_() + '_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, [m, d, c.area, c.lok].join('|'))).slice(0, 16);
   const ada = ambilCache_(kunci);
   if (ada) return ada;
-  const folder = DriveApp.getFolderById(CFG.FOLDER_ID), S = sumberBulan_(folder);
-  if (!S.atur) throw new Error('File Pengaturan Dashboard tidak ditemukan.');
-  const peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(S.atur), 'Pemetaan') || []);
-  const jamBln = mm => { const src = mm >= 0 ? (S.perBulan[mm] || []) : []; return src.length ? jamBulan_(folder, mm, src, peta) : { EJ: [] }; };
   // H-1: tanggal sebelumnya; tanggal 1 = tanggal terakhir bulan sebelumnya
-  const J = jamBln(m), mp = d > 1 ? m : m - 1, dp = d > 1 ? d - 1 : (m > 0 ? new Date(CFG.TAHUN, m, 0).getDate() : 0), JP = mp === m ? J : jamBln(mp);
+  const mp = d > 1 ? m : m - 1, dp = d > 1 ? d - 1 : (m > 0 ? new Date(CFG.TAHUN, m, 0).getDate() : 0);
   // H-2 (hanya jam 23.00): rentang 23:00-03:00 H-1 dimulai di hari sebelumnya
-  const mq = dp > 1 ? mp : mp - 1, dq = !dp ? 0 : dp > 1 ? dp - 1 : (mp > 0 ? new Date(CFG.TAHUN, mp, 0).getDate() : 0), JQ = mq === mp ? JP : mq === m ? J : jamBln(mq);
-  // parameter Pemetaan -> baris laporan (L4_EVENT); parameter di luar daftar tidak dihitung di laporan ini
-  const brs = {}; peta.urut.forEach(o => { const i = PETA_L4[kunciL4_(o.p)]; if (i !== undefined) brs[o.p] = i; });
+  const mq = dp > 1 ? mp : mp - 1, dq = !dp ? 0 : dp > 1 ? dp - 1 : (mp > 0 ? new Date(CFG.TAHUN, mp, 0).getDate() : 0);
   const H = L4_EVENT.map(() => [new Array(24).fill(0), new Array(24).fill(0), new Array(24).fill(0)]), TJ = { DB: [0, 0], DD: [0, 0], FM: [0, 0] };
-  const tambah = (X, dd, b) => X.EJ.forEach(e => {
-    const i = brs[e[4]];
-    if (e[0] !== dd || i === undefined || !cocokLH_(c, e[3], e[2])) return;
-    if (e[1] < 0 || e[1] > 23) { if (b < 2) TJ[L4_EVENT[i].k][b] += e[5]; return; }   // event tanpa jam kejadian: tidak bisa ditaruh per jam
-    if (b === 2 && e[1] !== 23) return;
-    H[i][b][e[1]] += e[5];
+  const ctx = {};
+  // baris per hari: [jam (-1 = tanpa jam), area, lokasi, baris L4_EVENT, jumlah]
+  const tambah = (mm, dd, b) => l4Hari_(mm, dd, ctx).forEach(e => {
+    const i = e[3];
+    if (!cocokLH_(c, e[2], e[1])) return;
+    if (e[0] < 0 || e[0] > 23) { if (b < 2) TJ[L4_EVENT[i].k][b] += e[4]; return; }   // event tanpa jam kejadian: tidak bisa ditaruh per jam
+    if (b === 2 && e[0] !== 23) return;
+    H[i][b][e[0]] += e[4];
   });
-  tambah(J, d, 0); if (dp) tambah(JP, dp, 1); if (dq) tambah(JQ, dq, 2);
+  tambah(m, d, 0); if (dp) tambah(mp, dp, 1); if (dq) tambah(mq, dq, 2);
   let jamAkhir = -1;
   H.forEach(o => o[0].forEach((n, j) => { if (n && j > jamAkhir) jamAkhir = j; }));
   const out = {
@@ -207,6 +203,59 @@ function lhPer4Jam(token, tanggal, area, lokasi) {
   const json = JSON.stringify(out);
   simpanCache_(json, kunci, LH.CACHE_DETIK);
   return json;
+}
+
+/**
+ * Event per jam satu tanggal untuk Laporan Per 4 Jam, semua area & lokasi: [[jam, area, lokasi, baris L4_EVENT, jumlah], ...].
+ * Data jam dibaca SEKALI per bulan (hanya Event Jam, tanpa AMT Jam), dipadatkan, lalu disimpan per tanggal di cache (gzip).
+ * Dulu setiap pilihan tanggal / area / lokasi membaca ulang seluruh Event Jam + AMT Jam bulan itu; saat file Summary belum diperbarui
+ * itu berarti ratusan ribu baris dari file Tarikan dan bisa melewati batas 6 menit Apps Script ("Melebihi jumlah eksekusi maksimum").
+ */
+const L4_CACHE_DETIK = 6 * 3600;   // kunci ikut versi data, jadi data baru tetap langsung terpakai
+const kunciL4Hari_ = (m, d) => 'L4D1_' + versiData_() + '_' + m + '_' + d, kunciL4Bulan_ = m => 'L4M1_' + versiData_() + '_' + m;
+function l4Hari_(m, d, ctx) {
+  if (m < 0 || !d) return [];
+  if (ctx['B' + m]) return ctx['B' + m][d] || [];
+  const ada = ambilCache_(kunciL4Hari_(m, d));
+  if (ada) return JSON.parse(unzip_(ada));
+  // bulan itu sudah dibaca dan tanggal ini tidak ada di daftar tanggal berisi event: memang kosong
+  const tgl = CacheService.getScriptCache().get(kunciL4Bulan_(m));
+  if (tgl !== null && (',' + tgl + ',').indexOf(',' + d + ',') < 0) return [];
+  return l4Bulan_(m, ctx)[d] || [];
+}
+/** Membaca data jam satu bulan, menyimpan hasil per tanggal ke cache, dan mengembalikan {tanggal: baris}. */
+function l4Bulan_(m, ctx) {
+  const t0 = Date.now();
+  if (!ctx.folder) {
+    ctx.folder = DriveApp.getFolderById(CFG.FOLDER_ID); ctx.S = sumberBulan_(ctx.folder);
+    if (!ctx.S.atur) throw new Error('File Pengaturan Dashboard tidak ditemukan.');
+    ctx.peta = bacaPemetaan(nilaiSheet(SpreadsheetApp.open(ctx.S.atur), 'Pemetaan') || []);
+  }
+  const src = ctx.S.perBulan[m] || [], B = {};
+  if (src.length) {
+    // parameter Pemetaan -> baris laporan (L4_EVENT); parameter di luar daftar tidak dihitung di laporan ini
+    const brs = {}; ctx.peta.urut.forEach(o => { const i = PETA_L4[kunciL4_(o.p)]; if (i !== undefined) brs[o.p] = i; });
+    const T = {};
+    jamBulan_(ctx.folder, m, src, ctx.peta, true).EJ.forEach(e => {
+      const i = brs[e[4]];
+      if (i === undefined) return;
+      const jam = e[1] < 0 || e[1] > 23 ? -1 : e[1], k = e[0] + '\u0001' + jam + '\u0001' + e[2] + '\u0001' + e[3] + '\u0001' + i;
+      (T[k] || (T[k] = [e[0], jam, e[2], e[3], i, 0]))[5] += e[5];
+    });
+    Object.keys(T).forEach(k => { const x = T[k]; (B[x[0]] = B[x[0]] || []).push(x.slice(1)); });
+  }
+  Object.keys(B).forEach(d => simpanCache_(zip_(JSON.stringify(B[d])), kunciL4Hari_(m, +d), L4_CACHE_DETIK));
+  ctx['B' + m] = B;
+  try { CacheService.getScriptCache().put(kunciL4Bulan_(m), Object.keys(B).join(','), L4_CACHE_DETIK); } catch (e) { /* tanpa cache */ }
+  Logger.log('Laporan Per 4 Jam ' + BULAN[m] + ': ' + Object.keys(B).length + ' tanggal, ' + (Date.now() - t0) + ' ms.');
+  return B;
+}
+/** Dipanggil panaskanLH_: data jam bulan berjalan (dan bulan lalu di awal bulan) disiapkan sebelum ada yang membuka laporan. */
+function panaskanL4_() {
+  const now = new Date(), m = now.getFullYear() === CFG.TAHUN ? now.getMonth() : 11, ctx = {};
+  const c = CacheService.getScriptCache();
+  if (c.get(kunciL4Bulan_(m)) === null) l4Bulan_(m, ctx);
+  if (now.getDate() <= 2 && m > 0 && c.get(kunciL4Bulan_(m - 1)) === null) l4Bulan_(m - 1, ctx);
 }
 
 /**
@@ -571,5 +620,6 @@ function panaskanLH_() {
   [m, m - 1].filter(x => x >= 0).forEach(x => coba('event ' + BULAN[x], () => eventBulanLH_(x)));
   coba('input', bacaInputLH_);
   coba('Justifikasi Uptime', () => kendalaBulan_(m));   // semua bulan sekaligus
+  if (Date.now() - MULAI_EKSEKUSI_ < 4.5 * 60 * 1000) coba('per 4 jam', panaskanL4_);   // membaca Event Jam bulan ini (sekitar 1 menit)
   Logger.log('Cache Laporan Harian dipanaskan: ' + (Date.now() - t0) + ' ms.');
 }

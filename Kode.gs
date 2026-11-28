@@ -1148,9 +1148,9 @@ function dataBulan_(folder, m, src, peta, belum, tulis, hanyaEvent) {
 }
 
 /** Data per jam satu bulan untuk filter waktu: dari Summary bila segar, selain itu dari file sumber. EJ / AJ: lihat bacaJamSumber_. */
-function jamBulan_(folder, m, src, peta) {
+function jamBulan_(folder, m, src, peta, hanyaEvent) {   // hanyaEvent: AJ tidak dibaca (Laporan Per 4 Jam), jauh lebih cepat
   const S = cariSummary_(folder, m, src, peta, false);
-  return (S.segar && bacaJamSummary_(S.ss, peta)) || bacaJamSumber_(folder, m, src, peta);
+  return (S.segar && bacaJamSummary_(S.ss, peta, hanyaEvent)) || bacaJamSumber_(folder, m, src, peta, hanyaEvent);
 }
 
 /** true bila sumber bulan ini punya jam kejadian: file "Jam <nn> ..." (tanggal sebelum mulai tarikan) atau sheet Event Jam di file Tarikan. */
@@ -1163,7 +1163,7 @@ function adaJamSumber_(folder, m, src) {
  * Event & AMT per tanggal x jam satu bulan dari file sumber: "Jam <nn> ....json.gz" untuk tanggal sebelum mulai tarikan, sheet Event Jam / AMT Jam
  * file Tarikan sesudahnya. EJ: [tanggal, jam (-1 = tanpa jam), area, lokasi, parameter, jumlah]; AJ: [tanggal, jam, area, lokasi, nama, parameter, jumlah].
  */
-function bacaJamSumber_(folder, m, src, peta) {
+function bacaJamSumber_(folder, m, src, peta, hanyaEvent) {
   const EJ = [], AJ = [], kasus = c => { const x = peta.kasus[normKasus(c)]; return x && x.k !== 'LAIN' ? x.p : null; };
   const fJam = m <= BULAN_MULAI_TARIKAN ? fileJam_(folder, m) : null;
   if (fJam) {
@@ -1172,13 +1172,13 @@ function bacaJamSumber_(folder, m, src, peta) {
       const tg = { m: m, d: +t }, blok = J.d[t], jam = x => +x === 99 ? -1 : +x, anom = J.area.map(a => anomali_(a, m, +t));
       (blok.e ? blok.e.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[3]], n = +v[4], a = area[+v[1]];
         if (p && n && !anom[+v[1]] && !dariTarikan_(tg, a)) EJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], p, n, '']); });
-      (blok.a ? blok.a.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[4]], n = +v[5], a = area[+v[1]];
+      (blok.a && !hanyaEvent ? blok.a.split(';') : []).forEach(x => { const v = x.split(','), p = ks[+v[4]], n = +v[5], a = area[+v[1]];
         const nm = namaAmt(J.nama[+v[3]]); if (p && n && nm && !anom[+v[1]] && !dariTarikan_(tg, a)) AJ.push([tg.d, jam(v[0]), a, J.lok[+v[2]], nm, p, n, '']); });
     });
   }
   src.filter(o => o.tarikan).forEach(o => {
     const ss = SpreadsheetApp.open(o.f);
-    const vEJ = nilaiSheet(ss, 'Event Jam') || [], kEJ = kolTarikan_(vEJ[0]), vAJ = nilaiSheet(ss, 'AMT Jam') || [], kAJ = kolTarikan_(vAJ[0]);
+    const vEJ = nilaiSheet(ss, 'Event Jam') || [], kEJ = kolTarikan_(vEJ[0]), vAJ = hanyaEvent ? [] : nilaiSheet(ss, 'AMT Jam') || [], kAJ = kolTarikan_(vAJ[0]);
     vEJ.slice(1).forEach(r => {
       const tg = tanggalTeks(r[0]), p = kasus(r[4]), n = angka(r[5]) || 0;
       if (tg && tg.m === m && p && n && dariTarikan_(tg, r[2]) && !anomali_(r[2], tg.m, tg.d)) EJ.push([tg.d, +r[1], areaNorm(r[2]), teks(r[3]).toUpperCase(), p, n, kEJ.pj >= 0 ? projNorm_(r[kEJ.pj]) : '']);
@@ -1259,8 +1259,8 @@ function bacaSummary_(ss, peta, hanyaEvent) {
 }
 
 /** Isi Sum_Jam & Sum_AMT_Jam (format bacaJamSumber_); null bila sheet-nya tidak ada. */
-function bacaJamSummary_(ss, peta) {
-  const H = nilaiSheet(ss, 'Sum_Jam'), A = nilaiSheet(ss, 'Sum_AMT_Jam');
+function bacaJamSummary_(ss, peta, hanyaEvent) {
+  const H = nilaiSheet(ss, 'Sum_Jam'), A = hanyaEvent ? [[]] : nilaiSheet(ss, 'Sum_AMT_Jam');
   if (!H || !A || !H.length || !A.length) return null;
   const pj = paramJudul_(peta), kh = H[0].map((h, j) => j < 4 || teks(h).toUpperCase() === 'PROJECT' ? null : pj(h)), EJ = [], AJ = [];
   const ih = kolProject_(H[0]), ia = kolProject_(A[0]);
