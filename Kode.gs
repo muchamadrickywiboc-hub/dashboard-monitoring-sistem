@@ -594,13 +594,13 @@ function catatEkspor(token, o) {
  *   2. ambilEksporMentah(id, i): baris file ke-i yang lolos saringan (gzip) -> dipanggil berurutan oleh dashboard
  * Command Center & Control Room dibatasi EKSPOR_MENTAH.BATAS kali per hari; RTC & Master tanpa batas.
  */
-// MAKS_HARI: panjang rentang per export. HARI_TERAKHIR: bila > 0, Command Center & Control Room hanya bisa export hari ini dan (HARI_TERAKHIR - 1) hari sebelumnya;
-// 0 = semua akun bebas memilih tanggal (6 Nov 2026: dibebaskan untuk semua akun, tetap maks. 3 hari per export)
-const EKSPOR_MENTAH = { BATAS: 5, PER: 'HARI', MAKS_HARI: 3, HARI_TERAKHIR: 0, MAKS_BARIS: 300000 };
+// MAKS_HARI: panjang rentang per export. Semua akun (RTC, Master, Command Center, Control Room) bebas memilih tanggal mana saja
+// sejak CFG.MULAI_CLEANSING sampai hari ini, asal rentangnya maks. MAKS_HARI hari. (16 Nov 2026: batas "3 hari terakhir" dihapus.)
+// BATAS: Command Center & Control Room maks. BATAS kali export per hari; RTC & Master tanpa batas.
+const EKSPOR_MENTAH = { BATAS: 5, PER: 'HARI', MAKS_HARI: 3, MAKS_BARIS: 300000 };
 const geserTgl_ = (x, n) => Utilities.formatDate(new Date(Date.UTC(+x.slice(0, 4), +x.slice(5, 7) - 1, +x.slice(8, 10) + n, 12)), 'UTC', 'yyyy-MM-dd');
-/** Rentang tanggal yang boleh di-export hari ini (WIB): { awal, akhir } */
-// RTC & Master: tanggal bebas (mulai MULAI_CLEANSING), tetap maks. MAKS_HARI hari per export; Command Center & Control Room: HARI_TERAKHIR hari terakhir
-function jendelaEkspor_(ses) { const hi = hariIni_(), bebas = !EKSPOR_MENTAH.HARI_TERAKHIR || !!(ses && tanpaBatas_(ses)), a = bebas ? CFG.MULAI_CLEANSING : geserTgl_(hi, 1 - EKSPOR_MENTAH.HARI_TERAKHIR); return { awal: a > CFG.MULAI_CLEANSING ? a : CFG.MULAI_CLEANSING, akhir: hi, bebas: bebas }; }
+/** Rentang tanggal yang boleh di-export (WIB), sama untuk semua akun: { awal: MULAI_CLEANSING, akhir: hari ini, bebas: true } */
+function jendelaEkspor_() { return { awal: CFG.MULAI_CLEANSING, akhir: hariIni_(), bebas: true }; }
 const tglId_ = x => x.slice(8, 10) + '/' + x.slice(5, 7) + '/' + x.slice(0, 4);
 // spreadsheet pemantau di folder data: satu baris per export (terbaru di atas) + sheet Rekap per Akun
 const LOG_MENTAH = 'Log Export Data Mentah', LOG_MENTAH_SH = 'Log', LOG_MENTAH_REKAP = 'Rekap per Akun';
@@ -651,8 +651,8 @@ function kuotaEkspor_(ses) {
 /** Untuk dialog export: sisa kuota akun dan tanggal awal data mentah. */
 function infoEksporMentah(token) {
   const ses = sesi_(token);
-  const j = jendelaEkspor_(ses);
-  return JSON.stringify(Object.assign(kuotaEkspor_(ses), { mulai: CFG.MULAI_CLEANSING, maksHari: EKSPOR_MENTAH.MAKS_HARI, hariIni: hariIni_(), awal: j.awal, akhir: j.akhir, bebas: j.bebas, hariTerakhir: EKSPOR_MENTAH.HARI_TERAKHIR }));
+  const j = jendelaEkspor_();
+  return JSON.stringify(Object.assign(kuotaEkspor_(ses), { mulai: CFG.MULAI_CLEANSING, maksHari: EKSPOR_MENTAH.MAKS_HARI, hariIni: hariIni_(), awal: j.awal, akhir: j.akhir, bebas: true }));
 }
 /** o: { dari, sampai (yyyy-mm-dd), area, lok (filter dashboard, kosong = semua dalam cakupan), event: [kunci parameter], project: [nama project; '' = tanpa project] } */
 function mulaiEksporMentah(token, o) {
@@ -662,8 +662,8 @@ function mulaiEksporMentah(token, o) {
   if (!dari || !sampai || sampai < dari) throw new Error('Rentang tanggal tidak valid.');
   if (hari(sampai) - hari(dari) + 1 > EKSPOR_MENTAH.MAKS_HARI) throw new Error('Rentang maksimal ' + EKSPOR_MENTAH.MAKS_HARI + ' hari.');
   if (sampai < CFG.MULAI_CLEANSING) throw new Error('Data mentah tersedia mulai ' + CFG.MULAI_CLEANSING + '.');
-  const jw = jendelaEkspor_(ses);
-  if (dari < jw.awal || sampai > jw.akhir) throw new Error(jw.bebas ? 'Data mentah tersedia ' + tglId_(jw.awal) + ' s/d ' + tglId_(jw.akhir) + '. Tanggal ' + tglId_(dari < jw.awal ? dari : sampai) + ' tidak bisa di-export.' : 'Data yang bisa di-export hanya ' + EKSPOR_MENTAH.HARI_TERAKHIR + ' hari terakhir (' + tglId_(jw.awal) + ' s/d ' + tglId_(jw.akhir) + '). Tanggal ' + tglId_(dari < jw.awal ? dari : sampai) + ' tidak bisa di-export.');
+  const jw = jendelaEkspor_();
+  if (dari < jw.awal || sampai > jw.akhir) throw new Error('Data mentah tersedia ' + tglId_(jw.awal) + ' s/d ' + tglId_(jw.akhir) + '. Tanggal ' + tglId_(dari < jw.awal ? dari : sampai) + ' tidak bisa di-export.');
   // cakupan: akun Area / Lokasi tidak bisa keluar dari cakupannya; filter dashboard hanya mempersempit
   const area = ses.peran === 'PUSAT' ? areaNorm(o.area) : ses.area || '';
   const lok = ses.peran === 'LOKASI' ? ses.lok : teks(o.lok).toUpperCase();
